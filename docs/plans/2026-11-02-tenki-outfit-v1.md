@@ -1,6 +1,6 @@
 # TENKI OUTFIT 天氣穿搭 — v1 開發計畫
 
-> 建立：2026-11-02　狀態：**第 3 階段進行中**
+> 建立：2026-11-02　狀態：**第 3 階段完成，待第 4 階段**
 > 基礎設施沿用 `/Users/mimi/Documents/REUSABLE_INFRA.md`
 
 ## 技術選型（沿用基礎文件）
@@ -136,7 +136,7 @@
 - 讀取單品失敗時目前只記錄 log，畫面停在讀取中；之後加錯誤狀態與重試
 - 實機（相簿／相機選照片、SQLite）尚未驗證，第 3 階段做 dev build 時一起驗
 
-### 第 3 階段 — 進行中（2026-11-02 開始，分支 `feat/phase-3-bg-removal`，每批 commit）
+### 第 3 階段 — 完成（2026-11-02，分支 `feat/phase-3-bg-removal`，每批 commit）
 
 使用者已同意（2026-11-02）：
 - Android 這階段不驗證（沒有模擬器/手機），留到第 7 階段打包時實機驗；本階段只在 iOS 模擬器驗證
@@ -184,9 +184,25 @@
 - 已知限制：編輯已存單品時，存檔會把原圖再複製一份新檔、刪掉舊檔（`saveItem` 的 replace 流程），功能正確但多一次複製
 - 回饋調整（2026-11-02，使用者要求筆刷可自由選大小、用拉 bar）：大／中／小按鈕改成 `BrushSizeSlider` 滑桿（4–80 畫面像素，預設 28，拖拉或點軌道直接跳到該位置，左側圓點即時顯示粗細，螢幕閱讀器可用增減手勢每次 ±4）；`maskEditing` 新增 `brushFromSlider`／`sliderFromBrush`；移除三語 `editor.small/medium/large`。Jest 117 項、regression 4/4 全過
 
-#### 批次 D — 進行中（2026-11-02）
+#### 批次 D — 完成（2026-11-02）
 - **驗證方式變更（使用者決定 2026-11-02）**：不在 iPhone／iOS 模擬器做操作驗證，改成打包 Android release APK 給使用者實機檢測（推翻先前「Android 留到第 7 階段」的決定）
 - iOS dev build（`expo prebuild` + `pod install` + `expo run:ios`，iPhone 17 模擬器）**編譯成功**：Swift 去背模組與 Skia 都能編譯、App 能安裝啟動；未做操作驗證
 - `prebuild` 把 `package.json` 的 `ios`／`android` 指令改成 `expo run:*`（需要 dev build，保留）
 - Android release APK（`/build-apk`，本機簽章）**建置成功**：Kotlin 去背模組、ML Kit、Skia 都編譯通過；APK manifest 確認含 `com.google.mlkit.vision.DEPENDENCIES = subject_segment`。檔案：Google Drive `SPARK-Builds/TENKI-OUTFIT/tenki-outfit-v0.1.0-20261102-1715.apk`（約 126 MB，含全部 CPU 架構）
 - **Android 實機檢測通過（使用者回報 2026-11-02）**：自動去背、拍照、手動擦除／補回／滑桿／復原、存檔、重開 App 資料仍在、編輯已存單品，皆無問題
+- 意外：上一個 commit 誤含 `modules/tenki-bg-removal/android/build/`（1,357 個建置產物），尚未推送，已 amend 移除並加入 `.gitignore`
+- **Code review 後修正**（code-reviewer：無 Critical，2 High）：
+  - High：Android `Tasks.await` 加 30 秒逾時；JS `removeBackground` 加 45 秒逾時 → `failed`（避免表單一直鎖在「去背中」）
+  - High＋Medium：新增原生 `normalizeAsync`（只轉正＋縮到 1600px＋JPEG，不需要 iOS 17／Play 服務）；去背沒成功時也改用它，編輯器不再載入原尺寸大圖、EXIF 方向也正確。**行為變更**：去背沒成功時存的是 1600px 版本，不是原尺寸照片
+  - 編輯器在兩張圖相同時只解碼一次；`drawAsImage` 的圖用完 `dispose()`；`containRect` 在還沒量到尺寸時回傳 null
+  - iOS 改用 `CGImageSourceCreateThumbnailAtIndex`（直接解碼成縮圖並套用 EXIF），不再先解碼原尺寸
+  - App 啟動時清除 `cache/bg-removal/`（`clearCutoutCache`）
+  - 原生寫檔檢查結果、失敗時刪除殘留檔（新錯誤碼 `ERR_WRITE`）；Android bitmap 用完 `recycle()`
+  - 未處理（Low、只影響效能）：筆畫路徑每次移動重建；編輯已存單品時原圖多複製一次
+- 修正後驗證：Jest 121 項通過、tsc、lint；`bash scripts/regression.sh` 4/4 全過；iOS `xcodebuild` BUILD SUCCEEDED；Android APK 重新建置成功：`SPARK-Builds/TENKI-OUTFIT/tenki-outfit-v0.1.0-20261102-1735.apk`（修正後版本尚未實機複測）
+
+#### 第 3 階段留待之後處理
+- 修正後 APK 尚未實機複測（建議第 4 階段開工前順手裝一次）
+- iOS 只驗證到編譯與安裝，沒有操作驗證（使用者決定不測 iPhone）
+- `cache/bg-removal/` 只在啟動時清除
+- 上述兩個 Low 效能項目

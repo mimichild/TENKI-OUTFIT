@@ -18,6 +18,11 @@ declare class TenkiBgRemovalModule extends NativeModule {
    * 錯誤碼：ERR_NO_SUBJECT（找不到主體）、ERR_UNAVAILABLE、ERR_LOAD_IMAGE、ERR_SEGMENTATION
    */
   removeBackgroundAsync(uri: string, maxSize: number): Promise<BgRemovalNativeResult>;
+  /**
+   * 只轉正並縮到長邊 maxSize，存成 JPEG（cache/bg-removal/）。去背沒成功時用，
+   * 不需要 iOS 17 / Play 服務。錯誤碼：ERR_LOAD_IMAGE、ERR_WRITE
+   */
+  normalizeAsync(uri: string, maxSize: number): Promise<{ uri: string; width: number; height: number }>;
 }
 
 // Expo Go、Web、單元測試沒有這個原生模組 → null，由 JS 包裝層退回原圖

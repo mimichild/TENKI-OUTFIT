@@ -21,6 +21,8 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import java.util.UUID
 import java.util.concurrent.ExecutionException
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import kotlin.math.max
 
 class TenkiBgRemovalModule : Module() {
@@ -40,15 +42,39 @@ class TenkiBgRemovalModule : Module() {
         throw CodedException("ERR_UNAVAILABLE", "Google Play services are not available", null)
       }
       val bitmap = loadNormalized(Uri.parse(uri), max(maxSize, 1))
-      val foreground = segment(bitmap)
-      val cutout = write(foreground, Bitmap.CompressFormat.PNG, "png")
-      val original = write(bitmap, Bitmap.CompressFormat.JPEG, "jpg")
-      mapOf(
-        "uri" to Uri.fromFile(cutout).toString(),
-        "originalUri" to Uri.fromFile(original).toString(),
-        "width" to foreground.width,
-        "height" to foreground.height,
-      )
+      try {
+        val foreground = segment(bitmap)
+        try {
+          val cutout = write(foreground, Bitmap.CompressFormat.PNG, "png")
+          val original = try {
+            write(bitmap, Bitmap.CompressFormat.JPEG, "jpg")
+          } catch (e: Exception) {
+            cutout.delete()
+            throw e
+          }
+          mapOf(
+            "uri" to Uri.fromFile(cutout).toString(),
+            "originalUri" to Uri.fromFile(original).toString(),
+            "width" to foreground.width,
+            "height" to foreground.height,
+          )
+        } finally {
+          foreground.recycle()
+        }
+      } finally {
+        bitmap.recycle()
+      }
+    }
+
+    // 去背沒成功時用：只轉正、縮小、存 JPEG（不需要 Play 服務）
+    AsyncFunction("normalizeAsync") { uri: String, maxSize: Int ->
+      val bitmap = loadNormalized(Uri.parse(uri), max(maxSize, 1))
+      try {
+        val file = write(bitmap, Bitmap.CompressFormat.JPEG, "jpg")
+        mapOf("uri" to Uri.fromFile(file).toString(), "width" to bitmap.width, "height" to bitmap.height)
+      } finally {
+        bitmap.recycle()
+      }
     }
   }
 
@@ -101,11 +127,14 @@ class TenkiBgRemovalModule : Module() {
     val options = SubjectSegmenterOptions.Builder().enableForegroundBitmap().build()
     val segmenter = SubjectSegmentation.getClient(options)
     try {
-      val result = Tasks.await(segmenter.process(InputImage.fromBitmap(bitmap, 0)))
+      // 模型還在由 Play 服務下載時 Task 可能一直不結束：最多等 30 秒
+      val result = Tasks.await(segmenter.process(InputImage.fromBitmap(bitmap, 0)), 30, TimeUnit.SECONDS)
       // foregroundBitmap 與輸入同尺寸、背景透明；找不到主體時為 null 或全透明
       return result.foregroundBitmap ?: throw CodedException("ERR_NO_SUBJECT", "No foreground subject found", null)
     } catch (e: ExecutionException) {
       throw CodedException("ERR_SEGMENTATION", "Background removal failed: ${e.cause?.message}", e.cause)
+    } catch (e: TimeoutException) {
+      throw CodedException("ERR_SEGMENTATION", "Background removal timed out", e)
     } finally {
       segmenter.close()
     }
@@ -114,7 +143,16 @@ class TenkiBgRemovalModule : Module() {
   private fun write(bitmap: Bitmap, format: Bitmap.CompressFormat, ext: String): File {
     val dir = File(context.cacheDir, "bg-removal").apply { mkdirs() }
     val file = File(dir, "${UUID.randomUUID()}.$ext")
-    FileOutputStream(file).use { bitmap.compress(format, if (format == Bitmap.CompressFormat.PNG) 100 else 90, it) }
+    val ok = try {
+      FileOutputStream(file).use { bitmap.compress(format, if (format == Bitmap.CompressFormat.PNG) 100 else 90, it) }
+    } catch (e: Exception) {
+      file.delete()
+      throw CodedException("ERR_WRITE", "Could not write image: ${e.message}", e)
+    }
+    if (!ok) {
+      file.delete()
+      throw CodedException("ERR_WRITE", "Could not encode image", null)
+    }
     return file
   }
 }

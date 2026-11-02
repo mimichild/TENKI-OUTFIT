@@ -75,6 +75,18 @@ describe('ItemForm', () => {
     });
   });
 
+  it('uses the upright, downscaled original when the cutout fails (avoids huge photos in the editor)', async () => {
+    const { onSubmit } = setup({
+      onRemoveBackground: jest.fn().mockResolvedValue({ status: 'unavailable', originalUri: 'file:///cache/bg-removal/n.jpg' }),
+    });
+    fireEvent.press(screen.getByRole('button', { name: '從相簿選擇' }));
+    await waitFor(() => expect(screen.getByText('這台裝置不支援自動去背，先使用原圖')).toBeTruthy());
+    fireEvent.press(screen.getByRole('button', { name: '儲存' }));
+    expect(onSubmit.mock.calls[0][1]).toEqual({
+      kind: 'replace', originalUri: 'file:///cache/bg-removal/n.jpg', imageUri: 'file:///cache/bg-removal/n.jpg',
+    });
+  });
+
   it.each([
     ['unavailable', '這台裝置不支援自動去背，先使用原圖'],
     ['noSubject', '照片中找不到衣物主體，先使用原圖'],

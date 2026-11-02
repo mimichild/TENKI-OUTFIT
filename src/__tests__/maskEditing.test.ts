@@ -26,6 +26,12 @@ describe('containRect', () => {
   });
 });
 
+describe('containRect before layout', () => {
+  it('returns null for an empty box so touches are ignored instead of producing NaN', () => {
+    expect(containRect({ width: 100, height: 100 }, { width: 0, height: 300 })).toBeNull();
+  });
+});
+
 describe('toImagePoint', () => {
   it('maps a touch in the canvas to image pixels', () => {
     const rect = { x: 100, y: 0, width: 200, height: 400, scale: 0.2 };

@@ -91,7 +91,12 @@ async function exportPng(base: SkImage, original: SkImage, strokes: DrawnStroke[
   const dir = new Directory(Paths.cache, 'bg-removal');
   if (!dir.exists) dir.create({ idempotent: true, intermediates: true });
   const file = new File(dir, `${randomUUID()}.png`);
-  file.write(image.encodeToBytes(ImageFormat.PNG, 100));
+  try {
+    file.write(image.encodeToBytes(ImageFormat.PNG, 100));
+  } finally {
+    // drawAsImage 產生的圖佔原生記憶體，用完立刻釋放
+    image.dispose();
+  }
   return file.uri;
 }
 
@@ -99,7 +104,9 @@ export function PhotoEditor({ imageUri, originalUri, onDone, onCancel }: Props) 
   const t = useT();
   const theme = useTheme();
   const base = useImage(imageUri);
-  const original = useImage(originalUri);
+  // 同一張圖（沒去背過）只解碼一次，避免大圖佔兩倍記憶體
+  const separateOriginal = useImage(originalUri === imageUri ? null : originalUri);
+  const original = originalUri === imageUri ? base : separateOriginal;
   const [box, setBox] = useState<LayoutRectangle | null>(null);
   const [mode, setMode] = useState<BrushMode>('erase');
   const [brush, setBrush] = useState(BRUSH_DEFAULT);

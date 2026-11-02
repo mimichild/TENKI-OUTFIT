@@ -49,3 +49,16 @@ export function deletePhotos(stored: (string | null | undefined)[]): void {
     }
   }
 }
+
+/**
+ * 清掉去背／編輯器留在暫存資料夾的檔案（取消、被新照片取代、已複製進 photos/ 的都不再需要）。
+ * App 啟動時呼叫，此時不會有進行中的去背。
+ */
+export function clearCutoutCache(): void {
+  try {
+    const dir = new Directory(Paths.cache, 'bg-removal');
+    if (dir.exists) dir.delete();
+  } catch (e) {
+    console.warn('清除去背暫存檔失敗', e);
+  }
+}

@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { create } from 'zustand';
 import { TRASH_RETENTION_DAYS } from '@/constants/options';
-import { deletePhotos } from '@/lib/photoStorage';
+import { clearCutoutCache, deletePhotos } from '@/lib/photoStorage';
 import type { ItemRepository } from './itemRepository';
 
 const ItemRepositoryContext = createContext<ItemRepository | null>(null);
@@ -14,6 +14,7 @@ export const useItemsVersion = create<{ version: number; bump: () => void }>(set
 
 export function ItemRepositoryProvider({ repository, children }: { repository: ItemRepository; children: ReactNode }) {
   useEffect(() => {
+    clearCutoutCache();
     repository
       .purgeExpired(TRASH_RETENTION_DAYS)
       .then(removed => {

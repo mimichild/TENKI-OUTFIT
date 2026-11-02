@@ -1,4 +1,4 @@
-import { deletePhotos, resolvePhotoUri, savePhoto } from '@/lib/photoStorage';
+import { clearCutoutCache, deletePhotos, resolvePhotoUri, savePhoto } from '@/lib/photoStorage';
 
 const mockCopied: { from: string; to: string }[] = [];
 const mockDeleted: string[] = [];
@@ -9,8 +9,9 @@ jest.mock('expo-file-system', () => {
     constructor(...parts: (string | { uri: string })[]) {
       this.uri = parts.map(p => (typeof p === 'string' ? p : p.uri)).join('/');
     }
-    get exists() { return true; }
+    get exists() { return !this.uri.includes('missing'); }
     create() {}
+    delete() { mockDeleted.push(this.uri); }
   }
   class File {
     uri: string;
@@ -20,7 +21,7 @@ jest.mock('expo-file-system', () => {
     get exists() { return !this.uri.includes('missing'); }
     delete() { mockDeleted.push(this.uri); }
   }
-  return { Directory, File, Paths: { document: new Directory('file:///doc') } };
+  return { Directory, File, Paths: { document: new Directory('file:///doc'), cache: new Directory('file:///cache') } };
 });
 jest.mock('expo-file-system/legacy', () => ({
   copyAsync: jest.fn(async ({ from, to }: { from: string; to: string }) => {
@@ -57,5 +58,10 @@ describe('photoStorage', () => {
   it('deletes only app-owned photos that exist and skips nulls and duplicates', () => {
     deletePhotos(['photos/a.jpg', null, 'photos/a.jpg', 'file:///elsewhere/b.jpg', '../escape.jpg', 'photos/missing.jpg']);
     expect(mockDeleted).toEqual(['file:///doc/photos/a.jpg']);
+  });
+
+  it('clears leftover cutout temp files from the cache folder', () => {
+    clearCutoutCache();
+    expect(mockDeleted).toEqual(['file:///cache/bg-removal']);
   });
 });

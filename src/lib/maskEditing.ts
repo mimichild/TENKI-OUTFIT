@@ -29,8 +29,9 @@ export function sliderFromBrush(size: number, trackWidth: number): number {
   return ((size - BRUSH_MIN) / (BRUSH_MAX - BRUSH_MIN)) * trackWidth;
 }
 
-/** 等比縮放、置中放進框內 */
-export function containRect(image: Size, box: Size): FitRect {
+/** 等比縮放、置中放進框內；框或圖還沒有尺寸時回傳 null（觸控先不處理） */
+export function containRect(image: Size, box: Size): FitRect | null {
+  if (image.width <= 0 || image.height <= 0 || box.width <= 0 || box.height <= 0) return null;
   const scale = Math.min(box.width / image.width, box.height / image.height);
   const width = image.width * scale;
   const height = image.height * scale;

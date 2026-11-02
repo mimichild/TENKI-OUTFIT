@@ -7,7 +7,7 @@ import type { Item } from '@/types/models';
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
-jest.mock('@/lib/photoStorage', () => ({ savePhoto: jest.fn(), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
+jest.mock('@/lib/photoStorage', () => ({ clearCutoutCache: jest.fn(), savePhoto: jest.fn(), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
 
 const trashed: Item = {
   id: 't', name: '舊T', brand: '', category: 'top', price: null, occasions: [], seasons: [],

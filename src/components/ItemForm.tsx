@@ -110,8 +110,13 @@ export function ItemForm({ initial, onPickPhoto, onRemoveBackground, onSubmit, o
     }
     if (seq !== pickSeq.current) return;
     // 去背成功：丟掉選到的原尺寸照片，只留縮小原圖（介面上不顯示，給手動「補回」筆刷用）
-    if (result.status === 'ok') setPhoto({ kind: 'replace', originalUri: result.originalUri, imageUri: result.uri });
-    else if (result.status === 'failed') console.warn('自動去背失敗', result.error);
+    if (result.status === 'ok') {
+      setPhoto({ kind: 'replace', originalUri: result.originalUri, imageUri: result.uri });
+    } else {
+      if (result.status === 'failed') console.warn('自動去背失敗', result.error);
+      // 沒去背成功：有轉正縮小版就用它（編輯器不會載入原尺寸大圖、方向也正確）
+      if (result.originalUri) setPhoto({ kind: 'replace', originalUri: result.originalUri, imageUri: result.originalUri });
+    }
     setCutout(result.status);
   };
 

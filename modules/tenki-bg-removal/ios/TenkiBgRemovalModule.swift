@@ -1,4 +1,5 @@
 import CoreImage
+import ImageIO
 import ExpoModulesCore
 import UIKit
 import Vision
@@ -18,6 +19,11 @@ final class LoadImageException: GenericException<String> {
   override var reason: String { "Could not load image at \(param)" }
 }
 
+final class WriteException: GenericException<String> {
+  override var code: String { "ERR_WRITE" }
+  override var reason: String { "Could not write image: \(param)" }
+}
+
 final class SegmentationException: GenericException<String> {
   override var code: String { "ERR_SEGMENTATION" }
   override var reason: String { "Background removal failed: \(param)" }
@@ -34,38 +40,59 @@ public class TenkiBgRemovalModule: Module {
 
     AsyncFunction("removeBackgroundAsync") { (uri: String, maxSize: Int) throws -> [String: Any] in
       guard #available(iOS 17.0, *) else { throw UnavailableException() }
-      let image = try Self.loadNormalized(uri: uri, maxSize: CGFloat(max(maxSize, 1)))
+      let image = try Self.loadNormalized(uri: uri, maxSize: max(maxSize, 1))
       let png = try Self.cutout(image)
-      guard let jpeg = UIImage(cgImage: image).jpegData(compressionQuality: 0.9) else {
-        throw SegmentationException("JPEG encoding failed")
-      }
+      let jpeg = try Self.jpeg(image)
       let cutoutUrl = try Self.write(png, ext: "png")
-      let originalUrl = try Self.write(jpeg, ext: "jpg")
+      let originalUrl: URL
+      do {
+        originalUrl = try Self.write(jpeg, ext: "jpg")
+      } catch {
+        try? FileManager.default.removeItem(at: cutoutUrl)
+        throw error
+      }
       return [
         "uri": cutoutUrl.absoluteString, "originalUri": originalUrl.absoluteString,
         "width": image.width, "height": image.height,
       ]
     }
     .runOnQueue(.global(qos: .userInitiated))
+
+    // 去背沒成功時用：只轉正、縮小、存 JPEG（不需要 iOS 17）
+    AsyncFunction("normalizeAsync") { (uri: String, maxSize: Int) throws -> [String: Any] in
+      let image = try Self.loadNormalized(uri: uri, maxSize: max(maxSize, 1))
+      let url = try Self.write(try Self.jpeg(image), ext: "jpg")
+      return ["uri": url.absoluteString, "width": image.width, "height": image.height]
+    }
+    .runOnQueue(.global(qos: .userInitiated))
   }
 
-  /// 讀檔、依 EXIF 轉正、縮到長邊 maxSize（不放大），輸出 CGImage
-  private static func loadNormalized(uri: String, maxSize: CGFloat) throws -> CGImage {
-    let path = URL(string: uri)?.isFileURL == true ? URL(string: uri)!.path : uri
-    guard let source = UIImage(contentsOfFile: path) else { throw LoadImageException(uri) }
+  /// 讀檔時直接解碼成縮圖（不先解碼原尺寸大圖）、依 EXIF 轉正，長邊最多 maxSize（不放大）
+  private static func loadNormalized(uri: String, maxSize: Int) throws -> CGImage {
+    let url = URL(string: uri).flatMap { $0.isFileURL ? $0 : nil } ?? URL(fileURLWithPath: uri)
+    guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+          let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+          let w = props[kCGImagePropertyPixelWidth] as? Int,
+          let h = props[kCGImagePropertyPixelHeight] as? Int
+    else { throw LoadImageException(uri) }
 
-    let size = source.size
-    let scale = min(1, maxSize / max(size.width, size.height))
-    let target = CGSize(width: (size.width * scale).rounded(), height: (size.height * scale).rounded())
-
-    let format = UIGraphicsImageRendererFormat()
-    format.scale = 1
-    format.opaque = true
-    let normalized = UIGraphicsImageRenderer(size: target, format: format).image { _ in
-      source.draw(in: CGRect(origin: .zero, size: target))
+    let options: [CFString: Any] = [
+      kCGImageSourceCreateThumbnailFromImageAlways: true,
+      kCGImageSourceCreateThumbnailWithTransform: true,
+      kCGImageSourceShouldCacheImmediately: true,
+      kCGImageSourceThumbnailMaxPixelSize: min(maxSize, max(w, h)),
+    ]
+    guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+      throw LoadImageException(uri)
     }
-    guard let cg = normalized.cgImage else { throw LoadImageException(uri) }
-    return cg
+    return image
+  }
+
+  private static func jpeg(_ image: CGImage) throws -> Data {
+    guard let data = UIImage(cgImage: image).jpegData(compressionQuality: 0.9) else {
+      throw WriteException("JPEG encoding failed")
+    }
+    return data
   }
 
   @available(iOS 17.0, *)
@@ -109,7 +136,7 @@ public class TenkiBgRemovalModule: Module {
       try data.write(to: url, options: .atomic)
       return url
     } catch {
-      throw SegmentationException(error.localizedDescription)
+      throw WriteException(error.localizedDescription)
     }
   }
 }
