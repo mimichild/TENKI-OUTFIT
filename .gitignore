@@ -40,3 +40,8 @@ yarn-error.*
 # Claude Code 本機設定
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# 本機原生模組的建置產物
+modules/*/android/build/
+modules/*/android/.cxx/
+modules/*/android/.gradle/

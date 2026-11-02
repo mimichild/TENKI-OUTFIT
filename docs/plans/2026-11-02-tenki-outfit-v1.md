@@ -183,3 +183,10 @@
 - 和計畫不同的地方：編輯器做成表單內的 Modal，不是獨立路由（結果要回到表單尚未存檔的狀態，Modal 最直接）
 - 已知限制：編輯已存單品時，存檔會把原圖再複製一份新檔、刪掉舊檔（`saveItem` 的 replace 流程），功能正確但多一次複製
 - 回饋調整（2026-11-02，使用者要求筆刷可自由選大小、用拉 bar）：大／中／小按鈕改成 `BrushSizeSlider` 滑桿（4–80 畫面像素，預設 28，拖拉或點軌道直接跳到該位置，左側圓點即時顯示粗細，螢幕閱讀器可用增減手勢每次 ±4）；`maskEditing` 新增 `brushFromSlider`／`sliderFromBrush`；移除三語 `editor.small/medium/large`。Jest 117 項、regression 4/4 全過
+
+#### 批次 D — 進行中（2026-11-02）
+- **驗證方式變更（使用者決定 2026-11-02）**：不在 iPhone／iOS 模擬器做操作驗證，改成打包 Android release APK 給使用者實機檢測（推翻先前「Android 留到第 7 階段」的決定）
+- iOS dev build（`expo prebuild` + `pod install` + `expo run:ios`，iPhone 17 模擬器）**編譯成功**：Swift 去背模組與 Skia 都能編譯、App 能安裝啟動；未做操作驗證
+- `prebuild` 把 `package.json` 的 `ios`／`android` 指令改成 `expo run:*`（需要 dev build，保留）
+- Android release APK（`/build-apk`，本機簽章）**建置成功**：Kotlin 去背模組、ML Kit、Skia 都編譯通過；APK manifest 確認含 `com.google.mlkit.vision.DEPENDENCIES = subject_segment`。檔案：Google Drive `SPARK-Builds/TENKI-OUTFIT/tenki-outfit-v0.1.0-20261102-1715.apk`（約 126 MB，含全部 CPU 架構）
+- **Android 實機檢測通過（使用者回報 2026-11-02）**：自動去背、拍照、手動擦除／補回／滑桿／復原、存檔、重開 App 資料仍在、編輯已存單品，皆無問題
