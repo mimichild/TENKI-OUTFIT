@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application>
+    <!-- 安裝 App 時就請 Play 服務下載去背模型，避免第一次去背時模型還沒下載完 -->
+    <meta-data
+      android:name="com.google.mlkit.vision.DEPENDENCIES"
+      android:value="subject_segment" />
+  </application>
+</manifest>

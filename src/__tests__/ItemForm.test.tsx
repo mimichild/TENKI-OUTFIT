@@ -2,12 +2,27 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { ItemForm, EMPTY_ITEM_INPUT } from '@/components/ItemForm';
 import { DEFAULT_SETTINGS, useSettingsStore } from '@/store/settingsStore';
 
+jest.mock('@/components/PhotoEditor', () => {
+  const { Pressable, Text, View } = jest.requireActual('react-native');
+  return {
+    PHOTO_EDITOR_SUPPORTED: true,
+    PhotoEditor: (p: { imageUri: string; originalUri: string; onDone: (uri: string) => void; onCancel: () => void }) => (
+      <View>
+        <Text>{`editor:${p.imageUri}|${p.originalUri}`}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="mock-done" onPress={() => p.onDone('file:///cache/bg-removal/edited.png')} />
+        <Pressable accessibilityRole="button" accessibilityLabel="mock-cancel" onPress={p.onCancel} />
+      </View>
+    ),
+  };
+});
+
 beforeEach(() => useSettingsStore.setState({ ...DEFAULT_SETTINGS }));
 
 function setup(overrides: Partial<React.ComponentProps<typeof ItemForm>> = {}) {
   const props = {
     initial: EMPTY_ITEM_INPUT,
     onPickPhoto: jest.fn().mockResolvedValue('file:///cache/picked.jpg'),
+    onRemoveBackground: jest.fn().mockResolvedValue({ status: 'ok', uri: 'file:///cache/bg-removal/cut.png', originalUri: 'file:///cache/bg-removal/cut.jpg', width: 1, height: 1 }),
     onSubmit: jest.fn(),
     onCancel: jest.fn(),
     ...overrides,
@@ -48,13 +63,72 @@ describe('ItemForm', () => {
     expect(screen.getByText('請輸入有效的金額')).toBeTruthy();
   });
 
-  it('picks a photo and reports it as a replacement', async () => {
-    const { onSubmit, onPickPhoto } = setup();
+  it('picks a photo, removes the background and keeps only the downscaled original (for the restore brush) + cutout', async () => {
+    const { onSubmit, onPickPhoto, onRemoveBackground } = setup();
     fireEvent.press(screen.getByRole('button', { name: '從相簿選擇' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: '刪除照片' })).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('已自動去背')).toBeTruthy());
     expect(onPickPhoto).toHaveBeenCalledWith('library');
+    expect(onRemoveBackground).toHaveBeenCalledWith('file:///cache/picked.jpg');
     fireEvent.press(screen.getByRole('button', { name: '儲存' }));
-    expect(onSubmit.mock.calls[0][1]).toEqual({ kind: 'replace', uri: 'file:///cache/picked.jpg' });
+    expect(onSubmit.mock.calls[0][1]).toEqual({
+      kind: 'replace', originalUri: 'file:///cache/bg-removal/cut.jpg', imageUri: 'file:///cache/bg-removal/cut.png',
+    });
+  });
+
+  it('uses the upright, downscaled original when the cutout fails (avoids huge photos in the editor)', async () => {
+    const { onSubmit } = setup({
+      onRemoveBackground: jest.fn().mockResolvedValue({ status: 'unavailable', originalUri: 'file:///cache/bg-removal/n.jpg' }),
+    });
+    fireEvent.press(screen.getByRole('button', { name: '從相簿選擇' }));
+    await waitFor(() => expect(screen.getByText('這台裝置不支援自動去背，先使用原圖')).toBeTruthy());
+    fireEvent.press(screen.getByRole('button', { name: '儲存' }));
+    expect(onSubmit.mock.calls[0][1]).toEqual({
+      kind: 'replace', originalUri: 'file:///cache/bg-removal/n.jpg', imageUri: 'file:///cache/bg-removal/n.jpg',
+    });
+  });
+
+  it.each([
+    ['unavailable', '這台裝置不支援自動去背，先使用原圖'],
+    ['noSubject', '照片中找不到衣物主體，先使用原圖'],
+    ['failed', '自動去背失敗，先使用原圖'],
+  ])('falls back to the original when background removal is %s', async (status, message) => {
+    const { onSubmit } = setup({ onRemoveBackground: jest.fn().mockResolvedValue({ status, error: new Error('x') }) });
+    fireEvent.press(screen.getByRole('button', { name: '從相簿選擇' }));
+    await waitFor(() => expect(screen.getByText(message)).toBeTruthy());
+    fireEvent.press(screen.getByRole('button', { name: '儲存' }));
+    expect(onSubmit.mock.calls[0][1]).toEqual({
+      kind: 'replace', originalUri: 'file:///cache/picked.jpg', imageUri: 'file:///cache/picked.jpg',
+    });
+  });
+
+  it('cannot save while the background is being removed', async () => {
+    let finish!: (r: unknown) => void;
+    const { onSubmit } = setup({ onRemoveBackground: jest.fn(() => new Promise(r => { finish = r; })) });
+    fireEvent.press(screen.getByRole('button', { name: '從相簿選擇' }));
+    await waitFor(() => expect(screen.getByText('正在自動去背…')).toBeTruthy());
+    fireEvent.press(screen.getByRole('button', { name: '儲存' }));
+    expect(onSubmit).not.toHaveBeenCalled();
+    await act(async () => finish({ status: 'ok', uri: 'file:///cache/bg-removal/cut.png', originalUri: 'file:///cache/bg-removal/cut.jpg', width: 1, height: 1 }));
+    fireEvent.press(screen.getByRole('button', { name: '儲存' }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a slow cutout result after a newer photo was picked', async () => {
+    const finishers: ((r: unknown) => void)[] = [];
+    const onPickPhoto = jest.fn()
+      .mockResolvedValueOnce('file:///cache/first.jpg')
+      .mockResolvedValueOnce('file:///cache/second.jpg');
+    const { onSubmit } = setup({ onPickPhoto, onRemoveBackground: jest.fn(() => new Promise(r => { finishers.push(r); })) });
+    fireEvent.press(screen.getByRole('button', { name: '從相簿選擇' }));
+    await waitFor(() => expect(finishers).toHaveLength(1));
+    fireEvent.press(screen.getByRole('button', { name: '拍照' }));
+    await waitFor(() => expect(finishers).toHaveLength(2));
+    await act(async () => finishers[1]({ status: 'ok', uri: 'file:///cache/bg-removal/second.png', originalUri: 'file:///cache/bg-removal/second.jpg', width: 1, height: 1 }));
+    await act(async () => finishers[0]({ status: 'ok', uri: 'file:///cache/bg-removal/first.png', originalUri: 'file:///cache/bg-removal/first.jpg', width: 1, height: 1 }));
+    fireEvent.press(screen.getByRole('button', { name: '儲存' }));
+    expect(onSubmit.mock.calls[0][1]).toEqual({
+      kind: 'replace', originalUri: 'file:///cache/bg-removal/second.jpg', imageUri: 'file:///cache/bg-removal/second.png',
+    });
   });
 
   it('removing an existing photo reports removal', () => {
@@ -88,5 +162,51 @@ describe('ItemForm', () => {
     expect(onDelete).toHaveBeenCalledTimes(1);
     await act(async () => reject(new Error('db')));
     expect(screen.getByText('儲存失敗，請再試一次')).toBeTruthy();
+  });
+
+  describe('manual cutout editing', () => {
+    it('edits the fresh cutout against the downscaled original and submits the edited image', async () => {
+      const { onSubmit } = setup();
+      fireEvent.press(screen.getByRole('button', { name: '從相簿選擇' }));
+      await waitFor(() => expect(screen.getByText('已自動去背')).toBeTruthy());
+      fireEvent.press(screen.getByRole('button', { name: '重新編輯照片' }));
+      expect(screen.getByText('editor:file:///cache/bg-removal/cut.png|file:///cache/bg-removal/cut.jpg')).toBeTruthy();
+      fireEvent.press(screen.getByRole('button', { name: 'mock-done' }));
+      expect(screen.queryByText(/^editor:/)).toBeNull();
+      fireEvent.press(screen.getByRole('button', { name: '儲存' }));
+      expect(onSubmit.mock.calls[0][1]).toEqual({
+        kind: 'replace', originalUri: 'file:///cache/bg-removal/cut.jpg', imageUri: 'file:///cache/bg-removal/edited.png',
+      });
+    });
+
+    it('edits a saved item photo using its stored original', () => {
+      const { onSubmit } = setup({ initial: { ...EMPTY_ITEM_INPUT, imageUri: 'file:///doc/photos/a.png', originalUri: 'file:///doc/photos/a.jpg' } });
+      fireEvent.press(screen.getByRole('button', { name: '重新編輯照片' }));
+      expect(screen.getByText('editor:file:///doc/photos/a.png|file:///doc/photos/a.jpg')).toBeTruthy();
+      fireEvent.press(screen.getByRole('button', { name: 'mock-done' }));
+      fireEvent.press(screen.getByRole('button', { name: '儲存' }));
+      expect(onSubmit.mock.calls[0][1]).toEqual({
+        kind: 'replace', originalUri: 'file:///doc/photos/a.jpg', imageUri: 'file:///cache/bg-removal/edited.png',
+      });
+    });
+
+    it('falls back to the display image when an item has no stored original', () => {
+      setup({ initial: { ...EMPTY_ITEM_INPUT, imageUri: 'file:///doc/photos/a.png', originalUri: null } });
+      fireEvent.press(screen.getByRole('button', { name: '重新編輯照片' }));
+      expect(screen.getByText('editor:file:///doc/photos/a.png|file:///doc/photos/a.png')).toBeTruthy();
+    });
+
+    it('cancelling the editor leaves the photo unchanged', () => {
+      const { onSubmit } = setup({ initial: { ...EMPTY_ITEM_INPUT, imageUri: 'file:///doc/photos/a.png', originalUri: 'file:///doc/photos/a.jpg' } });
+      fireEvent.press(screen.getByRole('button', { name: '重新編輯照片' }));
+      fireEvent.press(screen.getByRole('button', { name: 'mock-cancel' }));
+      fireEvent.press(screen.getByRole('button', { name: '儲存' }));
+      expect(onSubmit.mock.calls[0][1]).toEqual({ kind: 'keep' });
+    });
+
+    it('offers no editing without a photo', () => {
+      setup();
+      expect(screen.queryByRole('button', { name: '重新編輯照片' })).toBeNull();
+    });
   });
 });

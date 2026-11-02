@@ -1,6 +1,6 @@
 # TENKI OUTFIT 天氣穿搭 — v1 開發計畫
 
-> 建立：2026-11-02　狀態：**第 2 階段完成，待第 3 階段**
+> 建立：2026-11-02　狀態：**第 3 階段完成，待第 4 階段**
 > 基礎設施沿用 `/Users/mimi/Documents/REUSABLE_INFRA.md`
 
 ## 技術選型（沿用基礎文件）
@@ -131,7 +131,78 @@
 #### 留待之後處理
 - ~~待使用者決定~~ → 已決定（2026-11-02），見「我做的決定」：過去穿搭保留、未來穿搭移除，第 5 階段實作
 - 自動清除目前只在開 App 時跑；之後可在 App 回到前景時也跑一次
-- `File.copy` 是同步的，大張照片存檔可能頓一下；第 3 階段接去背時改非同步
+- ~~`File.copy` 是同步的，大張照片存檔可能頓一下~~ → 第 3 階段批次 B 改用 `copyAsync`
 - 英文單複數（1 days / 1 items）
 - 讀取單品失敗時目前只記錄 log，畫面停在讀取中；之後加錯誤狀態與重試
 - 實機（相簿／相機選照片、SQLite）尚未驗證，第 3 階段做 dev build 時一起驗
+
+### 第 3 階段 — 完成（2026-11-02，分支 `feat/phase-3-bg-removal`，每批 commit，PR #2）
+
+使用者已同意（2026-11-02）：
+- Android 這階段不驗證（沒有模擬器/手機），留到第 7 階段打包時實機驗；本階段只在 iOS 模擬器驗證
+- 不改 DB：遮罩從去背 PNG 的透明度反推（重新編輯 = 原圖 + 目前去背圖）
+- 顯示圖改存 `.png`（透明背景），原圖維持原格式
+- 每批 commit
+- 去背成功時不保留使用者選的原尺寸照片；不做「改回原圖」切換；去背效果不好也顯示去背結果，由使用者手動修改。只在背景保留「轉正＋縮到 1600px 的原圖 JPEG」（與去背圖同尺寸，介面不顯示），讓批次 C 的「補回」筆刷能取像素（使用者選 a，2026-11-02）
+- 自動去背只支援 iOS 17+（Expo SDK 54 最低 iOS 15.1，iOS 14 無法安裝）；iOS 15.1–16 不內建 Core ML 模型，退回原圖＋批次 C 的手動筆刷（使用者確認 2026-11-02）
+
+拆成四批：
+- **A｜去背原生模組**：專案內 Expo 本機模組 `modules/tenki-bg-removal`（iOS Vision `VNGenerateForegroundInstanceMaskRequest`，iOS 17+；Android ML Kit Subject Segmentation）；JS 包裝 `src/lib/backgroundRemoval.ts`（+ `.web.ts` 一律回報不支援），先縮到長邊 1600px 再去背；單元測試用假原生模組
+- **B｜接到新增／編輯流程**：選照片 → 去背中 → 顯示結果；失敗/不支援時退回原圖並提示；`saveItem` 分開存原圖與去背圖；照片複製改非同步
+- **C｜手動修改遮罩**：加 `@shopify/react-native-skia`，筆刷「擦除／補回」編輯畫面，存成新的去背 PNG；單品頁「重新編輯照片」
+- **D｜iOS dev build + 模擬器驗證**（含第 2 階段未驗的相簿、SQLite）；Android 只做 Gradle 編譯檢查
+
+#### 批次 A — 完成（2026-11-02）
+- `modules/tenki-bg-removal/`：Expo 本機模組（autolinking 已確認 iOS/Android 都抓得到）
+  - `ios/TenkiBgRemovalModule.swift`：讀檔 → 轉正並縮到長邊 maxSize → Vision 前景遮罩（iOS 17+）→ 不裁切、與輸入同尺寸的透明 PNG，存到 `Caches/bg-removal/`；在背景佇列執行
+  - `android/.../TenkiBgRemovalModule.kt`：inSampleSize 縮圖 + EXIF 轉正 → ML Kit Subject Segmentation 前景圖 → PNG 存到 `cacheDir/bg-removal/`；`AndroidManifest.xml` 加 `subject_segment` 讓安裝時預先下載模型
+  - 錯誤碼：`ERR_NO_SUBJECT`、`ERR_UNAVAILABLE`、`ERR_LOAD_IMAGE`、`ERR_SEGMENTATION`
+  - `src/TenkiBgRemovalModule.ts`：`requireOptionalNativeModule`，Expo Go / Web / 測試時為 null
+- `src/lib/backgroundRemoval.ts`（+ `.web.ts`）：`removeBackground(uri)` 不丟例外，回傳 `ok / unavailable / noSubject / failed`；`BG_REMOVAL_MAX_SIZE = 1600`
+- 驗證：Jest 90 項通過（新增 7 項）；`bash scripts/regression.sh` 4/4 全過（視覺 38 項）
+- **尚未驗證**：Swift / Kotlin 還沒編譯過（還沒 prebuild），批次 D 做 dev build 時才會編譯；Android 本階段只做 Gradle 編譯檢查
+
+#### 批次 B — 完成（2026-11-02）
+- `ItemForm`：選照片後立刻顯示原圖並開始去背（顯示「正在自動去背…」、儲存按鈕暫時停用），成功換成去背圖並顯示「已自動去背」；不支援／找不到主體／失敗時保留原圖並顯示對應提示；去背還沒回來又選了新照片時，丟掉舊結果；刪除照片會取消進行中的去背
+- `PhotoChange.replace` 改成 `{ originalUri, imageUri }`；`saveItem` 分別複製原圖與去背圖（沒去背時只複製一次），任一張失敗就回收已複製的檔案
+- `photoStorage.savePhoto` 改為非同步（`expo-file-system/legacy` 的 `copyAsync`），保留 `.png` 副檔名
+- 新增／單品頁注入 `removeBackground`；三語字串新增 5 組、移除 `item.cutoutPending`
+- 驗證：Jest 98 項通過（新增 8 項）、tsc、lint；`bash scripts/regression.sh` 4/4 全過（Web 一律走「不支援」路徑）
+- 和計畫不同的地方：沒有做「改用原圖／改用去背圖」切換；去背結果不好時改用批次 C 的手動修改
+- 回饋調整（2026-11-02）：原生模組多輸出縮小原圖 JPEG（`originalUri`）；去背成功時存「縮小原圖 + 去背 PNG」，丟掉原尺寸照片；去背沒成功時仍存使用者選的照片。Jest 98 項、regression 4/4 全過
+
+#### 批次 C — 完成（2026-11-02，編輯器本身待批次 D 在模擬器驗證）
+- 新增套件 `@shopify/react-native-skia` 2.2.12（`npx expo install`）
+- `src/lib/maskEditing.ts`：等比置中、觸控座標 → 圖片像素、存檔尺寸（長邊最多 1600）、筆畫新增／復原；筆畫存圖片像素座標
+- `src/components/PhotoEditor.tsx`：全螢幕編輯器（Modal + GestureHandlerRootView）。Skia 圖層：底圖 → 依序「擦除」（blendMode clear）與「補回」（原圖 ImageShader）；筆刷大／中／小、復原、完成時用 `drawAsImage` 輸出 PNG 到 `Caches/bg-removal/`；灰底讓透明區看得出來
+- `PhotoEditor.web.tsx`：Web 不載入 Skia、不顯示「重新編輯照片」
+- `ItemForm`：有照片且不在去背中時顯示「重新編輯照片」；新選的照片用（去背圖, 縮小原圖），已存的單品用（imageUri, originalUri，沒有原圖時用顯示圖）；完成後以 `replace` 存新去背圖、原圖沿用
+- Jest 用 `src/__mocks__/react-native-skia.ts` 取代 Skia（`moduleNameMapper`）
+- 三語字串新增 12 組
+- 驗證：Jest 111 項通過（新增 13 項）、tsc、lint；`bash scripts/regression.sh` 4/4 全過
+- 和計畫不同的地方：編輯器做成表單內的 Modal，不是獨立路由（結果要回到表單尚未存檔的狀態，Modal 最直接）
+- 已知限制：編輯已存單品時，存檔會把原圖再複製一份新檔、刪掉舊檔（`saveItem` 的 replace 流程），功能正確但多一次複製
+- 回饋調整（2026-11-02，使用者要求筆刷可自由選大小、用拉 bar）：大／中／小按鈕改成 `BrushSizeSlider` 滑桿（4–80 畫面像素，預設 28，拖拉或點軌道直接跳到該位置，左側圓點即時顯示粗細，螢幕閱讀器可用增減手勢每次 ±4）；`maskEditing` 新增 `brushFromSlider`／`sliderFromBrush`；移除三語 `editor.small/medium/large`。Jest 117 項、regression 4/4 全過
+
+#### 批次 D — 完成（2026-11-02）
+- **驗證方式變更（使用者決定 2026-11-02）**：不在 iPhone／iOS 模擬器做操作驗證，改成打包 Android release APK 給使用者實機檢測（推翻先前「Android 留到第 7 階段」的決定）
+- iOS dev build（`expo prebuild` + `pod install` + `expo run:ios`，iPhone 17 模擬器）**編譯成功**：Swift 去背模組與 Skia 都能編譯、App 能安裝啟動；未做操作驗證
+- `prebuild` 把 `package.json` 的 `ios`／`android` 指令改成 `expo run:*`（需要 dev build，保留）
+- Android release APK（`/build-apk`，本機簽章）**建置成功**：Kotlin 去背模組、ML Kit、Skia 都編譯通過；APK manifest 確認含 `com.google.mlkit.vision.DEPENDENCIES = subject_segment`。檔案：Google Drive `SPARK-Builds/TENKI-OUTFIT/tenki-outfit-v0.1.0-20261102-1715.apk`（約 126 MB，含全部 CPU 架構）
+- **Android 實機檢測通過（使用者回報 2026-11-02）**：自動去背、拍照、手動擦除／補回／滑桿／復原、存檔、重開 App 資料仍在、編輯已存單品，皆無問題
+- 意外：上一個 commit 誤含 `modules/tenki-bg-removal/android/build/`（1,357 個建置產物），尚未推送，已 amend 移除並加入 `.gitignore`
+- **Code review 後修正**（code-reviewer：無 Critical，2 High）：
+  - High：Android `Tasks.await` 加 30 秒逾時；JS `removeBackground` 加 45 秒逾時 → `failed`（避免表單一直鎖在「去背中」）
+  - High＋Medium：新增原生 `normalizeAsync`（只轉正＋縮到 1600px＋JPEG，不需要 iOS 17／Play 服務）；去背沒成功時也改用它，編輯器不再載入原尺寸大圖、EXIF 方向也正確。**行為變更**：去背沒成功時存的是 1600px 版本，不是原尺寸照片
+  - 編輯器在兩張圖相同時只解碼一次；`drawAsImage` 的圖用完 `dispose()`；`containRect` 在還沒量到尺寸時回傳 null
+  - iOS 改用 `CGImageSourceCreateThumbnailAtIndex`（直接解碼成縮圖並套用 EXIF），不再先解碼原尺寸
+  - App 啟動時清除 `cache/bg-removal/`（`clearCutoutCache`）
+  - 原生寫檔檢查結果、失敗時刪除殘留檔（新錯誤碼 `ERR_WRITE`）；Android bitmap 用完 `recycle()`
+  - 未處理（Low、只影響效能）：筆畫路徑每次移動重建；編輯已存單品時原圖多複製一次
+- 修正後驗證：Jest 121 項通過、tsc、lint；`bash scripts/regression.sh` 4/4 全過；iOS `xcodebuild` BUILD SUCCEEDED；Android APK 重新建置成功：`SPARK-Builds/TENKI-OUTFIT/tenki-outfit-v0.1.0-20261102-1735.apk`（修正後版本尚未實機複測）
+
+#### 第 3 階段留待之後處理
+- 修正後 APK 尚未實機複測（建議第 4 階段開工前順手裝一次）
+- iOS 只驗證到編譯與安裝，沒有操作驗證（使用者決定不測 iPhone）
+- `cache/bg-removal/` 只在啟動時清除
+- 上述兩個 Low 效能項目

@@ -5,6 +5,7 @@ import { useItemRepository } from '@/db/ItemRepositoryContext';
 import { useT } from '@/i18n';
 import { saveItem } from '@/lib/itemService';
 import { pickPhoto } from '@/lib/pickPhoto';
+import { removeBackground } from '@/lib/backgroundRemoval';
 import type { Category } from '@/types/models';
 
 export default function NewItemScreen() {
@@ -20,6 +21,7 @@ export default function NewItemScreen() {
       <ItemForm
         initial={{ ...EMPTY_ITEM_INPUT, category: initialCategory }}
         onPickPhoto={pickPhoto}
+        onRemoveBackground={removeBackground}
         onSubmit={async (input, photo) => {
           await saveItem(repo, null, input, photo);
           router.back();

@@ -1,17 +1,19 @@
 import { Image } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CATEGORIES, OCCASIONS, SEASONS } from '@/constants/options';
 import type { ItemInput } from '@/db/itemRepository';
 import { useT } from '@/i18n';
 import { CURRENCIES } from '@/lib/currency';
+import type { BgRemovalResult } from '@/lib/backgroundRemoval';
 import type { PhotoChange } from '@/lib/itemService';
 import type { PhotoSource } from '@/lib/pickPhoto';
 import { resolvePhotoUri } from '@/lib/photoStorage';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme, type Theme } from '@/theme/useTheme';
 import { Chip } from './Chip';
+import { PHOTO_EDITOR_SUPPORTED, PhotoEditor } from './PhotoEditor';
 
 export const EMPTY_ITEM_INPUT: ItemInput = {
   name: '', brand: '', category: 'top', price: null, occasions: [], seasons: [], imageUri: null, originalUri: null,
@@ -21,6 +23,8 @@ interface Props {
   initial: ItemInput;
   /** 回傳暫存 URI；取消回傳 null；沒有權限時丟出錯誤 */
   onPickPhoto: (source: PhotoSource) => Promise<string | null>;
+  /** 自動去背（畫面注入 removeBackground；測試注入假的） */
+  onRemoveBackground: (uri: string) => Promise<BgRemovalResult>;
   onSubmit: (input: ItemInput, photo: PhotoChange) => void | Promise<unknown>;
   onCancel: () => void;
   /** 有傳才顯示「刪除」（移到暫存區） */
@@ -35,11 +39,21 @@ export function parsePrice(text: string): number | null | undefined {
   return Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
+type CutoutState = 'running' | BgRemovalResult['status'] | null;
+
+const CUTOUT_MESSAGE = {
+  running: 'item.cutoutRunning',
+  ok: 'item.cutoutDone',
+  unavailable: 'item.cutoutUnavailable',
+  noSubject: 'item.cutoutNoSubject',
+  failed: 'item.cutoutFailed',
+} as const;
+
 function toggle<T>(list: T[], value: T): T[] {
   return list.includes(value) ? list.filter(v => v !== value) : [...list, value];
 }
 
-export function ItemForm({ initial, onPickPhoto, onSubmit, onCancel, onDelete }: Props) {
+export function ItemForm({ initial, onPickPhoto, onRemoveBackground, onSubmit, onCancel, onDelete }: Props) {
   const t = useT();
   const theme = useTheme();
   const currency = useSettingsStore(s => s.currency);
@@ -48,18 +62,68 @@ export function ItemForm({ initial, onPickPhoto, onSubmit, onCancel, onDelete }:
   const [photo, setPhoto] = useState<PhotoChange>({ kind: 'keep' });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [cutout, setCutout] = useState<CutoutState>(null);
+  const [editingPhoto, setEditingPhoto] = useState(false);
+  /** 每次選照片 +1；較慢回來的舊去背結果比對不符就丟掉 */
+  const pickSeq = useRef(0);
 
-  const previewUri = photo.kind === 'replace' ? photo.uri : photo.kind === 'remove' ? null : initial.imageUri;
+  const previewUri = photo.kind === 'replace' ? photo.imageUri : photo.kind === 'remove' ? null : initial.imageUri;
+  const busy = saving || cutout === 'running';
+
+  /** 手動修改用的兩張圖：目前顯示圖 + 補回筆刷的來源（沒有原圖的舊資料就用顯示圖） */
+  const editable =
+    photo.kind === 'replace'
+      ? { imageUri: photo.imageUri, originalUri: photo.originalUri }
+      : photo.kind === 'keep' && initial.imageUri
+        ? {
+            imageUri: resolvePhotoUri(initial.imageUri)!,
+            originalUri: resolvePhotoUri(initial.originalUri ?? initial.imageUri)!,
+          }
+        : null;
+
+  const finishEditing = (uri: string) => {
+    if (editable) setPhoto({ kind: 'replace', originalUri: editable.originalUri, imageUri: uri });
+    setCutout(null);
+    setEditingPhoto(false);
+  };
   const update = (patch: Partial<ItemInput>) => setForm(f => ({ ...f, ...patch }));
 
   const pick = async (source: PhotoSource) => {
     setError(null);
+    let uri: string | null;
     try {
-      const uri = await onPickPhoto(source);
-      if (uri) setPhoto({ kind: 'replace', uri });
+      uri = await onPickPhoto(source);
     } catch {
       setError(t(source === 'camera' ? 'item.cameraDenied' : 'item.libraryDenied'));
+      return;
     }
+    if (!uri) return;
+
+    const seq = ++pickSeq.current;
+    setPhoto({ kind: 'replace', originalUri: uri, imageUri: uri });
+    setCutout('running');
+    let result: BgRemovalResult;
+    try {
+      result = await onRemoveBackground(uri);
+    } catch (e) {
+      result = { status: 'failed', error: e };
+    }
+    if (seq !== pickSeq.current) return;
+    // 去背成功：丟掉選到的原尺寸照片，只留縮小原圖（介面上不顯示，給手動「補回」筆刷用）
+    if (result.status === 'ok') {
+      setPhoto({ kind: 'replace', originalUri: result.originalUri, imageUri: result.uri });
+    } else {
+      if (result.status === 'failed') console.warn('自動去背失敗', result.error);
+      // 沒去背成功：有轉正縮小版就用它（編輯器不會載入原尺寸大圖、方向也正確）
+      if (result.originalUri) setPhoto({ kind: 'replace', originalUri: result.originalUri, imageUri: result.originalUri });
+    }
+    setCutout(result.status);
+  };
+
+  const removePhoto = () => {
+    pickSeq.current++;
+    setCutout(null);
+    setPhoto({ kind: 'remove' });
   };
 
   /** 非同步動作期間鎖住按鈕，失敗時顯示錯誤（避免連點、避免未處理的 rejection） */
@@ -70,6 +134,7 @@ export function ItemForm({ initial, onPickPhoto, onSubmit, onCancel, onDelete }:
   };
 
   const submit = () => {
+    if (busy) return;
     const price = parsePrice(priceText);
     if (price === undefined) return setError(t('item.priceInvalid'));
     setError(null);
@@ -91,11 +156,19 @@ export function ItemForm({ initial, onPickPhoto, onSubmit, onCancel, onDelete }:
             </View>
           )}
         </View>
-        {photo.kind === 'replace' && <Text style={[s.muted, s.center]}>{t('item.cutoutPending')}</Text>}
+        {cutout && (
+          <View style={s.cutoutRow} accessibilityLiveRegion="polite">
+            {cutout === 'running' && <ActivityIndicator size="small" color={theme.textMuted} />}
+            <Text style={s.muted}>{t(CUTOUT_MESSAGE[cutout])}</Text>
+          </View>
+        )}
         <View style={s.chipRow}>
           <Chip label={t(previewUri ? 'item.reupload' : 'item.pickLibrary')} selected={false} onPress={() => pick('library')} />
           <Chip label={t('item.takePhoto')} selected={false} onPress={() => pick('camera')} />
-          {previewUri && <Chip label={t('item.removePhoto')} selected={false} onPress={() => setPhoto({ kind: 'remove' })} />}
+          {PHOTO_EDITOR_SUPPORTED && editable && cutout !== 'running' && (
+            <Chip label={t('item.editPhoto')} selected={false} onPress={() => setEditingPhoto(true)} />
+          )}
+          {previewUri && <Chip label={t('item.removePhoto')} selected={false} onPress={removePhoto} />}
         </View>
 
         <Field theme={theme} label={t('item.brand')}>
@@ -139,6 +212,14 @@ export function ItemForm({ initial, onPickPhoto, onSubmit, onCancel, onDelete }:
         </Field>
         {error && <Text style={s.error}>{error}</Text>}
       </ScrollView>
+      {editingPhoto && editable && (
+        <PhotoEditor
+          imageUri={editable.imageUri}
+          originalUri={editable.originalUri}
+          onDone={finishEditing}
+          onCancel={() => setEditingPhoto(false)}
+        />
+      )}
 
       <View style={s.actions}>
         {onDelete && (
@@ -159,10 +240,10 @@ export function ItemForm({ initial, onPickPhoto, onSubmit, onCancel, onDelete }:
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('item.save')}
-          accessibilityState={{ disabled: saving }}
-          disabled={saving}
+          accessibilityState={{ disabled: busy }}
+          disabled={busy}
           onPress={submit}
-          style={[s.action, { backgroundColor: theme.primary, opacity: saving ? 0.6 : 1 }]}
+          style={[s.action, { backgroundColor: theme.primary, opacity: busy ? 0.6 : 1 }]}
         >
           <Text style={s.primaryText}>{t('item.save')}</Text>
         </Pressable>
@@ -189,7 +270,7 @@ const makeStyles = (theme: Theme) =>
     photo: { flex: 1 },
     photoEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
     muted: { color: theme.textMuted, fontSize: 13 },
-    center: { textAlign: 'center', marginTop: -8 },
+    cutoutRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: -8 },
     chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     input: {
       borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,

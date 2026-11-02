@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "jest",
@@ -18,6 +18,7 @@
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
+    "@shopify/react-native-skia": "2.2.12",
     "babel-preset-expo": "~54.0.10",
     "expo": "~54.0.36",
     "expo-asset": "~12.0.14",
@@ -71,7 +72,8 @@
       "^expo-sqlite$": "<rootDir>/src/__mocks__/expo-sqlite.ts",
       "^@react-native-async-storage/async-storage$": "<rootDir>/src/__mocks__/async-storage.ts",
       "^expo-secure-store$": "<rootDir>/src/__mocks__/expo-secure-store.ts",
-      "^@expo/vector-icons/Ionicons$": "<rootDir>/src/__mocks__/ionicons.tsx"
+      "^@expo/vector-icons/Ionicons$": "<rootDir>/src/__mocks__/ionicons.tsx",
+      "^@shopify/react-native-skia$": "<rootDir>/src/__mocks__/react-native-skia.ts"
     },
     "testMatch": [
       "<rootDir>/src/__tests__/**/*.test.(ts|tsx)"
