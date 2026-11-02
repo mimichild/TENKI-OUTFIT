@@ -1,6 +1,6 @@
 # TENKI OUTFIT 天氣穿搭 — v1 開發計畫
 
-> 建立：2026-11-02　狀態：**第 2 階段完成，待第 3 階段**
+> 建立：2026-11-02　狀態：**第 3 階段進行中**
 > 基礎設施沿用 `/Users/mimi/Documents/REUSABLE_INFRA.md`
 
 ## 技術選型（沿用基礎文件）
@@ -135,3 +135,27 @@
 - 英文單複數（1 days / 1 items）
 - 讀取單品失敗時目前只記錄 log，畫面停在讀取中；之後加錯誤狀態與重試
 - 實機（相簿／相機選照片、SQLite）尚未驗證，第 3 階段做 dev build 時一起驗
+
+### 第 3 階段 — 進行中（2026-11-02 開始，分支 `feat/phase-3-bg-removal`，每批 commit）
+
+使用者已同意（2026-11-02）：
+- Android 這階段不驗證（沒有模擬器/手機），留到第 7 階段打包時實機驗；本階段只在 iOS 模擬器驗證
+- 不改 DB：遮罩從去背 PNG 的透明度反推（重新編輯 = 原圖 + 目前去背圖）
+- 顯示圖改存 `.png`（透明背景），原圖維持原格式
+- 每批 commit
+
+拆成四批：
+- **A｜去背原生模組**：專案內 Expo 本機模組 `modules/tenki-bg-removal`（iOS Vision `VNGenerateForegroundInstanceMaskRequest`，iOS 17+；Android ML Kit Subject Segmentation）；JS 包裝 `src/lib/backgroundRemoval.ts`（+ `.web.ts` 一律回報不支援），先縮到長邊 1600px 再去背；單元測試用假原生模組
+- **B｜接到新增／編輯流程**：選照片 → 去背中 → 顯示結果；失敗/不支援時退回原圖並提示；`saveItem` 分開存原圖與去背圖；照片複製改非同步
+- **C｜手動修改遮罩**：加 `@shopify/react-native-skia`，筆刷「擦除／補回」編輯畫面，存成新的去背 PNG；單品頁「重新編輯照片」
+- **D｜iOS dev build + 模擬器驗證**（含第 2 階段未驗的相簿、SQLite）；Android 只做 Gradle 編譯檢查
+
+#### 批次 A — 完成（2026-11-02）
+- `modules/tenki-bg-removal/`：Expo 本機模組（autolinking 已確認 iOS/Android 都抓得到）
+  - `ios/TenkiBgRemovalModule.swift`：讀檔 → 轉正並縮到長邊 maxSize → Vision 前景遮罩（iOS 17+）→ 不裁切、與輸入同尺寸的透明 PNG，存到 `Caches/bg-removal/`；在背景佇列執行
+  - `android/.../TenkiBgRemovalModule.kt`：inSampleSize 縮圖 + EXIF 轉正 → ML Kit Subject Segmentation 前景圖 → PNG 存到 `cacheDir/bg-removal/`；`AndroidManifest.xml` 加 `subject_segment` 讓安裝時預先下載模型
+  - 錯誤碼：`ERR_NO_SUBJECT`、`ERR_UNAVAILABLE`、`ERR_LOAD_IMAGE`、`ERR_SEGMENTATION`
+  - `src/TenkiBgRemovalModule.ts`：`requireOptionalNativeModule`，Expo Go / Web / 測試時為 null
+- `src/lib/backgroundRemoval.ts`（+ `.web.ts`）：`removeBackground(uri)` 不丟例外，回傳 `ok / unavailable / noSubject / failed`；`BG_REMOVAL_MAX_SIZE = 1600`
+- 驗證：Jest 90 項通過（新增 7 項）；`bash scripts/regression.sh` 4/4 全過（視覺 38 項）
+- **尚未驗證**：Swift / Kotlin 還沒編譯過（還沒 prebuild），批次 D 做 dev build 時才會編譯；Android 本階段只做 Gradle 編譯檢查
