@@ -1,6 +1,6 @@
 # TENKI OUTFIT 天氣穿搭 — v1 開發計畫
 
-> 建立：2026-11-02　狀態：**第 3 階段完成，待第 4 階段**
+> 建立：2026-11-02　狀態：**第 4 階段進行中**
 > 基礎設施沿用 `/Users/mimi/Documents/REUSABLE_INFRA.md`
 
 ## 技術選型（沿用基礎文件）
@@ -206,3 +206,38 @@
 - iOS 只驗證到編譯與安裝，沒有操作驗證（使用者決定不測 iPhone）
 - `cache/bg-removal/` 只在啟動時清除
 - 上述兩個 Low 效能項目
+
+### 第 4 階段 — 進行中（2026-11-02，分支 `feat/phase-4-weather`，每批 commit）
+
+使用者決定（2026-11-02）：
+- **只做到縣市，不做鄉鎮**：改用 `F-D0047-091`（全臺未來 1 週，22 縣市），不需要鄉鎮清單；`weather_days.town` 一律存空字串，設定的 `town` 預設改為空字串
+- 使用者有授權碼；真實回傳格式用本機 `~/.config/tenki/cwa_key` 抓一份比對（授權碼不進對話、不進 git）
+- 先出 APK 給使用者實測，再做視覺測試與 code review
+
+規格核對（2026-11-02，`opendata.cwa.gov.tw/apidoc/v1`）：欄位已改中文名稱——最高溫度、最低溫度、最高體感溫度、最低體感溫度、12小時降雨機率、天氣現象（計畫原寫的 MaxT/PoP12h 為舊格式）
+
+做法：
+- 一天 = 白天＋晚上兩個 12 小時時段：最高/最低溫與體感取極值、降雨機率取較大、天氣現象取白天；日期用台灣時間
+- 快取優先；超過 3 小時或下拉時重抓；只寫入今天（含）以後的日期，過去日期不再更新；今天的新資料若已沒有白天時段，保留舊的今天資料
+- en / ja 用天氣代碼分類顯示（晴、多雲、陰、雨、雷雨、霧、雪），zh-TW 顯示氣象署原文
+
+分批：
+- **A｜資料層**：API 連線與解析、天氣資料存取（SQLite／記憶體）、快取規則
+- **B｜畫面**：每日氣象頁天氣卡＋前後日期、下拉更新、各種狀態；設定頁移除鄉鎮；三語 → 打包 APK 給使用者實測
+- **C｜收尾**：Web 視覺測試、code review、依實測回饋修正
+
+#### 批次 A｜資料層 — 完成（2026-11-02）
+- `src/lib/cwaWeather.ts`：組網址（`F-D0047-091`、縣市、6 個中文欄位名）、解析（12 小時時段 → 每天一筆；`-` 視為未知；接受 `Locations`／`locations` 大小寫；ElementValue 鍵名不同時退回取第一個數值）、`fetchForecast` 回傳 `ok / noKey / unauthorized / network / timeout(15 秒) / badResponse`、`taipeiDate`、天氣代碼分類 `wxCategory`
+- `src/db/weatherRepository.ts`（介面）、`sqliteWeatherRepository.ts`（upsert 在單一 transaction）、`memoryWeatherRepository.ts`
+- `src/lib/weatherService.ts`：`refreshWeather`（3 小時快取、只寫今天以後、今天沒有白天時段就不覆蓋舊資料）
+- 不需要改 DB
+- 解析用的範例資料 `src/__tests__/fixtures/cwa-f-d0047-091.json` 是**照規格做的**，還沒和真實回傳比對
+
+#### 批次 B｜畫面 — 完成（2026-11-02）
+- `app/(tabs)/index.tsx`：天氣卡（日期＋今天/明天/昨天、縣市、天氣圖示、最高/最低溫、天氣描述、體感溫度、降雨機率、更新時間）；左右箭頭或左右滑動切換日期（範圍：最早快取 ~ 最晚預報）；下拉更新；沒有授權碼 → 「前往設定」；錯誤橫幅（保留快取資料）；沒有資料／讀取中；下方白色畫布先放第 5 階段提示；資料來源標示
+- `src/db/WeatherContext.tsx`（注入 repository、fetcher、now）、`src/db/useWeather.ts`（換縣市或授權碼時丟棄舊請求的結果）、`src/lib/weatherDates.ts`
+- 手機版與網頁版 `DatabaseProvider` 都掛上 `WeatherProvider`
+- 設定：`town` 預設改空字串，讀回舊存檔時一律清成空字串
+- 三語字串：新增 `weather.*`（31 組）、`wx.*`（8 組），移除 `placeholder.weather`
+- 驗證：Jest 170 項通過（新增 52 項）、tsc、lint；Web 視覺測試 38 項通過（還沒加天氣頁的檢查，批次 C 補上）
+- 和計畫不同的地方：滑動用 React Native 內建的 `PanResponder`，不用 gesture-handler（比較簡單、測試不用另外 mock）

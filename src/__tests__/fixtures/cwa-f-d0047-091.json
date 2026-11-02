@@ -1,0 +1,616 @@
+{
+ "success": "true",
+ "result": {
+  "resource_id": "F-D0047-091",
+  "fields": []
+ },
+ "records": {
+  "Locations": [
+   {
+    "DatasetDescription": "臺灣各縣市鄉鎮未來1週逐12小時天氣預報",
+    "LocationsName": "臺灣",
+    "Dataid": "D0047-091",
+    "Location": [
+     {
+      "LocationName": "新北市",
+      "Geocode": "63",
+      "Latitude": "25.0",
+      "Longitude": "121.5",
+      "WeatherElement": [
+       {
+        "ElementName": "平均溫度",
+        "Time": [
+         {
+          "StartTime": "2026-11-02T18:00:00+08:00",
+          "EndTime": "2026-11-03T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "Temperature": "10"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T06:00:00+08:00",
+          "EndTime": "2026-11-03T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "Temperature": "10"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T18:00:00+08:00",
+          "EndTime": "2026-11-04T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "Temperature": "10"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-04T06:00:00+08:00",
+          "EndTime": "2026-11-04T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "Temperature": "10"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "ElementName": "最高溫度",
+        "Time": [
+         {
+          "StartTime": "2026-11-02T18:00:00+08:00",
+          "EndTime": "2026-11-03T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "MaxTemperature": "11"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T06:00:00+08:00",
+          "EndTime": "2026-11-03T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "MaxTemperature": "16"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T18:00:00+08:00",
+          "EndTime": "2026-11-04T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "MaxTemperature": "12"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-04T06:00:00+08:00",
+          "EndTime": "2026-11-04T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "MaxTemperature": "15"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "ElementName": "最低溫度",
+        "Time": [
+         {
+          "StartTime": "2026-11-02T18:00:00+08:00",
+          "EndTime": "2026-11-03T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "MinTemperature": "7"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T06:00:00+08:00",
+          "EndTime": "2026-11-03T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "MinTemperature": "10"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T18:00:00+08:00",
+          "EndTime": "2026-11-04T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "MinTemperature": "6"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-04T06:00:00+08:00",
+          "EndTime": "2026-11-04T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "MinTemperature": "9"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "ElementName": "最高體感溫度",
+        "Time": [
+         {
+          "StartTime": "2026-11-02T18:00:00+08:00",
+          "EndTime": "2026-11-03T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "MaxApparentTemperature": "10"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T06:00:00+08:00",
+          "EndTime": "2026-11-03T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "MaxApparentTemperature": "17"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T18:00:00+08:00",
+          "EndTime": "2026-11-04T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "MaxApparentTemperature": "11"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-04T06:00:00+08:00",
+          "EndTime": "2026-11-04T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "MaxApparentTemperature": "14"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "ElementName": "最低體感溫度",
+        "Time": [
+         {
+          "StartTime": "2026-11-02T18:00:00+08:00",
+          "EndTime": "2026-11-03T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "MinApparentTemperature": "5"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T06:00:00+08:00",
+          "EndTime": "2026-11-03T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "MinApparentTemperature": "9"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T18:00:00+08:00",
+          "EndTime": "2026-11-04T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "MinApparentTemperature": "4"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-04T06:00:00+08:00",
+          "EndTime": "2026-11-04T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "MinApparentTemperature": "8"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "ElementName": "12小時降雨機率",
+        "Time": [
+         {
+          "StartTime": "2026-11-02T18:00:00+08:00",
+          "EndTime": "2026-11-03T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "ProbabilityOfPrecipitation": "20"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T06:00:00+08:00",
+          "EndTime": "2026-11-03T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "ProbabilityOfPrecipitation": "70"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T18:00:00+08:00",
+          "EndTime": "2026-11-04T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "ProbabilityOfPrecipitation": "30"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-04T06:00:00+08:00",
+          "EndTime": "2026-11-04T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "ProbabilityOfPrecipitation": "-"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "ElementName": "天氣現象",
+        "Time": [
+         {
+          "StartTime": "2026-11-02T18:00:00+08:00",
+          "EndTime": "2026-11-03T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "Weather": "多雲",
+            "WeatherCode": "04"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T06:00:00+08:00",
+          "EndTime": "2026-11-03T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "Weather": "短暫陣雨",
+            "WeatherCode": "08"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T18:00:00+08:00",
+          "EndTime": "2026-11-04T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "Weather": "陰天",
+            "WeatherCode": "07"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-04T06:00:00+08:00",
+          "EndTime": "2026-11-04T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "Weather": "晴天",
+            "WeatherCode": "01"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "LocationName": "臺北市",
+      "Geocode": "63",
+      "Latitude": "25.0",
+      "Longitude": "121.5",
+      "WeatherElement": [
+       {
+        "ElementName": "平均溫度",
+        "Time": [
+         {
+          "StartTime": "2026-11-02T18:00:00+08:00",
+          "EndTime": "2026-11-03T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "Temperature": "20"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T06:00:00+08:00",
+          "EndTime": "2026-11-03T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "Temperature": "20"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T18:00:00+08:00",
+          "EndTime": "2026-11-04T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "Temperature": "20"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-04T06:00:00+08:00",
+          "EndTime": "2026-11-04T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "Temperature": "20"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "ElementName": "最高溫度",
+        "Time": [
+         {
+          "StartTime": "2026-11-02T18:00:00+08:00",
+          "EndTime": "2026-11-03T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "MaxTemperature": "21"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T06:00:00+08:00",
+          "EndTime": "2026-11-03T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "MaxTemperature": "26"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T18:00:00+08:00",
+          "EndTime": "2026-11-04T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "MaxTemperature": "22"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-04T06:00:00+08:00",
+          "EndTime": "2026-11-04T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "MaxTemperature": "25"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "ElementName": "最低溫度",
+        "Time": [
+         {
+          "StartTime": "2026-11-02T18:00:00+08:00",
+          "EndTime": "2026-11-03T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "MinTemperature": "17"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T06:00:00+08:00",
+          "EndTime": "2026-11-03T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "MinTemperature": "20"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T18:00:00+08:00",
+          "EndTime": "2026-11-04T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "MinTemperature": "16"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-04T06:00:00+08:00",
+          "EndTime": "2026-11-04T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "MinTemperature": "19"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "ElementName": "最高體感溫度",
+        "Time": [
+         {
+          "StartTime": "2026-11-02T18:00:00+08:00",
+          "EndTime": "2026-11-03T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "MaxApparentTemperature": "20"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T06:00:00+08:00",
+          "EndTime": "2026-11-03T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "MaxApparentTemperature": "27"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T18:00:00+08:00",
+          "EndTime": "2026-11-04T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "MaxApparentTemperature": "21"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-04T06:00:00+08:00",
+          "EndTime": "2026-11-04T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "MaxApparentTemperature": "24"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "ElementName": "最低體感溫度",
+        "Time": [
+         {
+          "StartTime": "2026-11-02T18:00:00+08:00",
+          "EndTime": "2026-11-03T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "MinApparentTemperature": "15"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T06:00:00+08:00",
+          "EndTime": "2026-11-03T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "MinApparentTemperature": "19"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T18:00:00+08:00",
+          "EndTime": "2026-11-04T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "MinApparentTemperature": "14"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-04T06:00:00+08:00",
+          "EndTime": "2026-11-04T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "MinApparentTemperature": "18"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "ElementName": "12小時降雨機率",
+        "Time": [
+         {
+          "StartTime": "2026-11-02T18:00:00+08:00",
+          "EndTime": "2026-11-03T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "ProbabilityOfPrecipitation": "20"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T06:00:00+08:00",
+          "EndTime": "2026-11-03T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "ProbabilityOfPrecipitation": "70"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T18:00:00+08:00",
+          "EndTime": "2026-11-04T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "ProbabilityOfPrecipitation": "30"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-04T06:00:00+08:00",
+          "EndTime": "2026-11-04T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "ProbabilityOfPrecipitation": "-"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "ElementName": "天氣現象",
+        "Time": [
+         {
+          "StartTime": "2026-11-02T18:00:00+08:00",
+          "EndTime": "2026-11-03T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "Weather": "多雲",
+            "WeatherCode": "04"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T06:00:00+08:00",
+          "EndTime": "2026-11-03T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "Weather": "短暫陣雨",
+            "WeatherCode": "08"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-03T18:00:00+08:00",
+          "EndTime": "2026-11-04T06:00:00+08:00",
+          "ElementValue": [
+           {
+            "Weather": "陰天",
+            "WeatherCode": "07"
+           }
+          ]
+         },
+         {
+          "StartTime": "2026-11-04T06:00:00+08:00",
+          "EndTime": "2026-11-04T18:00:00+08:00",
+          "ElementValue": [
+           {
+            "Weather": "晴天",
+            "WeatherCode": "01"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

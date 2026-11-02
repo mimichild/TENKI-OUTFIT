@@ -13,7 +13,7 @@ const CWA_KEY_SECURE_NAME = 'cwaApiKey';
 export interface Settings {
   language: Language;
   county: County;
-  /** 鄉鎮市區，空字串 = 縣市層級（第 4 階段串接氣象署時使用） */
+  /** 鄉鎮市區；v1 只做到縣市，一律為空字串（保留欄位給之後的鄉鎮層級） */
   town: string;
   currency: CurrencyCode;
   themeColor: ThemeColorKey;
@@ -24,7 +24,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   language: 'zh-TW',
   county: '臺北市',
-  town: '中正區',
+  town: '',
   currency: 'TWD',
   themeColor: 'sky',
   cwaApiKey: '',
@@ -39,11 +39,9 @@ export function sanitizeSettings(raw: Partial<Settings>): Omit<Settings, 'cwaApi
   if (!VALID_LANGUAGES.includes(s.language)) s.language = DEFAULT_SETTINGS.language;
   if (!(s.themeColor in THEME_COLORS)) s.themeColor = DEFAULT_SETTINGS.themeColor;
   if (!(s.currency in CURRENCIES)) s.currency = DEFAULT_SETTINGS.currency;
-  if (!(COUNTIES as readonly string[]).includes(s.county)) {
-    s.county = DEFAULT_SETTINGS.county;
-    s.town = DEFAULT_SETTINGS.town;
-  }
-  if (typeof s.town !== 'string') s.town = '';
+  if (!(COUNTIES as readonly string[]).includes(s.county)) s.county = DEFAULT_SETTINGS.county;
+  // v1 只做到縣市：舊版存的鄉鎮（例如預設的中正區）一律清掉
+  s.town = '';
   return s;
 }
 
