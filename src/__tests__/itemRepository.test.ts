@@ -55,7 +55,7 @@ describe('memory item repository', () => {
     await repo.create(input);
     await repo.moveToTrash('id1');
     const removed = await repo.purge('id1');
-    expect(removed?.id).toBe('id1');
+    expect(removed.map(i => i.id)).toEqual(['id1']);
     expect(await repo.get('id1')).toBeNull();
   });
 
@@ -129,32 +129,19 @@ describe('sqlite item repository', () => {
     return { db, tx };
   }
 
-  it('purge removes the item and its outfit placements inside one exclusive transaction', async () => {
-    const { db, tx } = txDb();
-    const repo = createSqliteItemRepository(db as never, { now: () => 'T', newId: () => 'x' });
-    expect((await repo.purge('x'))?.id).toBe('x');
-    expect(db.withExclusiveTransactionAsync).toHaveBeenCalledTimes(1);
-    expect(tx.runAsync.mock.calls).toEqual([
-      ['DELETE FROM outfit_items WHERE item_id = ?', 'x'],
-      ['DELETE FROM items WHERE id = ?', 'x'],
-    ]);
-    expect(db.runAsync).not.toHaveBeenCalled();
-  });
-
+  // 永久刪除的實際 SQL 規則（過去／未來穿搭）由 outfitData.test.ts 用真的 SQLite 驗證
   it('purge propagates a failed transaction', async () => {
     const { db } = txDb();
     db.withExclusiveTransactionAsync.mockRejectedValue(new Error('locked'));
-    const repo = createSqliteItemRepository(db as never, { now: () => 'T', newId: () => 'x' });
+    const repo = createSqliteItemRepository(db as never, { now: () => '2026-11-02T00:00:00.000Z', newId: () => 'x' });
     await expect(repo.purge('x')).rejects.toThrow('locked');
   });
 
-  it('purgeExpired deletes rows older than the cutoff', async () => {
-    const { db, tx } = txDb([{ ...row, deleted_at: '2026-01-01T00:00:00.000Z' }]);
+  it('purgeExpired looks up trash older than the cutoff, skipping archived items', async () => {
+    const { db } = txDb([]);
     const repo = createSqliteItemRepository(db as never, { now: () => '2026-11-02T00:00:00.000Z', newId: () => 'x' });
-    const removed = await repo.purgeExpired(30);
-    expect(removed.map(i => i.id)).toEqual(['x']);
+    expect(await repo.purgeExpired(30)).toEqual([]);
+    expect(db.getAllAsync.mock.calls[0][0]).toMatch(/archived_at IS NULL/);
     expect(db.getAllAsync.mock.calls[0][1]).toBe('2026-10-03T00:00:00.000Z');
-    expect(tx.runAsync).toHaveBeenCalledWith('DELETE FROM items WHERE id = ?', 'x');
-    expect(db.withExclusiveTransactionAsync).toHaveBeenCalledTimes(1);
   });
 });

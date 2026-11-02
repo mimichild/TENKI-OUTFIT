@@ -64,6 +64,10 @@ export const MIGRATIONS: string[] = [
     PRIMARY KEY (county, town, date)
   );
   `,
+  // v2（第 5 階段）：永久刪除但過去穿搭仍參照的單品改為「已封存」，不出現在服裝牆與暫存區
+  `
+  ALTER TABLE items ADD COLUMN archived_at TEXT;
+  `,
 ];
 
 export async function migrate(db: MigrationDb): Promise<void> {

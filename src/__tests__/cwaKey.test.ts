@@ -5,6 +5,7 @@ describe('cwaKey', () => {
     jest.resetModules();
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- 每個測試重新載入以讀取不同的環境變數
   const load = () => require('@/lib/cwaKey') as typeof import('@/lib/cwaKey');
 
   it('prefers the built-in key over the user key', () => {

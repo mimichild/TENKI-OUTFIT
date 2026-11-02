@@ -1,6 +1,6 @@
 # TENKI OUTFIT 天氣穿搭 — v1 開發計畫
 
-> 建立：2026-11-02　狀態：**第 4 階段完成（待實機複測），待第 5 階段**
+> 建立：2026-11-02　狀態：**第 4 階段完成（實機複測通過），第 5 階段進行中**
 > 基礎設施沿用 `/Users/mimi/Documents/REUSABLE_INFRA.md`
 
 ## 技術選型（沿用基礎文件）
@@ -29,7 +29,7 @@
 - 上排：天氣卡，可左右切換前後日期；顯示最高／最低溫、晴雨、降雨機率、體感溫度
 - 右上月曆圖示：切換日／週／月檢視，都顯示已排定的穿搭
 - 中層：當日或當週的穿搭；底部白色畫布
-- 右下 ＋：在白色畫布上拖拉、縮放單品組成穿搭；可存成當日、指定其他日期，或不指定日期
+- 右下 ＋：在白色畫布上拖拉、縮放單品組成穿搭；可存成當日或指定其他日期（**必須有日期**，使用者決定 2026-11-02）
 - 每套穿搭自動加總單品價格，以設定的幣別顯示
 
 ### 4. 穿搭建議
@@ -275,3 +275,39 @@
   - 手機上已快取的過去日期維持舊算法（今天以後的日期下次抓資料時會被覆蓋）
   - `parseForecast` 改寫；測試改為 B 的預期，新增「晚上下雨不影響白天」「沒有前一晚時用白天最低溫」；Jest 189 項、視覺 44 項通過
 - 驗證：Jest 187 項、tsc、lint；`bash scripts/regression.sh` 4/4 全過（視覺 44 項）
+- **實機複測通過（使用者回報 2026-11-02）**：`tenki-outfit-v0.1.0-20261102-2054.apk`（做法 B）——安裝覆蓋、內建授權碼、天氣卡數值、切換日期／滑動／下拉更新／回到前景、離線錯誤處理全部正常；降雨機率第 4 天起顯示「—」維持現狀
+
+### 第 5 階段 — 進行中（2026-11-02，分支 `feat/phase-5-outfits`，從 `feat/phase-4-weather` 分出，每批 commit）
+
+使用者決定（2026-11-02）：
+- **穿搭一定要有日期**：沒選日期不能存；不做「未排日期」清單。DB 的 `outfits.date` 維持可為 NULL（不另改 DB），由 App 存檔時檢查；讀到舊的 NULL 資料視為未來（沿用暫存區規則）
+- 同一天可排多套穿搭，每日檢視依序列出
+- 點穿搭打開畫布編輯；畫布上可刪除穿搭（點兩次確認，不用系統對話框）
+- 畫布只做拖拉、縮放（`rotation` 固定 0）；點單品移到最上層；可從畫布移除單品
+- 位置以畫布寬度的比例存（換手機相對位置不變）
+- 總金額：有填價格的單品才加總（含已封存單品），全部沒填顯示「—」
+- 「最近使用」（`last_used_at`）= 該單品所在穿搭的最晚日期（含未來日期）
+- 月曆自己做（日／週／月格子），不新增套件
+
+分批：
+- **A｜資料層**：DB v2（items 加封存欄位）、穿搭 repository（SQLite／記憶體）、改寫永久刪除規則與測試、總金額與最近使用
+- **B｜穿搭畫布**：選單品、拖拉縮放、選日期（必填）存檔、編輯、刪除
+- **C｜每日氣象頁**：日／週／月切換、月曆標示有穿搭的日子、當日／當週穿搭與總金額；暫存區頁說明文字
+- **D｜收尾**：Web 視覺測試、code review、APK 實機測試
+
+#### 批次 A｜資料層 — 完成（2026-11-02）
+- DB v2（`src/db/migrations.ts`）：`ALTER TABLE items ADD COLUMN archived_at TEXT`，舊資料保留；沒有加其他欄位或索引
+- `src/db/outfitRepository.ts`：介面、`OutfitInput`（日期必填）、`validateOutfitInput`（日期格式 `date`、沒有單品 `empty`、同一件重複 `duplicate` → `OutfitValidationError`）
+- `src/db/sqliteOutfitRepository.ts`：`listInRange`（含兩端，依日期→建立時間）、`get`、`create`、`update`、`delete`，寫入都在排他交易內；讀出的穿搭帶完整單品資料（含已封存、在暫存區的）
+- `src/db/sqliteOutfitRules.ts`：永久刪除規則（今天以後／沒有日期的穿搭移除該單品、變空就刪穿搭；過去穿搭還用到 → `archived_at`；否則真正刪除）、「最近使用」重算（最晚穿搭日期，含未來）、沒人參照的封存單品真正刪除
+- `src/db/sqliteItemRepository.ts`：`list`／`listTrash`／`get` 排除已封存；`purge`／`purgeExpired` 套用上述規則，回傳「真正刪除」的單品
+- `src/db/memoryItemRepository.ts`：新增 `createMemoryDatabase`（單品與穿搭共用一份記憶體資料，規則同 SQLite）；`createMemoryItemRepository` 保留為包裝
+- `src/lib/outfitTotals.ts`（總金額，全部沒填 → null）、`src/lib/outfitService.ts`（`saveOutfit`／`deleteOutfit`：刪除真正刪掉的封存單品照片、通知畫面）；`purgeItem` 封存時不刪照片
+- `src/db/OutfitRepositoryContext.tsx`；手機版與網頁版 `DatabaseProvider` 掛上穿搭資料層
+- 測試：新增 `outfitData.test.ts`（同一組規則測試跑記憶體版與 **真的 SQLite**——`src/__tests__/helpers/nodeSqlite.ts` 用 Node 內建 `node:sqlite` 包成 expo-sqlite 介面，需 Node 22.5+）、`outfitService.test.ts`、`outfitTotals.test.ts`、migration v1→v2 實際升級測試；舊的永久刪除 SQL 逐字比對測試改由真 SQLite 測試取代
+- 驗證：Jest 218 項通過（原 189 → 新增 29、移除 2 項舊比對）、tsc、lint 0 警告；`bash scripts/regression.sh` 4/4 全過（視覺 44 項）
+- 和計畫不同的地方：
+  - `Outfit` 型別的 `items` 改為 `pieces`（每件帶完整 `Item`），畫面不用再另外查單品；`Item` 型別沒有加封存欄位（封存單品只會透過穿搭讀到）
+  - `ItemRepository.purge` 回傳改為 `Item[]`（真正刪除的單品），封存時回傳空陣列
+  - 穿搭變動沿用 `useItemsVersion` 通知（會改到單品的最近使用），不另開版本號
+  - 順手修掉第 4 階段留下的 lint 警告（`cwaKey.test.ts` 的 `require`）

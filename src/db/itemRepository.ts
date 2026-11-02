@@ -21,9 +21,13 @@ export interface ItemRepository {
   update(id: string, input: ItemInput): Promise<Item | null>;
   moveToTrash(id: string): Promise<void>;
   restore(id: string): Promise<void>;
-  /** 永久刪除，回傳被刪的單品（呼叫端負責刪照片檔） */
-  purge(id: string): Promise<Item | null>;
-  /** 刪除進暫存區超過 days 天的單品 */
+  /**
+   * 永久刪除。今天以後（含今天、沒有日期）的穿搭移除這件單品，穿搭變空就刪掉；
+   * 過去的穿搭還用到它時改為「已封存」（保留資料與照片），否則真正刪除。
+   * 回傳真正刪除的單品（呼叫端負責刪照片檔）
+   */
+  purge(id: string): Promise<Item[]>;
+  /** 對進暫存區超過 days 天的單品做 purge，回傳真正刪除的單品 */
   purgeExpired(days: number): Promise<Item[]>;
 }
 

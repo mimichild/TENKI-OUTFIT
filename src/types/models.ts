@@ -37,12 +37,19 @@ export interface OutfitItemPlacement {
   z: number;
 }
 
+/** 穿搭裡的一件單品；位置以畫布寬度的比例存（0–1），rotation v1 固定 0 */
+export interface OutfitPiece extends OutfitItemPlacement {
+  /** 已封存（永久刪除但過去穿搭仍參照）的單品也會帶出來 */
+  item: Item;
+}
+
 export interface Outfit {
   id: string;
   name: string;
-  /** YYYY-MM-DD, null = 不指定日期 */
+  /** YYYY-MM-DD。新存的穿搭一定有日期；null 只會出現在舊資料，視為未來 */
   date: string | null;
-  items: OutfitItemPlacement[];
+  /** 依 z 由下而上 */
+  pieces: OutfitPiece[];
   createdAt: string;
   updatedAt: string;
 }
