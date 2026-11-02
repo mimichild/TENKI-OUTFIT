@@ -53,10 +53,37 @@ describe('SettingsScreen', () => {
     expect(useSettingsStore.getState()).toMatchObject({ county: '高雄市', town: '' });
   });
 
-  it('stores the trimmed CWA key', async () => {
+  it('saves the trimmed CWA key only when 儲存 is pressed', async () => {
     await render(<SettingsScreen />);
+    const save = screen.getByRole('button', { name: '儲存授權碼' });
+    expect(save).toBeDisabled();
     fireEvent.changeText(screen.getByLabelText('氣象署授權碼'), ' CWA-123 ');
+    expect(useSettingsStore.getState().cwaApiKey).toBe('');
+    expect(save).toBeEnabled();
+    fireEvent.press(save);
     expect(useSettingsStore.getState().cwaApiKey).toBe('CWA-123');
+    expect(screen.getByText('已儲存')).toBeTruthy();
+    expect(save).toBeDisabled();
+  });
+
+  it('shows whether a key is already set and can reveal it', async () => {
+    useSettingsStore.setState({ cwaApiKey: 'CWA-SAVED' });
+    await render(<SettingsScreen />);
+    expect(screen.getByText('已設定')).toBeTruthy();
+    const input = screen.getByLabelText('氣象署授權碼');
+    expect(input.props.secureTextEntry).toBe(true);
+    fireEvent.press(screen.getByRole('button', { name: '顯示授權碼' }));
+    expect(screen.getByLabelText('氣象署授權碼').props.secureTextEntry).toBe(false);
+    expect(screen.getByLabelText('氣象署授權碼').props.value).toBe('CWA-SAVED');
+  });
+
+  it('clears the "已儲存" note once the key is edited again', async () => {
+    await render(<SettingsScreen />);
+    fireEvent.changeText(screen.getByLabelText('氣象署授權碼'), 'CWA-1');
+    fireEvent.press(screen.getByRole('button', { name: '儲存授權碼' }));
+    fireEvent.changeText(screen.getByLabelText('氣象署授權碼'), 'CWA-12');
+    expect(screen.queryByText('已儲存')).toBeNull();
+    expect(screen.getByText('尚未儲存')).toBeTruthy();
   });
 
   it('shows the trash count and opens the trash page', async () => {
