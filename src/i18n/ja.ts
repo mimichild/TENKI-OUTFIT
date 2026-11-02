@@ -165,7 +165,6 @@ export const ja: Record<keyof typeof zhTW, string> = {
   'outfit.addItems': 'アイテムを追加',
   'outfit.removePiece': 'キャンバスから外す',
   'outfit.emptyCanvas': '「アイテムを追加」でキャンバスに置きます。1本指で移動、2本指で拡大縮小と回転',
-  'outfit.needItems': 'アイテムを1つ以上置いてください',
   'outfit.total': '合計 {amount}',
   'outfit.delete': 'コーデを削除',
   'outfit.confirmDelete': 'もう一度タップで削除',

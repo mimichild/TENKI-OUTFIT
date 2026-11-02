@@ -28,6 +28,9 @@ const WX_ICONS: Record<WxCategory, keyof typeof Ionicons.glyphMap> = {
 
 const SWIPE_DISTANCE = 50;
 
+const minDate = (a: string, b: string) => (a < b ? a : b);
+const maxDate = (a: string, b: string) => (a > b ? a : b);
+
 const num = (n: number | null) => (n === null ? '—' : String(Math.round(n)));
 const deg = (n: number | null) => `${num(n)}°`;
 
@@ -85,8 +88,11 @@ export default function WeatherScreen() {
 
   const week = weekOf(selected);
   const grid = monthGrid(month);
+  // 月檢視換到別的月份時，選取的日子可能不在格子裡；查詢範圍要涵蓋它，下方才列得出它的穿搭
   const [from, to] =
-    mode === 'week' ? [week[0], week[6]] : mode === 'month' ? [grid[0][0], grid[grid.length - 1][6]] : [selected, selected];
+    mode === 'week' ? [week[0], week[6]]
+      : mode === 'month' ? [minDate(grid[0][0], selected), maxDate(grid[grid.length - 1][6], selected)]
+        : [selected, selected];
   const outfits = useOutfitsInRange(from, to);
   const outfitsOn = (date: string) => (outfits ?? []).filter(o => o.date === date);
   const marked = useMemo(() => new Set((outfits ?? []).map(o => o.date ?? '')), [outfits]);

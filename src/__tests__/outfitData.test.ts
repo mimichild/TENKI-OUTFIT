@@ -182,6 +182,40 @@ describe.each([
     expect(await env.items.purgeExpired(30)).toEqual([]);
   });
 
+  it('archived items cannot be edited, trashed or restored', async () => {
+    const [a, b] = await twoItems();
+    await env.outfits.create(outfit('2026-10-01', a));
+    await env.items.moveToTrash(a);
+    await env.items.purge(a);
+    expect(await env.items.update(a, { ...shirt, imageUri: 'photos/new.png' })).toBeNull();
+    await env.items.restore(a);
+    expect((await env.items.list()).map(i => i.id)).toEqual([b]);
+    await env.items.moveToTrash(a);
+    expect(await env.items.listTrash()).toEqual([]);
+    const past = await env.outfits.listInRange('2026-10-01', '2026-10-01');
+    expect(past[0].pieces[0].item.imageUri).toBe('photos/a.png');
+  });
+
+  it('drops archived items when an outfit is saved for today or later', async () => {
+    const [a, b] = await twoItems();
+    const past = await env.outfits.create(outfit('2026-10-01', a, b));
+    await env.items.moveToTrash(a);
+    await env.items.purge(a);
+    // 從舊畫面帶著封存單品存到未來：封存單品不會被放進去
+    const future = await env.outfits.create(outfit('2026-11-05', a, b));
+    expect(future.pieces.map(p => p.itemId)).toEqual([b]);
+    await expect(env.outfits.create(outfit('2026-11-05', a))).rejects.toMatchObject({ reason: 'empty' });
+    // 把過去穿搭改到未來：封存單品被拿掉，且已沒有參照 → 真正刪除
+    const moved = await env.outfits.update(past.id, outfit('2026-11-06', a, b));
+    expect(moved!.outfit.pieces.map(p => p.itemId)).toEqual([b]);
+    expect(moved!.purged.map(i => i.id)).toEqual([a]);
+  });
+
+  it('rejects outfits that reference an item that does not exist', async () => {
+    await twoItems();
+    await expect(env.outfits.create(outfit('2026-11-05', 'ghost'))).rejects.toThrow();
+  });
+
   it('an outfit that was in the future becomes past as days go by', async () => {
     const [a] = await twoItems();
     const o = await env.outfits.create(outfit('2026-11-03', a));

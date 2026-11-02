@@ -1,7 +1,8 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { taipeiDate } from '@/lib/cwaWeather';
 import type { Outfit, OutfitPiece } from '@/types/models';
 import type { RepositoryDeps } from './itemRepository';
-import { validateOutfitInput, type OutfitInput, type OutfitRepository } from './outfitRepository';
+import { OutfitValidationError, validateOutfitInput, type OutfitInput, type OutfitRepository } from './outfitRepository';
 import { rowToItem, type ItemRow } from './sqliteItemRepository';
 import { refreshLastUsed, removeOrphanedArchived, type Tx } from './sqliteOutfitRules';
 
@@ -63,6 +64,24 @@ export function createSqliteOutfitRepository(db: Db, deps: RepositoryDeps): Outf
     }
   };
 
+  /**
+   * 單品必須存在；今天以後的穿搭不放已封存的單品（例如從舊畫面帶過來的），
+   * 和永久刪除的規則一致。拿掉後沒有單品就丟 empty
+   */
+  const usableInput = async (tx: Tx, input: OutfitInput): Promise<OutfitInput> => {
+    const ids = input.items.map(p => p.itemId);
+    const rows = await tx.getAllAsync<{ id: string; archived_at: string | null }>(
+      `SELECT id, archived_at FROM items WHERE id IN (${marks(ids.length)})`,
+      ...ids,
+    );
+    const archived = new Map(rows.map(r => [r.id, r.archived_at !== null]));
+    if (ids.some(id => !archived.has(id))) throw new Error('outfit references a missing item');
+    if (input.date < taipeiDate(deps.now())) return input;
+    const items = input.items.filter(p => !archived.get(p.itemId));
+    if (items.length === 0) throw new OutfitValidationError('empty');
+    return { ...input, items };
+  };
+
   const itemIdsOf = async (tx: Tx, outfitId: string) =>
     (await tx.getAllAsync<{ item_id: string }>('SELECT item_id FROM outfit_items WHERE outfit_id = ?', outfitId)).map(r => r.item_id);
 
@@ -80,12 +99,13 @@ export function createSqliteOutfitRepository(db: Db, deps: RepositoryDeps): Outf
       const id = deps.newId();
       const now = deps.now();
       await db.withExclusiveTransactionAsync(async tx => {
+        const usable = await usableInput(tx, input);
         await tx.runAsync(
           'INSERT INTO outfits (id, name, date, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-          id, input.name, input.date, now, now,
+          id, usable.name, usable.date, now, now,
         );
-        await writePieces(tx, id, input);
-        await refreshLastUsed(tx, input.items.map(p => p.itemId));
+        await writePieces(tx, id, usable);
+        await refreshLastUsed(tx, usable.items.map(p => p.itemId));
       });
       return (await get(id))!;
     },
@@ -94,16 +114,18 @@ export function createSqliteOutfitRepository(db: Db, deps: RepositoryDeps): Outf
       let found = false;
       let purged: Awaited<ReturnType<typeof removeOrphanedArchived>> = [];
       await db.withExclusiveTransactionAsync(async tx => {
-        const result = await tx.runAsync(
-          'UPDATE outfits SET name = ?, date = ?, updated_at = ? WHERE id = ?',
-          input.name, input.date, deps.now(), id,
-        );
-        if (result.changes === 0) return;
+        const exists = await tx.getFirstAsync<{ id: string }>('SELECT id FROM outfits WHERE id = ?', id);
+        if (!exists) return;
         found = true;
+        const usable = await usableInput(tx, input);
+        await tx.runAsync(
+          'UPDATE outfits SET name = ?, date = ?, updated_at = ? WHERE id = ?',
+          usable.name, usable.date, deps.now(), id,
+        );
         const before = await itemIdsOf(tx, id);
         await tx.runAsync('DELETE FROM outfit_items WHERE outfit_id = ?', id);
-        await writePieces(tx, id, input);
-        await refreshLastUsed(tx, [...new Set([...before, ...input.items.map(p => p.itemId)])]);
+        await writePieces(tx, id, usable);
+        await refreshLastUsed(tx, [...new Set([...before, ...usable.items.map(p => p.itemId)])]);
         purged = await removeOrphanedArchived(tx, before);
       });
       if (!found) return null;

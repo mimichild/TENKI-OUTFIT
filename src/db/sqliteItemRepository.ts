@@ -100,7 +100,7 @@ export function createSqliteItemRepository(db: Db, deps: RepositoryDeps): ItemRe
     async update(id, input) {
       const result = await db.runAsync(
         `UPDATE items SET name = ?, brand = ?, category = ?, price = ?, occasions = ?, seasons = ?,
-         image_uri = ?, original_uri = ?, updated_at = ? WHERE id = ?`,
+         image_uri = ?, original_uri = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL`,
         input.name, input.brand, input.category, input.price,
         JSON.stringify(input.occasions), JSON.stringify(input.seasons),
         input.imageUri, input.originalUri, deps.now(), id,
@@ -109,10 +109,10 @@ export function createSqliteItemRepository(db: Db, deps: RepositoryDeps): ItemRe
     },
     async moveToTrash(id) {
       const now = deps.now();
-      await db.runAsync('UPDATE items SET deleted_at = ?, updated_at = ? WHERE id = ?', now, now, id);
+      await db.runAsync('UPDATE items SET deleted_at = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL', now, now, id);
     },
     async restore(id) {
-      await db.runAsync('UPDATE items SET deleted_at = NULL, updated_at = ? WHERE id = ?', deps.now(), id);
+      await db.runAsync('UPDATE items SET deleted_at = NULL, updated_at = ? WHERE id = ? AND archived_at IS NULL', deps.now(), id);
     },
     purge: id => purgeAll([id]),
     async purgeExpired(days) {

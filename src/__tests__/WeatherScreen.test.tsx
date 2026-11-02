@@ -280,6 +280,8 @@ describe('WeatherScreen outfits', () => {
     expect(cards()).toHaveLength(1);
     await press(screen.getByRole('button', { name: '下個月' }));
     expect(screen.getByText('2026 年 12 月')).toBeTruthy();
+    // 換月份後，下方仍是原本選的那天的穿搭
+    expect(cards()).toHaveLength(1);
   });
 
   it('after picking a day beyond the forecast, the arrows lead back toward it', async () => {

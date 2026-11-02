@@ -72,6 +72,11 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
   };
 
   // 只回寫位置／大小／角度；z 由 select 時的 bringToFront 決定
+  const canvasTap = Gesture.Tap()
+    .withTestId('canvas-tap')
+    .runOnJS(true)
+    .onEnd(() => setSelectedId(null));
+
   const commit = (itemId: string, { x, y, scale, rotation }: OutfitItemPlacement) => {
     setPieces(list => list.map(p => (p.itemId === itemId ? { ...p, x, y, scale, rotation } : p)));
   };
@@ -138,13 +143,17 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
         </Pressable>
         {date === null && <Text style={[s.hint, { color: theme.primary }]}>{t('outfit.dateRequired')}</Text>}
 
-        <Pressable
+        <View
           testID="outfit-canvas"
           accessibilityLabel={t('outfit.canvas')}
-          onPress={() => setSelectedId(null)}
           style={[s.canvas, { width: canvasWidth, height: canvasWidth * CANVAS_HEIGHT_RATIO, borderColor: theme.border }]}
         >
-          {pieces.length === 0 && <Text style={s.emptyHint}>{t('outfit.emptyCanvas')}</Text>}
+          {/* 點空白處取消選取。用手勢而不是 Pressable：Pressable 會在點單品放開時也收到 onPress，把剛選的又取消 */}
+          <GestureDetector gesture={canvasTap}>
+            <View style={s.canvasBackground}>
+              {pieces.length === 0 && <Text style={s.emptyHint}>{t('outfit.emptyCanvas')}</Text>}
+            </View>
+          </GestureDetector>
           {/* 疊放順序用 zIndex，不重新排列子元件，避免手勢進行中原生畫面被搬動 */}
           {pieces.map(p => (
             <CanvasPiece
@@ -158,7 +167,7 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
               onCommit={next => commit(p.itemId, next)}
             />
           ))}
-        </Pressable>
+        </View>
 
         <View style={s.toolbar}>
           <Pressable testID="add-items" onPress={() => setPickerOpen(true)} accessibilityRole="button" style={[s.toolButton, { backgroundColor: theme.primary }]}>
@@ -222,6 +231,7 @@ interface PieceProps {
   onCommit: (next: OutfitItemPlacement) => void;
 }
 
+type GestureKind = 'pan' | 'pinch' | 'rotate';
 const NO_CHANGE: GestureDelta = { dx: 0, dy: 0, scale: 1, rotation: 0 };
 
 /**
@@ -234,7 +244,8 @@ function CanvasPiece({ piece, width, selected, label, color, onBegin, onCommit }
   // 手勢的 callback 可能是較早 render 時建立的，一律從 ref 讀最新的值
   const latest = useRef({ piece, width, onBegin, onCommit });
   latest.current = { piece, width, onBegin, onCommit };
-  const active = useRef(0);
+  /** 已經 onBegin 的手勢；onFinalize 也可能發生在沒有 onBegin 的手勢上，要配對才算 */
+  const active = useRef(new Set<GestureKind>());
   const start = useRef<OutfitItemPlacement>(piece);
   const done = useRef<GestureDelta>(NO_CHANGE);
   const current = useRef<GestureDelta>(NO_CHANGE);
@@ -249,22 +260,40 @@ function CanvasPiece({ piece, width, selected, label, color, onBegin, onCommit }
     current.current = { ...current.current, ...patch };
     setLive(applyGesture(start.current, total(), latest.current.width));
   };
-  const fold = (reset: Partial<GestureDelta>) => {
-    done.current = total();
-    current.current = { ...current.current, ...reset };
+  /**
+   * 某個手勢結束：它的變化併入 done（其他還在進行的手勢留在 current）。
+   * 併入時先套用上下限，避免超出的部分要先「還掉」才有反應
+   */
+  const fold = (ended: Partial<Record<keyof GestureDelta, true>>) => {
+    const width = latest.current.width;
+    const c = current.current;
+    const clamped = applyGesture(start.current, total(), width);
+    // 還在進行的手勢的部分不併入
+    const keep = {
+      dx: ended.dx ? 0 : c.dx,
+      dy: ended.dy ? 0 : c.dy,
+      scale: ended.scale ? 1 : c.scale,
+      rotation: ended.rotation ? 0 : c.rotation,
+    };
+    done.current = {
+      dx: (clamped.x - start.current.x) * width - keep.dx,
+      dy: (clamped.y - start.current.y) * width - keep.dy,
+      scale: clamped.scale / start.current.scale / keep.scale,
+      rotation: total().rotation - keep.rotation,
+    };
+    current.current = keep;
   };
-  const begin = () => {
-    if (active.current === 0) {
+  const begin = (kind: GestureKind) => {
+    if (active.current.size === 0) {
       start.current = latest.current.piece;
       done.current = NO_CHANGE;
       current.current = NO_CHANGE;
       latest.current.onBegin();
     }
-    active.current += 1;
+    active.current.add(kind);
   };
-  const finalize = () => {
-    active.current = Math.max(0, active.current - 1);
-    if (active.current > 0) return;
+  const finalize = (kind: GestureKind) => {
+    if (!active.current.delete(kind) || active.current.size > 0) return;
     const next = applyGesture(start.current, total(), latest.current.width);
     setLive(null);
     latest.current.onCommit(next);
@@ -273,33 +302,36 @@ function CanvasPiece({ piece, width, selected, label, color, onBegin, onCommit }
   const pan = Gesture.Pan()
     .withTestId(`pan-${piece.itemId}`)
     .runOnJS(true)
-    .onBegin(begin)
+    .onBegin(() => begin('pan'))
     .onUpdate(e => update({ dx: e.translationX, dy: e.translationY }))
-    .onEnd(() => fold({ dx: 0, dy: 0 }))
-    .onFinalize(finalize);
+    .onEnd(() => fold({ dx: true, dy: true }))
+    .onFinalize(() => finalize('pan'));
   const pinch = Gesture.Pinch()
     .withTestId(`pinch-${piece.itemId}`)
     .runOnJS(true)
-    .onBegin(begin)
+    .onBegin(() => begin('pinch'))
     .onUpdate(e => update({ scale: e.scale }))
-    .onEnd(() => fold({ scale: 1 }))
-    .onFinalize(finalize);
+    .onEnd(() => fold({ scale: true }))
+    .onFinalize(() => finalize('pinch'));
   const rotate = Gesture.Rotation()
     .withTestId(`rotate-${piece.itemId}`)
     .runOnJS(true)
-    .onBegin(begin)
+    .onBegin(() => begin('rotate'))
     .onUpdate(e => update({ rotation: e.rotation }))
-    .onEnd(() => fold({ rotation: 0 }))
-    .onFinalize(finalize);
+    .onEnd(() => fold({ rotation: true }))
+    .onFinalize(() => finalize('rotate'));
 
-  const shown = live ?? piece;
+  // 手勢開始時已移到最上層，拖拉中也要用新的 z
+  const shown = live ? { ...live, z: piece.z } : piece;
   return (
     <GestureDetector gesture={Gesture.Simultaneous(pan, pinch, rotate)}>
       <View
         testID={`piece-${piece.itemId}`}
         accessible
+        accessibilityRole="button"
         accessibilityLabel={label}
         accessibilityState={{ selected }}
+        onAccessibilityTap={() => latest.current.onBegin()}
         style={[pieceStyle(shown, width), selected && { borderWidth: 1.5, borderColor: color, borderStyle: 'dashed' }]}
       >
         <PieceImage item={piece.item} />
@@ -318,7 +350,8 @@ const makeStyles = (theme: Theme) =>
     dateLabel: { fontSize: 14 },
     hint: { alignSelf: 'stretch', fontSize: 13 },
     // 去背單品放在白底最好看，深色模式也維持白底
-    canvas: { backgroundColor: '#FFFFFF', borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: 'hidden', justifyContent: 'center' },
+    canvas: { backgroundColor: '#FFFFFF', borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: 'hidden' },
+    canvasBackground: { ...StyleSheet.absoluteFillObject, justifyContent: 'center' },
     emptyHint: { color: '#8A8A8A', textAlign: 'center', paddingHorizontal: 24, fontSize: 14, lineHeight: 20 },
     toolbar: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
     toolButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18 },

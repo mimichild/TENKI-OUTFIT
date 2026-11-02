@@ -18,8 +18,8 @@ export function ItemRepositoryProvider({ repository, children }: { repository: I
     repository
       .purgeExpired(TRASH_RETENTION_DAYS)
       .then(removed => {
-        if (removed.length === 0) return;
         deletePhotos(removed.flatMap(i => [i.imageUri, i.originalUri]));
+        // 只封存、沒有真正刪除時，穿搭與暫存區也可能變了；一律通知畫面重新讀取
         useItemsVersion.getState().bump();
       })
       .catch(e => console.warn('清除過期暫存區失敗', e));

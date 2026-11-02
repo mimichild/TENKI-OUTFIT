@@ -1,7 +1,7 @@
 import { taipeiDate } from '@/lib/cwaWeather';
 import type { Item, Outfit, OutfitItemPlacement } from '@/types/models';
 import { trashCutoff, type ItemRepository, type RepositoryDeps } from './itemRepository';
-import { validateOutfitInput, type OutfitInput, type OutfitRepository } from './outfitRepository';
+import { OutfitValidationError, validateOutfitInput, type OutfitInput, type OutfitRepository } from './outfitRepository';
 
 const clone = (item: Item): Item => ({ ...item, occasions: [...item.occasions], seasons: [...item.seasons] });
 
@@ -91,8 +91,14 @@ export function createMemoryDatabase(
       }),
   });
 
-  const copyPlacements = (input: OutfitInput) =>
-    input.items.map(({ itemId, x, y, scale, rotation, z }) => ({ itemId, x, y, scale, rotation, z }));
+  /** 與 SQLite 版一致：單品必須存在；今天以後的穿搭不放已封存的單品 */
+  const copyPlacements = (input: OutfitInput) => {
+    if (input.items.some(p => !items.has(p.itemId))) throw new Error('outfit references a missing item');
+    const future = input.date >= taipeiDate(deps.now());
+    const usable = input.items.filter(p => !(future && items.get(p.itemId)!.archivedAt !== null));
+    if (usable.length === 0) throw new OutfitValidationError('empty');
+    return usable.map(({ itemId, x, y, scale, rotation, z }) => ({ itemId, x, y, scale, rotation, z }));
+  };
 
   const itemRepo: ItemRepository = {
     async list() {
@@ -157,8 +163,9 @@ export function createMemoryDatabase(
     },
     async create(input) {
       validateOutfitInput(input);
+      const placements = copyPlacements(input);
       const now = deps.now();
-      const o: StoredOutfit = { id: deps.newId(), name: input.name, date: input.date, createdAt: now, updatedAt: now, items: copyPlacements(input) };
+      const o: StoredOutfit = { id: deps.newId(), name: input.name, date: input.date, createdAt: now, updatedAt: now, items: placements };
       outfits.set(o.id, o);
       refreshLastUsed(o.items.map(p => p.itemId));
       return toOutfit(o);
@@ -168,7 +175,8 @@ export function createMemoryDatabase(
       const o = outfits.get(id);
       if (!o) return null;
       const before = o.items.map(p => p.itemId);
-      Object.assign(o, { name: input.name, date: input.date, updatedAt: deps.now(), items: copyPlacements(input) });
+      const placements = copyPlacements(input);
+      Object.assign(o, { name: input.name, date: input.date, updatedAt: deps.now(), items: placements });
       refreshLastUsed([...before, ...o.items.map(p => p.itemId)]);
       const purged = removeOrphanedArchived(before);
       return { outfit: toOutfit(o), purged };

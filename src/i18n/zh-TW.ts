@@ -163,7 +163,6 @@ export const zhTW = {
   'outfit.addItems': '加入單品',
   'outfit.removePiece': '從畫布移除',
   'outfit.emptyCanvas': '按「加入單品」把服裝放到畫布上。單指拖拉移動，雙指縮放與旋轉',
-  'outfit.needItems': '至少要放一件單品',
   'outfit.total': '總金額 {amount}',
   'outfit.delete': '刪除穿搭',
   'outfit.confirmDelete': '再按一次確認刪除',

@@ -120,6 +120,38 @@ describe('OutfitEditor', () => {
     expect(screen.queryByLabelText('白襯衫，在畫布上')).toBeNull();
   });
 
+  it('a plain tap selects a piece; tapping the empty canvas deselects it', () => {
+    setup({ initial: { name: '', date: '2026-11-02', pieces: [{ itemId: 'a', x: 0.5, y: 0.5, scale: 1, rotation: 0, z: 0, item: shirt }] } });
+    act(() => {
+      fireGestureHandler(getByGestureTestId('pan-a'), [{ state: State.BEGAN }, { state: State.FAILED }]);
+    });
+    expect(screen.getByRole('button', { name: '從畫布移除' })).toBeTruthy();
+    act(() => {
+      fireGestureHandler(getByGestureTestId('canvas-tap'), [{ state: State.BEGAN }, { state: State.ACTIVE }, { state: State.END }]);
+    });
+    expect(screen.queryByRole('button', { name: '從畫布移除' })).toBeNull();
+  });
+
+  it('pinching past the limit does not leave a dead zone when pinching back', async () => {
+    const { onSave } = setup({ initial: { name: '', date: '2026-11-02', pieces: [{ itemId: 'a', x: 0.5, y: 0.5, scale: 1, rotation: 0, z: 0, item: shirt }] } });
+    const pinch = (from: number, to: number) => act(() => {
+      fireGestureHandler(getByGestureTestId('pinch-a'), [
+        { state: State.BEGAN, scale: from }, { state: State.ACTIVE, scale: from }, { state: State.ACTIVE, scale: to }, { state: State.END, scale: to },
+      ]);
+    });
+    pinch(1, 10); // 停在上限 4 倍
+    pinch(1, 0.5); // 立刻縮到 2 倍，不用先「還掉」超出的部分
+    await act(async () => fireEvent.press(saveButton()));
+    expect(onSave.mock.calls[0][0].items[0].scale).toBe(2);
+  });
+
+  it('pieces can be selected with a screen reader', () => {
+    setup({ initial: { name: '', date: '2026-11-02', pieces: [{ itemId: 'a', x: 0.5, y: 0.5, scale: 1, rotation: 0, z: 0, item: shirt }] } });
+    const piece = screen.getByRole('button', { name: '白襯衫，在畫布上' });
+    act(() => piece.props.onAccessibilityTap());
+    expect(screen.getByRole('button', { name: '從畫布移除' })).toBeTruthy();
+  });
+
   it('shows an error when saving fails and lets the user retry', async () => {
     const onSave = jest.fn().mockRejectedValueOnce(new Error('disk')).mockResolvedValue(undefined);
     setup({ initial: { name: '', date: '2026-11-02', pieces: [{ itemId: 'a', x: 0.5, y: 0.5, scale: 1, rotation: 0, z: 0, item: shirt }] }, onSave });
