@@ -5,7 +5,7 @@ import type { WeatherRepository } from './weatherRepository';
 
 export interface WeatherDeps {
   repository: WeatherRepository;
-  fetcher: (args: { apiKey: string; county: string }) => Promise<FetchForecastResult>;
+  fetcher: (args: { apiKey: string; county: string; signal?: AbortSignal }) => Promise<FetchForecastResult>;
   now: () => string;
 }
 

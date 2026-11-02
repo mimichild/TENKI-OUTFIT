@@ -8,13 +8,14 @@ export type RefreshResult = { status: 'ok' | 'fresh' } | Exclude<FetchForecastRe
 
 export interface RefreshOptions {
   repo: WeatherRepository;
-  fetcher: (args: { apiKey: string; county: string }) => Promise<FetchForecastResult>;
+  fetcher: (args: { apiKey: string; county: string; signal?: AbortSignal }) => Promise<FetchForecastResult>;
   county: string;
   apiKey: string;
   /** ISO 時間 */
   now: string;
   /** 下拉更新：不管快取新不新都重抓 */
   force?: boolean;
+  signal?: AbortSignal;
 }
 
 /**
@@ -22,15 +23,17 @@ export interface RefreshOptions {
  * - 只寫今天（台灣時間）以後的日期，過去日期保留當時的資料當歷史
  * - 晚上抓的「今天」只剩夜間時段，若已有今天的資料就不覆蓋
  */
-export async function refreshWeather({ repo, fetcher, county, apiKey, now, force = false }: RefreshOptions): Promise<RefreshResult> {
+export async function refreshWeather({ repo, fetcher, county, apiKey, now, force = false, signal }: RefreshOptions): Promise<RefreshResult> {
   if (!force) {
     const last = await repo.lastFetchedAt(county);
-    if (last !== null && new Date(now).getTime() - new Date(last).getTime() < WEATHER_STALE_MS) {
+    const age = last === null ? null : new Date(now).getTime() - new Date(last).getTime();
+    // age < 0：上次抓的時候裝置時間比較快，不能當作「還很新」
+    if (age !== null && age >= 0 && age < WEATHER_STALE_MS) {
       return { status: 'fresh' };
     }
   }
 
-  const result = await fetcher({ apiKey, county });
+  const result = await fetcher({ apiKey, county, signal });
   if (result.status !== 'ok') return result;
 
   const today = taipeiDate(now);

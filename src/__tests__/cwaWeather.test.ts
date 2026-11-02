@@ -92,6 +92,21 @@ describe('fetchForecast', () => {
     await expect(fetchForecast({ apiKey: 'k', county: '臺北市', fetchImpl: fEmpty })).resolves.toEqual({ status: 'badResponse' });
   });
 
+  it('maps an invalid JSON body (e.g. an HTML error page) to badResponse', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => { throw new SyntaxError('Unexpected token <'); } } as unknown as Response);
+    await expect(fetchForecast({ apiKey: 'k', county: '臺北市', fetchImpl })).resolves.toEqual({ status: 'badResponse' });
+  });
+
+  it('stops when the caller aborts', async () => {
+    const controller = new AbortController();
+    const fetchImpl = jest.fn((_url: string, init?: RequestInit) => new Promise<Response>((_res, rej) => {
+      init?.signal?.addEventListener('abort', () => rej(new Error('aborted')));
+    }));
+    const p = fetchForecast({ apiKey: 'k', county: '臺北市', fetchImpl, signal: controller.signal });
+    controller.abort();
+    await expect(p).resolves.toEqual({ status: 'aborted' });
+  });
+
   it('maps thrown fetch errors to network', async () => {
     const fetchImpl = jest.fn().mockRejectedValue(new TypeError('Network request failed'));
     await expect(fetchForecast({ apiKey: 'k', county: '臺北市', fetchImpl })).resolves.toEqual({ status: 'network' });

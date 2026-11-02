@@ -39,7 +39,7 @@ describe('sqlite weather repository', () => {
       runAsync: jest.fn().mockResolvedValue({ changes: 1, lastInsertRowId: 0 }),
       getAllAsync: jest.fn().mockResolvedValue([]),
       getFirstAsync: jest.fn().mockResolvedValue(null),
-      withExclusiveTransactionAsync: jest.fn(async (fn: (tx: unknown) => Promise<void>) => fn(db)),
+      withTransactionAsync: jest.fn(async (fn: () => Promise<void>) => fn()),
     };
   }
   let db: ReturnType<typeof makeDb>;
@@ -48,7 +48,7 @@ describe('sqlite weather repository', () => {
   it('upserts every day inside one transaction with town = ""', async () => {
     const repo = createSqliteWeatherRepository(db as never);
     await repo.upsert('臺北市', [day('2026-11-03', 25), day('2026-11-04', 24)], 'T');
-    expect(db.withExclusiveTransactionAsync).toHaveBeenCalledTimes(1);
+    expect(db.withTransactionAsync).toHaveBeenCalledTimes(1);
     expect(db.runAsync).toHaveBeenCalledTimes(2);
     const [sql, params] = db.runAsync.mock.calls[0];
     expect(sql).toMatch(/INSERT INTO weather_days[\s\S]*ON CONFLICT\(county, town, date\) DO UPDATE/);
@@ -57,7 +57,7 @@ describe('sqlite weather repository', () => {
 
   it('skips the transaction when there is nothing to write', async () => {
     await createSqliteWeatherRepository(db as never).upsert('臺北市', [], 'T');
-    expect(db.withExclusiveTransactionAsync).not.toHaveBeenCalled();
+    expect(db.withTransactionAsync).not.toHaveBeenCalled();
   });
 
   it('maps rows to WeatherDay', async () => {

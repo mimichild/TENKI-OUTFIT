@@ -83,6 +83,8 @@ export const zhTW = {
   'weather.error.network': '無法連線到氣象署',
   'weather.error.timeout': '氣象署回應逾時，請稍後再試',
   'weather.error.badResponse': '氣象署資料無法解讀，請稍後再試',
+  'weather.error.storage': '無法讀取本機天氣資料',
+  'weather.tempsLabel': '最高 {max}，最低 {min}',
   'weather.updatedAt': '更新於 {time}',
   'weather.outfitsComing': '當天的穿搭會在第 5 階段加上',
   'weather.source': '資料來源：中央氣象署',

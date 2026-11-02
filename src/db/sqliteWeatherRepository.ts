@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import type { WeatherDay } from '@/types/models';
 import { COUNTY_LEVEL_TOWN, toWeatherDay, type WeatherRepository } from './weatherRepository';
 
-type Db = Pick<SQLiteDatabase, 'runAsync' | 'getFirstAsync' | 'getAllAsync' | 'withExclusiveTransactionAsync'>;
+type Db = Pick<SQLiteDatabase, 'runAsync' | 'getFirstAsync' | 'getAllAsync' | 'withTransactionAsync'>;
 
 interface WeatherRow {
   county: string;
@@ -52,10 +52,12 @@ export function createSqliteWeatherRepository(db: Db): WeatherRepository {
     },
     async upsert(county, days, fetchedAt) {
       if (days.length === 0) return;
-      await db.withExclusiveTransactionAsync(async tx => {
+      // 不用 withExclusiveTransactionAsync：它會另開連線，和單品寫入同時發生時可能 SQLITE_BUSY。
+      // 這裡的 callback 只跑這幾筆 upsert，沒有其他非同步工作會混進同一個 transaction
+      await db.withTransactionAsync(async () => {
         for (const d of days) {
           const w = toWeatherDay(county, d, fetchedAt);
-          await tx.runAsync(UPSERT_SQL, [
+          await db.runAsync(UPSERT_SQL, [
             w.county, w.town, w.date, w.maxT, w.minT, w.maxAT, w.minAT, w.pop, w.wxCode, w.wxText, w.fetchedAt,
           ]);
         }

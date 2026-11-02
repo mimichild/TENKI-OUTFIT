@@ -16,6 +16,10 @@ const EL = {
   wx: '天氣現象',
 } as const;
 
+/**
+ * 一天 = 當天白天（06–18）＋當晚（18–隔天 06）兩個時段，和氣象署網站「白天／晚上」的分法一致。
+ * 所以 minT / minAT 可能是隔天清晨的低溫；pop 取兩個時段中較大的。
+ */
 export interface DailyForecast {
   /** YYYY-MM-DD（台灣時間） */
   date: string;
@@ -37,7 +41,9 @@ export type FetchForecastResult =
   | { status: 'unauthorized' }
   | { status: 'network' }
   | { status: 'timeout' }
-  | { status: 'badResponse' };
+  | { status: 'badResponse' }
+  /** 呼叫端取消（換縣市、畫面關掉），結果不用顯示 */
+  | { status: 'aborted' };
 
 const TAIPEI_OFFSET_MS = 8 * 3_600_000;
 
@@ -172,6 +178,7 @@ export interface FetchForecastOptions {
   county: string;
   fetchImpl?: (url: string, init?: RequestInit) => Promise<Response>;
   timeoutMs?: number;
+  signal?: AbortSignal;
 }
 
 export async function fetchForecast({
@@ -179,9 +186,11 @@ export async function fetchForecast({
   county,
   fetchImpl = fetch,
   timeoutMs = CWA_TIMEOUT_MS,
+  signal,
 }: FetchForecastOptions): Promise<FetchForecastResult> {
   const key = apiKey.trim();
   if (!key) return { status: 'noKey' };
+  if (signal?.aborted) return { status: 'aborted' };
 
   const controller = new AbortController();
   let timedOut = false;
@@ -189,16 +198,31 @@ export async function fetchForecast({
     timedOut = true;
     controller.abort();
   }, timeoutMs);
+  const onAbort = () => controller.abort();
+  signal?.addEventListener('abort', onAbort);
+  const failure = (): FetchForecastResult =>
+    signal?.aborted ? { status: 'aborted' } : timedOut ? { status: 'timeout' } : { status: 'network' };
   try {
-    const res = await fetchImpl(buildForecastUrl(key, county), { signal: controller.signal });
+    let res: Response;
+    try {
+      res = await fetchImpl(buildForecastUrl(key, county), { signal: controller.signal });
+    } catch {
+      return failure();
+    }
     if (res.status === 401 || res.status === 403) return { status: 'unauthorized' };
     if (!res.ok) return { status: 'badResponse' };
-    const days = parseForecast(await res.json(), county);
+    let body: unknown;
+    try {
+      body = await res.json();
+    } catch {
+      // 逾時／取消時讀內容也會失敗；其他情況是內容不是 JSON（例如閘道器回的 HTML）
+      return signal?.aborted || timedOut ? failure() : { status: 'badResponse' };
+    }
+    const days = parseForecast(body, county);
     return days.length > 0 ? { status: 'ok', days } : { status: 'badResponse' };
-  } catch {
-    return { status: timedOut ? 'timeout' : 'network' };
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
   }
 }
 

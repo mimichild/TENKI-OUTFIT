@@ -85,6 +85,8 @@ export const ja: Record<keyof typeof zhTW, string> = {
   'weather.error.network': '気象署に接続できません',
   'weather.error.timeout': '気象署の応答がタイムアウトしました。しばらくしてから再試行してください',
   'weather.error.badResponse': '天気データを読み取れません。しばらくしてから再試行してください',
+  'weather.error.storage': '保存した天気データを読み込めません',
+  'weather.tempsLabel': '最高 {max}、最低 {min}',
   'weather.updatedAt': '更新 {time}',
   'weather.outfitsComing': 'その日のコーデはフェーズ 5 で追加されます',
   'weather.source': 'データ提供：中央気象署',

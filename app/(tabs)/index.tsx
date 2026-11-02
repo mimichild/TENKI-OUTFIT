@@ -98,7 +98,9 @@ export default function WeatherScreen() {
     <ScrollView
       style={{ backgroundColor: theme.background }}
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={weather.refreshing} onRefresh={weather.refresh} tintColor={theme.primary} />}
+      refreshControl={
+        <RefreshControl refreshing={weather.refreshing} onRefresh={weather.refresh} tintColor={theme.primary} colors={[theme.primary]} />
+      }
     >
       {weather.error && (
         <View style={[styles.banner, { backgroundColor: theme.primarySoft }]} accessibilityRole="alert">
@@ -110,7 +112,8 @@ export default function WeatherScreen() {
       <View {...pan.panHandlers} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
         <View style={styles.cardHeader}>
           <NavButton icon="chevron-back" label={t('weather.prevDay')} disabled={!canPrev} onPress={() => move(-1)} theme={theme} />
-          <View style={styles.dateBlock}>
+          {/* 切換日期時讓螢幕閱讀器念出新日期（Android） */}
+          <View style={styles.dateBlock} accessibilityLiveRegion="polite">
             <Text style={[styles.date, { color: theme.text }]}>{dateLabel}</Text>
             <View style={styles.subRow}>
               {relative && <Text style={[styles.relative, { color: theme.primary }]}>{t(relative)}</Text>}
@@ -170,8 +173,12 @@ function DayDetails({ day, theme, language, t }: {
   return (
     <View style={styles.details}>
       <View style={styles.mainRow}>
-        <Ionicons name={WX_ICONS[category]} size={64} color={theme.primary} />
-        <View style={styles.temps}>
+        <Ionicons name={WX_ICONS[category]} size={64} color={theme.primary} accessible={false} importantForAccessibility="no" />
+        <View
+          style={styles.temps}
+          accessible
+          accessibilityLabel={t('weather.tempsLabel', { max: deg(day.maxT), min: deg(day.minT) })}
+        >
           <Text style={[styles.maxT, { color: theme.text }]}>{deg(day.maxT)}</Text>
           <Text style={[styles.slash, { color: theme.textMuted }]}>/</Text>
           <Text style={[styles.minT, { color: theme.textMuted }]}>{deg(day.minT)}</Text>
@@ -180,13 +187,13 @@ function DayDetails({ day, theme, language, t }: {
       <Text style={[styles.wx, { color: theme.text }]}>{wxLabel}</Text>
       <View style={styles.metaRow}>
         <View style={styles.meta}>
-          <Ionicons name="body-outline" size={16} color={theme.textMuted} />
+          <Ionicons name="body-outline" size={16} color={theme.textMuted} accessible={false} importantForAccessibility="no" />
           <Text style={[styles.metaText, { color: theme.textMuted }]}>
             {t('weather.feelsLike', { min: num(day.minAT), max: num(day.maxAT) })}
           </Text>
         </View>
         <View style={styles.meta}>
-          <Ionicons name="umbrella-outline" size={16} color={theme.textMuted} />
+          <Ionicons name="umbrella-outline" size={16} color={theme.textMuted} accessible={false} importantForAccessibility="no" />
           <Text style={[styles.metaText, { color: theme.textMuted }]}>
             {day.pop === null ? t('weather.popUnknown') : t('weather.pop', { pop: Math.round(day.pop) })}
           </Text>

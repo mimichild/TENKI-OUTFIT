@@ -64,6 +64,21 @@ describe('refreshWeather', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
+  it('refetches when the cached time is in the future (device clock was ahead)', async () => {
+    const { repo, fetcher, run } = setup({ status: 'ok', days: [] });
+    await repo.upsert('臺北市', [day('2026-11-03', 25)], '2026-11-04T12:00:00.000Z');
+    await run();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes the abort signal to the fetcher', async () => {
+    const { fetcher } = setup({ status: 'aborted' });
+    const repo = createMemoryWeatherRepository();
+    const signal = new AbortController().signal;
+    await refreshWeather({ repo, fetcher, county: '臺北市', apiKey: 'k', now: NOW, signal });
+    expect(fetcher).toHaveBeenCalledWith({ apiKey: 'k', county: '臺北市', signal });
+  });
+
   it('passes fetch failures through and leaves the cache alone', async () => {
     const { repo, run } = setup({ status: 'unauthorized' });
     await repo.upsert('臺北市', [day('2026-11-03', 25)], 'old');

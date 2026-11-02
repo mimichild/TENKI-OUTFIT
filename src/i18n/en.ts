@@ -85,6 +85,8 @@ export const en: Record<keyof typeof zhTW, string> = {
   'weather.error.network': 'Can’t reach the weather service',
   'weather.error.timeout': 'The weather service timed out. Try again later',
   'weather.error.badResponse': 'Couldn’t read the weather data. Try again later',
+  'weather.error.storage': 'Couldn’t read the saved weather data',
+  'weather.tempsLabel': 'High {max}, low {min}',
   'weather.updatedAt': 'Updated {time}',
   'weather.outfitsComing': 'Outfits for the day arrive in phase 5',
   'weather.source': 'Source: Central Weather Administration',
