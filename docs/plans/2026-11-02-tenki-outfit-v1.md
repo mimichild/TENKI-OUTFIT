@@ -241,3 +241,6 @@
 - 三語字串：新增 `weather.*`（31 組）、`wx.*`（8 組），移除 `placeholder.weather`
 - 驗證：Jest 170 項通過（新增 52 項）、tsc、lint；Web 視覺測試 38 項通過（還沒加天氣頁的檢查，批次 C 補上）
 - 和計畫不同的地方：滑動用 React Native 內建的 `PanResponder`，不用 gesture-handler（比較簡單、測試不用另外 mock）
+- APK 建置成功（2026-11-02）：`SPARK-Builds/TENKI-OUTFIT/tenki-outfit-v0.1.0-20261102-1939.apk`，已確認 bundle 內含新天氣程式碼；**待使用者實機檢測**（含真實 API 回傳格式）
+
+#### 批次 C｜收尾 — 待開始（等實測回饋）
