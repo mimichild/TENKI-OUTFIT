@@ -23,12 +23,17 @@ beforeEach(() => {
     isAvailableAsync: jest.fn().mockResolvedValue(true),
     removeBackgroundAsync: jest
       .fn()
-      .mockResolvedValue({ uri: 'file:///cache/bg-removal/a.png', width: 1200, height: 1600 }),
+      .mockResolvedValue({
+        uri: 'file:///cache/bg-removal/a.png',
+        originalUri: 'file:///cache/bg-removal/a.jpg',
+        width: 1200,
+        height: 1600,
+      }),
   };
 });
 
 describe('removeBackground', () => {
-  it('呼叫原生模組並帶入最大邊長', async () => {
+  it('呼叫原生模組並帶入最大邊長，回傳去背圖與同尺寸的縮小原圖', async () => {
     const result = await removeBackground('file:///tmp/photo.jpg');
     expect(mockNative.module!.removeBackgroundAsync).toHaveBeenCalledWith(
       'file:///tmp/photo.jpg',
@@ -37,6 +42,7 @@ describe('removeBackground', () => {
     expect(result).toEqual({
       status: 'ok',
       uri: 'file:///cache/bg-removal/a.png',
+      originalUri: 'file:///cache/bg-removal/a.jpg',
       width: 1200,
       height: 1600,
     });

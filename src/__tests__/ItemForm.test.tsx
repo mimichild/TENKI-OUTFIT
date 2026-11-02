@@ -8,7 +8,7 @@ function setup(overrides: Partial<React.ComponentProps<typeof ItemForm>> = {}) {
   const props = {
     initial: EMPTY_ITEM_INPUT,
     onPickPhoto: jest.fn().mockResolvedValue('file:///cache/picked.jpg'),
-    onRemoveBackground: jest.fn().mockResolvedValue({ status: 'ok', uri: 'file:///cache/bg-removal/cut.png', width: 1, height: 1 }),
+    onRemoveBackground: jest.fn().mockResolvedValue({ status: 'ok', uri: 'file:///cache/bg-removal/cut.png', originalUri: 'file:///cache/bg-removal/cut.jpg', width: 1, height: 1 }),
     onSubmit: jest.fn(),
     onCancel: jest.fn(),
     ...overrides,
@@ -49,7 +49,7 @@ describe('ItemForm', () => {
     expect(screen.getByText('請輸入有效的金額')).toBeTruthy();
   });
 
-  it('picks a photo, removes the background and submits original + cutout', async () => {
+  it('picks a photo, removes the background and keeps only the downscaled original (for the restore brush) + cutout', async () => {
     const { onSubmit, onPickPhoto, onRemoveBackground } = setup();
     fireEvent.press(screen.getByRole('button', { name: '從相簿選擇' }));
     await waitFor(() => expect(screen.getByText('已自動去背')).toBeTruthy());
@@ -57,7 +57,7 @@ describe('ItemForm', () => {
     expect(onRemoveBackground).toHaveBeenCalledWith('file:///cache/picked.jpg');
     fireEvent.press(screen.getByRole('button', { name: '儲存' }));
     expect(onSubmit.mock.calls[0][1]).toEqual({
-      kind: 'replace', originalUri: 'file:///cache/picked.jpg', imageUri: 'file:///cache/bg-removal/cut.png',
+      kind: 'replace', originalUri: 'file:///cache/bg-removal/cut.jpg', imageUri: 'file:///cache/bg-removal/cut.png',
     });
   });
 
@@ -82,7 +82,7 @@ describe('ItemForm', () => {
     await waitFor(() => expect(screen.getByText('正在自動去背…')).toBeTruthy());
     fireEvent.press(screen.getByRole('button', { name: '儲存' }));
     expect(onSubmit).not.toHaveBeenCalled();
-    await act(async () => finish({ status: 'ok', uri: 'file:///cache/bg-removal/cut.png', width: 1, height: 1 }));
+    await act(async () => finish({ status: 'ok', uri: 'file:///cache/bg-removal/cut.png', originalUri: 'file:///cache/bg-removal/cut.jpg', width: 1, height: 1 }));
     fireEvent.press(screen.getByRole('button', { name: '儲存' }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
@@ -97,11 +97,11 @@ describe('ItemForm', () => {
     await waitFor(() => expect(finishers).toHaveLength(1));
     fireEvent.press(screen.getByRole('button', { name: '拍照' }));
     await waitFor(() => expect(finishers).toHaveLength(2));
-    await act(async () => finishers[1]({ status: 'ok', uri: 'file:///cache/bg-removal/second.png', width: 1, height: 1 }));
-    await act(async () => finishers[0]({ status: 'ok', uri: 'file:///cache/bg-removal/first.png', width: 1, height: 1 }));
+    await act(async () => finishers[1]({ status: 'ok', uri: 'file:///cache/bg-removal/second.png', originalUri: 'file:///cache/bg-removal/second.jpg', width: 1, height: 1 }));
+    await act(async () => finishers[0]({ status: 'ok', uri: 'file:///cache/bg-removal/first.png', originalUri: 'file:///cache/bg-removal/first.jpg', width: 1, height: 1 }));
     fireEvent.press(screen.getByRole('button', { name: '儲存' }));
     expect(onSubmit.mock.calls[0][1]).toEqual({
-      kind: 'replace', originalUri: 'file:///cache/second.jpg', imageUri: 'file:///cache/bg-removal/second.png',
+      kind: 'replace', originalUri: 'file:///cache/bg-removal/second.jpg', imageUri: 'file:///cache/bg-removal/second.png',
     });
   });
 

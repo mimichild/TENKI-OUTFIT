@@ -90,7 +90,8 @@ export function ItemForm({ initial, onPickPhoto, onRemoveBackground, onSubmit, o
       result = { status: 'failed', error: e };
     }
     if (seq !== pickSeq.current) return;
-    if (result.status === 'ok') setPhoto({ kind: 'replace', originalUri: uri, imageUri: result.uri });
+    // 去背成功：丟掉選到的原尺寸照片，只留縮小原圖（介面上不顯示，給手動「補回」筆刷用）
+    if (result.status === 'ok') setPhoto({ kind: 'replace', originalUri: result.originalUri, imageUri: result.uri });
     else if (result.status === 'failed') console.warn('自動去背失敗', result.error);
     setCutout(result.status);
   };

@@ -4,7 +4,8 @@ import TenkiBgRemoval from '../../modules/tenki-bg-removal';
 export const BG_REMOVAL_MAX_SIZE = 1600;
 
 export type BgRemovalResult =
-  | { status: 'ok'; uri: string; width: number; height: number }
+  /** uri：去背 PNG；originalUri：同尺寸的縮小原圖（手動補回用） */
+  | { status: 'ok'; uri: string; originalUri: string; width: number; height: number }
   /** 沒有原生模組或裝置不支援：呼叫端退回原圖 */
   | { status: 'unavailable' }
   /** 照片裡找不到主體 */
@@ -28,8 +29,8 @@ export async function removeBackground(uri: string): Promise<BgRemovalResult> {
   }
 
   try {
-    const { uri: out, width, height } = await native.removeBackgroundAsync(uri, BG_REMOVAL_MAX_SIZE);
-    return { status: 'ok', uri: out, width, height };
+    const r = await native.removeBackgroundAsync(uri, BG_REMOVAL_MAX_SIZE);
+    return { status: 'ok', uri: r.uri, originalUri: r.originalUri, width: r.width, height: r.height };
   } catch (e) {
     switch (errorCode(e)) {
       case 'ERR_NO_SUBJECT':

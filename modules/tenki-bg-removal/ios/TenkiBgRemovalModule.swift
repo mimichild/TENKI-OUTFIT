@@ -36,8 +36,15 @@ public class TenkiBgRemovalModule: Module {
       guard #available(iOS 17.0, *) else { throw UnavailableException() }
       let image = try Self.loadNormalized(uri: uri, maxSize: CGFloat(max(maxSize, 1)))
       let png = try Self.cutout(image)
-      let url = try Self.write(png: png)
-      return ["uri": url.absoluteString, "width": image.width, "height": image.height]
+      guard let jpeg = UIImage(cgImage: image).jpegData(compressionQuality: 0.9) else {
+        throw SegmentationException("JPEG encoding failed")
+      }
+      let cutoutUrl = try Self.write(png, ext: "png")
+      let originalUrl = try Self.write(jpeg, ext: "jpg")
+      return [
+        "uri": cutoutUrl.absoluteString, "originalUri": originalUrl.absoluteString,
+        "width": image.width, "height": image.height,
+      ]
     }
     .runOnQueue(.global(qos: .userInitiated))
   }
@@ -93,13 +100,13 @@ public class TenkiBgRemovalModule: Module {
     return png
   }
 
-  private static func write(png: Data) throws -> URL {
+  private static func write(_ data: Data, ext: String) throws -> URL {
     let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
       .appendingPathComponent("bg-removal", isDirectory: true)
     do {
       try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-      let url = dir.appendingPathComponent("\(UUID().uuidString).png")
-      try png.write(to: url, options: .atomic)
+      let url = dir.appendingPathComponent("\(UUID().uuidString).\(ext)")
+      try data.write(to: url, options: .atomic)
       return url
     } catch {
       throw SegmentationException(error.localizedDescription)

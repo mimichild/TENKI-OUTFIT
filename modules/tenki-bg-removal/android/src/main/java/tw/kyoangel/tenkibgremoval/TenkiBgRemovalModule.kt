@@ -41,8 +41,14 @@ class TenkiBgRemovalModule : Module() {
       }
       val bitmap = loadNormalized(Uri.parse(uri), max(maxSize, 1))
       val foreground = segment(bitmap)
-      val file = write(foreground)
-      mapOf("uri" to Uri.fromFile(file).toString(), "width" to foreground.width, "height" to foreground.height)
+      val cutout = write(foreground, Bitmap.CompressFormat.PNG, "png")
+      val original = write(bitmap, Bitmap.CompressFormat.JPEG, "jpg")
+      mapOf(
+        "uri" to Uri.fromFile(cutout).toString(),
+        "originalUri" to Uri.fromFile(original).toString(),
+        "width" to foreground.width,
+        "height" to foreground.height,
+      )
     }
   }
 
@@ -105,10 +111,10 @@ class TenkiBgRemovalModule : Module() {
     }
   }
 
-  private fun write(bitmap: Bitmap): File {
+  private fun write(bitmap: Bitmap, format: Bitmap.CompressFormat, ext: String): File {
     val dir = File(context.cacheDir, "bg-removal").apply { mkdirs() }
-    val file = File(dir, "${UUID.randomUUID()}.png")
-    FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    val file = File(dir, "${UUID.randomUUID()}.$ext")
+    FileOutputStream(file).use { bitmap.compress(format, if (format == Bitmap.CompressFormat.PNG) 100 else 90, it) }
     return file
   }
 }
