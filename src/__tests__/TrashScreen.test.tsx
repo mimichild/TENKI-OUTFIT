@@ -47,6 +47,11 @@ describe('TrashScreen', () => {
     expect(screen.queryByText('還在用')).toBeNull();
   });
 
+  it('explains that past outfits keep the photo after deleting forever', async () => {
+    await setup();
+    expect(screen.getByText('永久刪除後，過去穿搭仍會保留這件單品的照片')).toBeTruthy();
+  });
+
   it('restores an item', async () => {
     await setup();
     await act(async () => fireEvent.press(screen.getByRole('button', { name: '還原 舊外套' })));

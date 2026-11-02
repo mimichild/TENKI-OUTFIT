@@ -3,6 +3,9 @@ import { AppState, RefreshControl, type AppStateStatus } from 'react-native';
 import WeatherScreen from '../../app/(tabs)/index';
 import { WeatherProvider } from '@/db/WeatherContext';
 import { createMemoryWeatherRepository } from '@/db/memoryWeatherRepository';
+import { createMemoryDatabase } from '@/db/memoryItemRepository';
+import { OutfitRepositoryProvider } from '@/db/OutfitRepositoryContext';
+import type { OutfitInput } from '@/db/outfitRepository';
 import type { DailyForecast, FetchForecastResult } from '@/lib/cwaWeather';
 import { DEFAULT_SETTINGS, useSettingsStore } from '@/store/settingsStore';
 import type { WeatherDay } from '@/types/models';
@@ -28,20 +31,35 @@ const cached = (date: string, maxT: number): WeatherDay => ({
   wxCode: '01', wxText: '晴天', fetchedAt: '2026-11-02T02:00:00.000Z',
 });
 
-async function setup({ apiKey = 'KEY', result, seed = [], fetcher: customFetcher, repo: customRepo }: {
+type OutfitSeed = { date: string; items: ('shirt' | 'jeans')[] };
+
+async function setup({ apiKey = 'KEY', result, seed = [], fetcher: customFetcher, repo: customRepo, outfits = [] }: {
   apiKey?: string; result?: FetchForecastResult; seed?: WeatherDay[];
-  fetcher?: jest.Mock; repo?: WeatherRepository;
+  fetcher?: jest.Mock; repo?: WeatherRepository; outfits?: OutfitSeed[];
 }) {
+  let n = 0;
+  const db = createMemoryDatabase({ now: () => NOW, newId: () => `id${++n}` });
+  const base = { brand: '', category: 'top' as const, occasions: [], seasons: [], imageUri: null, originalUri: null };
+  const shirt = await db.items.create({ ...base, name: '白襯衫', price: 790 });
+  const jeans = await db.items.create({ ...base, name: '牛仔褲', price: null });
+  const ids = { shirt: shirt.id, jeans: jeans.id };
+  const outfitIds: string[] = [];
+  for (const o of outfits) {
+    const input: OutfitInput = { name: '', date: o.date, items: o.items.map((k, z) => ({ itemId: ids[k], x: 0.5, y: 0.5, scale: 1, rotation: 0, z })) };
+    outfitIds.push((await db.outfits.create(input)).id);
+  }
   useSettingsStore.setState({ ...DEFAULT_SETTINGS, cwaApiKey: apiKey });
   const repo = customRepo ?? createMemoryWeatherRepository(seed);
   const fetcher = customFetcher ?? jest.fn().mockResolvedValue(result ?? { status: 'ok', days: [] });
   render(
-    <WeatherProvider repository={repo} fetcher={fetcher} now={() => currentNow}>
-      <WeatherScreen />
-    </WeatherProvider>,
+    <OutfitRepositoryProvider repository={db.outfits}>
+      <WeatherProvider repository={repo} fetcher={fetcher} now={() => currentNow}>
+        <WeatherScreen />
+      </WeatherProvider>
+    </OutfitRepositoryProvider>,
   );
   await act(async () => {});
-  return { fetcher, repo };
+  return { fetcher, repo, outfitIds };
 }
 
 beforeEach(() => {
@@ -198,5 +216,83 @@ describe('WeatherScreen', () => {
   it('reads the temperatures as one accessible label', async () => {
     await setup({ result: { status: 'ok', days: [forecast('2026-11-03', 25)] } });
     expect(screen.getByLabelText('最高 25°，最低 19°')).toBeTruthy();
+  });
+});
+
+describe('WeatherScreen outfits', () => {
+  const twoDays: FetchForecastResult = { status: 'ok', days: [forecast('2026-11-03', 25), forecast('2026-11-04', 22)] };
+  const planned: OutfitSeed[] = [
+    { date: '2026-11-03', items: ['shirt', 'jeans'] },
+    { date: '2026-11-03', items: ['jeans'] },
+    { date: '2026-11-04', items: ['shirt'] },
+  ];
+  const cards = () => screen.queryAllByLabelText(/^編輯穿搭，/);
+  // 換日期／檢視後穿搭是非同步讀取的
+  const press = async (el: Parameters<typeof fireEvent.press>[0]) => act(async () => { fireEvent.press(el); });
+
+  it('shows the outfits planned for the selected day with totals, and opens one for editing', async () => {
+    const { outfitIds } = await setup({ result: twoDays, outfits: planned });
+    expect(cards().map(c => c.props.accessibilityLabel)).toEqual(['編輯穿搭，2 件單品，NT$790', '編輯穿搭，1 件單品，—']);
+    await press(cards()[0]);
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/outfit/edit', params: { id: outfitIds[0] } });
+    await press(screen.getByRole('button', { name: '後一天' }));
+    expect(cards()).toHaveLength(1);
+  });
+
+  it('says when a day has no outfit yet', async () => {
+    await setup({ result: twoDays });
+    expect(screen.getByText('這天還沒有穿搭，按右下 ＋ 新增')).toBeTruthy();
+    expect(cards()).toHaveLength(0);
+  });
+
+  it('still shows outfits and the + button without an API key', async () => {
+    await setup({ apiKey: '', outfits: planned });
+    expect(screen.getByText('請先到設定輸入氣象署授權碼')).toBeTruthy();
+    expect(cards()).toHaveLength(2);
+    expect(screen.getByRole('button', { name: '新增穿搭' })).toBeTruthy();
+  });
+
+  it('week view lists every day of the week; tapping a day opens it in day view', async () => {
+    await setup({ result: twoDays, outfits: planned });
+    await press(screen.getByRole('tab', { name: '週' }));
+    for (const label of ['11/1（日）', '11/3（二）', '11/7（六）']) {
+      expect(screen.getByRole('button', { name: `查看 ${label}` })).toBeTruthy();
+    }
+    expect(cards()).toHaveLength(3);
+    await press(screen.getByRole('button', { name: '下一週' }));
+    expect(screen.getByRole('button', { name: '查看 11/8（日）' })).toBeTruthy();
+    expect(cards()).toHaveLength(0);
+    await press(screen.getByRole('button', { name: '上一週' }));
+    await press(screen.getByRole('button', { name: '查看 11/4（三）' }));
+    expect(screen.getByRole('tab', { name: '日' })).toBeSelected();
+    expect(screen.getByText('明天')).toBeTruthy();
+    expect(cards()).toHaveLength(1);
+  });
+
+  it('month view marks days with outfits and shows the chosen day', async () => {
+    await setup({ result: twoDays, outfits: planned });
+    await press(screen.getByRole('tab', { name: '月' }));
+    expect(screen.getByText('2026 年 11 月')).toBeTruthy();
+    expect(screen.getByTestId('day-2026-11-03').props.accessibilityLabel).toMatch(/有穿搭/);
+    expect(screen.getByTestId('day-2026-11-05').props.accessibilityLabel).not.toMatch(/有穿搭/);
+    expect(cards()).toHaveLength(2);
+    await press(screen.getByTestId('day-2026-11-04'));
+    expect(cards()).toHaveLength(1);
+    await press(screen.getByRole('button', { name: '下個月' }));
+    expect(screen.getByText('2026 年 12 月')).toBeTruthy();
+  });
+
+  it('after picking a day beyond the forecast, the arrows lead back toward it', async () => {
+    await setup({ result: twoDays });
+    await press(screen.getByRole('tab', { name: '月' }));
+    await press(screen.getByTestId('day-2026-11-20'));
+    await press(screen.getByRole('tab', { name: '日' }));
+    expect(screen.getByText('11/20（五）')).toBeTruthy();
+    expect(screen.getByText('這一天沒有天氣資料')).toBeTruthy();
+    expect(screen.getByLabelText('後一天')).toBeDisabled();
+    await press(screen.getByLabelText('前一天'));
+    expect(screen.getByText('11/19（四）')).toBeTruthy();
+    await press(screen.getByRole('button', { name: '新增穿搭' }));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/outfit/edit', params: { date: '2026-11-19' } });
   });
 });

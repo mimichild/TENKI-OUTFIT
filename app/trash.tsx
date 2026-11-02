@@ -34,7 +34,12 @@ export default function TrashScreen() {
         contentContainerStyle={styles.content}
         data={items ?? []}
         keyExtractor={i => i.id}
-        ListHeaderComponent={<Text style={[styles.hint, { color: theme.textMuted }]}>{t('trash.hint', { days: TRASH_RETENTION_DAYS })}</Text>}
+        ListHeaderComponent={
+          <View style={styles.header}>
+            <Text style={[styles.hint, { color: theme.textMuted }]}>{t('trash.hint', { days: TRASH_RETENTION_DAYS })}</Text>
+            <Text style={[styles.hint, { color: theme.textMuted }]}>{t('trash.archiveNote')}</Text>
+          </View>
+        }
         ListEmptyComponent={
           items ? (
             <View style={styles.empty}>
@@ -90,7 +95,8 @@ export default function TrashScreen() {
 
 const styles = StyleSheet.create({
   content: { padding: 16, gap: 10 },
-  hint: { fontSize: 13, marginBottom: 4 },
+  header: { gap: 2, marginBottom: 4 },
+  hint: { fontSize: 13 },
   empty: { alignItems: 'center', gap: 10, paddingTop: 60 },
   row: { flexDirection: 'row', gap: 12, padding: 12, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth },
   thumb: { width: 56, height: 56, borderRadius: 8, overflow: 'hidden', backgroundColor: '#FFFFFF', borderWidth: StyleSheet.hairlineWidth },

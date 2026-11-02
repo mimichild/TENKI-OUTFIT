@@ -122,6 +122,28 @@ npx agent-browser screenshot "$OUT_DIR/outfit-canvas.png" > /dev/null 2>&1
 npx agent-browser click '[data-testid="save-outfit"]' > /dev/null 2>&1 || true
 npx agent-browser wait 1500 > /dev/null 2>&1
 if npx agent-browser get url 2>/dev/null | grep -q "/outfit/edit"; then log_fail "穿搭存檔後沒有關閉畫布"; else log_pass "穿搭存檔後關閉畫布"; fi
+if npx agent-browser eval '!!document.querySelector("[aria-label=\"編輯穿搭，1 件單品，NT$1,290\"]")' 2>/dev/null | grep -q true; then
+  log_pass "每日氣象頁顯示剛存的穿搭與總金額"
+else
+  log_fail "每日氣象頁沒有顯示剛存的穿搭"
+fi
+npx agent-browser screenshot "$OUT_DIR/weather-day-outfit.png" > /dev/null 2>&1
+npx agent-browser click '[role="tab"][aria-label="週"]' > /dev/null 2>&1 || log_fail "找不到「週」"
+npx agent-browser wait 1000 > /dev/null 2>&1
+WEEK_TEXT=$(npx agent-browser get text body 2>/dev/null)
+expect_text "週檢視顯示整週日期" "（日）" "$WEEK_TEXT"
+expect_text "週檢視顯示整週日期" "（六）" "$WEEK_TEXT"
+npx agent-browser screenshot "$OUT_DIR/weather-week.png" > /dev/null 2>&1
+npx agent-browser click '[role="tab"][aria-label="月"]' > /dev/null 2>&1 || log_fail "找不到「月」"
+npx agent-browser wait 1000 > /dev/null 2>&1
+if npx agent-browser eval '[...document.querySelectorAll("[aria-label]")].some(e => / 今天 有穿搭$/.test(e.getAttribute("aria-label")))' 2>/dev/null | grep -q true; then
+  log_pass "月曆在今天標示有穿搭"
+else
+  log_fail "月曆沒有在今天標示有穿搭"
+fi
+npx agent-browser screenshot "$OUT_DIR/weather-month.png" > /dev/null 2>&1
+npx agent-browser click '[role="tab"][aria-label="日"]' > /dev/null 2>&1 || true
+
 
 # ── 第 4 階段：每日氣象（沒有授權碼時引導到設定）──
 WEATHER_TEXT=$(visit /)
@@ -140,7 +162,7 @@ for label in 氣象署授權碼 儲存; do
 done
 
 TRASH_TEXT=$(visit /trash)
-for label in 暫存區 暫存區是空的; do
+for label in 暫存區 暫存區是空的 過去穿搭仍會保留這件單品的照片; do
   expect_text "暫存區頁「${label}」存在" "$label" "$TRASH_TEXT"
 done
 

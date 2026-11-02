@@ -1,10 +1,15 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, PanResponder, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, PanResponder, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { MonthGrid } from '@/components/MonthGrid';
+import { OutfitCard } from '@/components/OutfitCard';
+import { ViewModeSwitch, type ViewMode } from '@/components/ViewModeSwitch';
+import { useOutfitsInRange } from '@/db/useOutfits';
 import { useWeather } from '@/db/useWeather';
 import { useT, type TranslationKey } from '@/i18n';
 import { wxCategory, type WxCategory } from '@/lib/cwaWeather';
+import { addMonths, monthGrid, monthOf, weekOf } from '@/lib/calendar';
 import { addDays, browsableRange, weekdayOf } from '@/lib/weatherDates';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme, type Theme } from '@/theme/useTheme';
@@ -39,20 +44,29 @@ export default function WeatherScreen() {
   const language = useSettingsStore(s => s.language);
   const theme = useTheme();
   const router = useRouter();
+  const window = useWindowDimensions();
   const weather = useWeather();
   const { today, days } = weather;
   const [selected, setSelected] = useState(today);
+  const [mode, setMode] = useState<ViewMode>('day');
+  const [month, setMonth] = useState(monthOf(today));
 
-  // 換縣市後回到今天
-  useEffect(() => setSelected(today), [weather.county, today]);
+  // 換縣市或跨過午夜後回到今天
+  useEffect(() => {
+    setSelected(today);
+    setMonth(monthOf(today));
+  }, [weather.county, today]);
 
   const range = useMemo(() => browsableRange((days ?? []).map(d => d.date), today), [days, today]);
-  const canPrev = selected > range.first;
-  const canNext = selected < range.last;
-  const move = (n: number) => setSelected(s => {
-    const target = addDays(s, n);
-    return target < range.first || target > range.last ? s : target;
-  });
+  // 箭頭／滑動只在有天氣資料的範圍內移動；從週、月曆選到範圍外的日期時，可以往範圍的方向走回來
+  const canMove = (from: string, n: number) => {
+    const target = addDays(from, n);
+    if (target >= range.first && target <= range.last) return true;
+    return n < 0 ? from > range.last : from < range.first;
+  };
+  const canPrev = canMove(selected, -1);
+  const canNext = canMove(selected, 1);
+  const move = (n: number) => setSelected(s => (canMove(s, n) ? addDays(s, n) : s));
 
   // PanResponder 的 handler 只建立一次，用 ref 拿最新的 move
   const moveRef = useRef(move);
@@ -69,43 +83,149 @@ export default function WeatherScreen() {
     [],
   );
 
+  const week = weekOf(selected);
+  const grid = monthGrid(month);
+  const [from, to] =
+    mode === 'week' ? [week[0], week[6]] : mode === 'month' ? [grid[0][0], grid[grid.length - 1][6]] : [selected, selected];
+  const outfits = useOutfitsInRange(from, to);
+  const outfitsOn = (date: string) => (outfits ?? []).filter(o => o.date === date);
+  const marked = useMemo(() => new Set((outfits ?? []).map(o => o.date ?? '')), [outfits]);
+
+  const labelOf = (date: string) => {
+    const [, m, d] = date.split('-').map(Number);
+    return t('weather.dateLabel', { m, d, wd: t(`weather.wd${weekdayOf(date)}` as TranslationKey) });
+  };
   const day = days?.find(d => d.date === selected);
   const relative: TranslationKey | null =
     selected === today ? 'weather.today'
       : selected === addDays(today, 1) ? 'weather.tomorrow'
         : selected === addDays(today, -1) ? 'weather.yesterday'
           : null;
-  const [, m, d] = selected.split('-').map(Number);
-  const dateLabel = t('weather.dateLabel', { m, d, wd: t(`weather.wd${weekdayOf(selected)}` as TranslationKey) });
 
-  // 穿搭不需要天氣資料：沒有授權碼時也能新增
-  const addButton = (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={t('outfit.new')}
-      onPress={() => router.push({ pathname: '/outfit/edit', params: { date: selected } })}
-      style={[styles.fab, { backgroundColor: theme.primary }]}
-    >
-      <Ionicons name="add" size={30} color="#FFFFFF" />
-    </Pressable>
-  );
+  const changeMode = (next: ViewMode) => {
+    if (next === 'month') setMonth(monthOf(selected));
+    setMode(next);
+  };
+  const openDay = (date: string) => {
+    setSelected(date);
+    setMode('day');
+  };
+  const openOutfit = (id: string) => router.push({ pathname: '/outfit/edit', params: { id } });
+  const cardWidth = Math.min(window.width - 32, 360);
 
-  if (!weather.hasKey) {
+  const dayOutfits = (date: string) => {
+    if (outfits === undefined) return <ActivityIndicator color={theme.primary} />;
+    const list = outfitsOn(date);
+    if (list.length === 0) {
+      return (
+        <View style={[styles.canvas, { borderColor: theme.border }]}>
+          <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.noOutfit')}</Text>
+        </View>
+      );
+    }
     return (
-      <View style={[styles.center, { backgroundColor: theme.background }]}>
-        <Ionicons name="key-outline" size={40} color={theme.primary} />
-        <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.noKey')}</Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push('/settings')}
-          style={[styles.button, { backgroundColor: theme.primary }]}
-        >
-          <Text style={styles.buttonText}>{t('weather.goSettings')}</Text>
-        </Pressable>
-        {addButton}
+      <View style={styles.outfitList}>
+        {list.map(o => <OutfitCard key={o.id} outfit={o} width={cardWidth} onPress={() => openOutfit(o.id)} />)}
       </View>
     );
-  }
+  };
+
+  const weatherCard = (
+    <View {...pan.panHandlers} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+      <View style={styles.cardHeader}>
+        <NavButton icon="chevron-back" label={t('weather.prevDay')} disabled={!canPrev} onPress={() => move(-1)} theme={theme} />
+        {/* 切換日期時讓螢幕閱讀器念出新日期（Android） */}
+        <View style={styles.dateBlock} accessibilityLiveRegion="polite">
+          <Text style={[styles.date, { color: theme.text }]}>{labelOf(selected)}</Text>
+          <View style={styles.subRow}>
+            {relative && <Text style={[styles.relative, { color: theme.primary }]}>{t(relative)}</Text>}
+            <Text style={[styles.county, { color: theme.textMuted }]}>{weather.county}</Text>
+          </View>
+        </View>
+        <NavButton icon="chevron-forward" label={t('weather.nextDay')} disabled={!canNext} onPress={() => move(1)} theme={theme} />
+      </View>
+
+      {!weather.hasKey ? (
+        <View style={styles.placeholder}>
+          <Ionicons name="key-outline" size={36} color={theme.primary} />
+          <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.noKey')}</Text>
+          <Pressable accessibilityRole="button" onPress={() => router.push('/settings')} style={[styles.button, { backgroundColor: theme.primary }]}>
+            <Text style={styles.buttonText}>{t('weather.goSettings')}</Text>
+          </Pressable>
+        </View>
+      ) : day ? (
+        <DayDetails day={day} theme={theme} language={language} t={t} />
+      ) : weather.loading || days === undefined ? (
+        <View style={styles.placeholder}>
+          <ActivityIndicator color={theme.primary} />
+          <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.loading')}</Text>
+        </View>
+      ) : (
+        <View style={styles.placeholder}>
+          <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.noData')}</Text>
+        </View>
+      )}
+    </View>
+  );
+
+  const weekView = (
+    <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border, gap: 4 }]}>
+      <View style={styles.cardHeader}>
+        <NavButton icon="chevron-back" label={t('calendar.prevWeek')} disabled={false} onPress={() => setSelected(s => addDays(s, -7))} theme={theme} />
+        <Text style={[styles.weekTitle, { color: theme.text }]} accessibilityLiveRegion="polite">
+          {`${labelOf(week[0])} – ${labelOf(week[6])}`}
+        </Text>
+        <NavButton icon="chevron-forward" label={t('calendar.nextWeek')} disabled={false} onPress={() => setSelected(s => addDays(s, 7))} theme={theme} />
+      </View>
+      {week.map(date => {
+        const w = days?.find(d => d.date === date);
+        const list = outfitsOn(date);
+        return (
+          <View key={date} style={[styles.weekRow, { borderColor: theme.border }]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('calendar.showDay', { date: labelOf(date) })}
+              onPress={() => openDay(date)}
+              style={styles.weekDay}
+            >
+              <Text style={[styles.weekDate, { color: date === today ? theme.primary : theme.text }]}>{labelOf(date)}</Text>
+              {w && (
+                <View style={styles.weekWx}>
+                  <Ionicons name={WX_ICONS[wxCategory(w.wxCode)]} size={14} color={theme.textMuted} accessible={false} importantForAccessibility="no" />
+                  <Text style={[styles.weekTemp, { color: theme.textMuted }]}>{`${deg(w.maxT)}/${deg(w.minT)}`}</Text>
+                </View>
+              )}
+            </Pressable>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weekOutfits}>
+              {list.length === 0 ? (
+                <Text style={[styles.weekEmpty, { color: theme.textMuted }]}>—</Text>
+              ) : (
+                list.map(o => <OutfitCard key={o.id} outfit={o} width={66} compact onPress={() => openOutfit(o.id)} />)
+              )}
+            </ScrollView>
+          </View>
+        );
+      })}
+    </View>
+  );
+
+  const monthView = (
+    <>
+      <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border, paddingVertical: 8 }]}>
+        <MonthGrid
+          month={month}
+          today={today}
+          selected={selected}
+          marked={marked}
+          onSelect={setSelected}
+          onPrev={() => setMonth(m => addMonths(m, -1))}
+          onNext={() => setMonth(m => addMonths(m, 1))}
+        />
+      </View>
+      <Text style={[styles.sectionTitle, { color: theme.text }]}>{labelOf(selected)}</Text>
+      {dayOutfits(selected)}
+    </>
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -116,48 +236,35 @@ export default function WeatherScreen() {
           <RefreshControl refreshing={weather.refreshing} onRefresh={weather.refresh} tintColor={theme.primary} colors={[theme.primary]} />
         }
       >
-        {weather.error && (
+        <ViewModeSwitch mode={mode} onChange={changeMode} />
+
+        {weather.hasKey && weather.error && (
           <View style={[styles.banner, { backgroundColor: theme.primarySoft }]} accessibilityRole="alert">
             <Ionicons name="alert-circle-outline" size={18} color={theme.text} />
             <Text style={[styles.bannerText, { color: theme.text }]}>{t(`weather.error.${weather.error}`)}</Text>
           </View>
         )}
 
-        <View {...pan.panHandlers} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <View style={styles.cardHeader}>
-            <NavButton icon="chevron-back" label={t('weather.prevDay')} disabled={!canPrev} onPress={() => move(-1)} theme={theme} />
-            {/* 切換日期時讓螢幕閱讀器念出新日期（Android） */}
-            <View style={styles.dateBlock} accessibilityLiveRegion="polite">
-              <Text style={[styles.date, { color: theme.text }]}>{dateLabel}</Text>
-              <View style={styles.subRow}>
-                {relative && <Text style={[styles.relative, { color: theme.primary }]}>{t(relative)}</Text>}
-                <Text style={[styles.county, { color: theme.textMuted }]}>{weather.county}</Text>
-              </View>
-            </View>
-            <NavButton icon="chevron-forward" label={t('weather.nextDay')} disabled={!canNext} onPress={() => move(1)} theme={theme} />
-          </View>
-
-          {day ? (
-            <DayDetails day={day} theme={theme} language={language} t={t} />
-          ) : weather.loading || days === undefined ? (
-            <View style={styles.placeholder}>
-              <ActivityIndicator color={theme.primary} />
-              <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.loading')}</Text>
-            </View>
-          ) : (
-            <View style={styles.placeholder}>
-              <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.noData')}</Text>
-            </View>
-          )}
-        </View>
-
-        <View style={[styles.canvas, { borderColor: theme.border }]}>
-          <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.outfitsComing')}</Text>
-        </View>
+        {mode === 'day' && (
+          <>
+            {weatherCard}
+            {dayOutfits(selected)}
+          </>
+        )}
+        {mode === 'week' && weekView}
+        {mode === 'month' && monthView}
 
         <Text style={[styles.source, { color: theme.textMuted }]}>{t('weather.source')}</Text>
       </ScrollView>
-      {addButton}
+      {/* 穿搭不需要天氣資料：沒有授權碼時也能新增 */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t('outfit.new')}
+        onPress={() => router.push({ pathname: '/outfit/edit', params: { date: selected } })}
+        style={[styles.fab, { backgroundColor: theme.primary }]}
+      >
+        <Ionicons name="add" size={30} color="#FFFFFF" />
+      </Pressable>
     </View>
   );
 }
@@ -228,7 +335,6 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 5,
   },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 14 },
   message: { fontSize: 15, textAlign: 'center' },
   button: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 },
   buttonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
@@ -255,8 +361,18 @@ const styles = StyleSheet.create({
   metaText: { fontSize: 14 },
   updated: { fontSize: 12, marginTop: 4 },
   canvas: {
-    flexGrow: 1, minHeight: 200, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 200, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth,
     backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', padding: 24,
   },
+  outfitList: { alignItems: 'center', gap: 16 },
+  sectionTitle: { fontSize: 16, fontWeight: '600' },
+  weekTitle: { flex: 1, textAlign: 'center', fontSize: 15, fontWeight: '600' },
+  weekRow: { flexDirection: 'row', alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 6, gap: 8 },
+  weekDay: { width: 96, gap: 2 },
+  weekDate: { fontSize: 14, fontWeight: '600' },
+  weekWx: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  weekTemp: { fontSize: 12 },
+  weekOutfits: { gap: 6, alignItems: 'center', minHeight: 40 },
+  weekEmpty: { fontSize: 14, paddingHorizontal: 4 },
   source: { fontSize: 11, textAlign: 'center' },
 });

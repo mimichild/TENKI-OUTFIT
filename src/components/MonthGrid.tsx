@@ -53,7 +53,7 @@ export function MonthGrid({ month, today, selected, marked, onSelect, onPrev, on
                 key={date}
                 testID={`day-${date}`}
                 accessibilityRole="button"
-                accessibilityLabel={`${Number(date.slice(5, 7))}/${day}${isToday ? ` ${t('weather.today')}` : ''}`}
+                accessibilityLabel={`${Number(date.slice(5, 7))}/${day}${isToday ? ` ${t('weather.today')}` : ''}${hasOutfit ? ` ${t('calendar.hasOutfit')}` : ''}`}
                 accessibilityState={{ selected: isSelected }}
                 onPress={() => onSelect(date)}
                 style={styles.cell}
