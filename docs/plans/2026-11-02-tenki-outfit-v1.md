@@ -1,6 +1,6 @@
 # TENKI OUTFIT 天氣穿搭 — v1 開發計畫
 
-> 建立：2026-11-02　狀態：**第 2 階段進行中（批次 A 完成）**
+> 建立：2026-11-02　狀態：**第 2 階段進行中（批次 A、B 完成）**
 > 基礎設施沿用 `/Users/mimi/Documents/REUSABLE_INFRA.md`
 
 ## 技術選型（沿用基礎文件）
@@ -94,3 +94,14 @@
 - `DatabaseProvider`（native / web）掛上單品資料層
 - 和計畫不同的地方：永久刪除單品時，同時刪掉 `outfit_items` 裡用到這件單品的紀錄（外鍵沒有 CASCADE，不刪會擋住刪除）
 - 驗證：Jest 46 項通過（新增 20 項）；`bash scripts/regression.sh` 4/4 全過
+
+#### 批次 B — 完成（2026-11-02）
+- 服裝頁 `app/(tabs)/closet.tsx`：分類小分頁（全部＋8 類）、三欄白底照片牆、右上「篩選與排序」（四種排序＋季節/場合複選，有篩選時圖示顯示小圓點）、右下 ＋（帶入目前分類）、空狀態
+- 新增頁 `app/item/new.tsx`（modal）、單品頁 `app/item/[id].tsx`（檢視 → 右上「編輯」→ 表單，可儲存／取消／刪除＝移到暫存區）
+- 共用元件：`ItemForm`（照片：從相簿選擇／拍照／重新上傳／刪除照片；品牌、名稱、分類、價格〔顯示幣別符號〕、場合、季節）、`ItemTile`、`ItemFilterSheet`、`Chip`、`HeaderIconButton`
+- `src/lib/itemService.ts`：存檔時才把新照片複製進 App 資料夾，成功後才刪舊照片；存檔失敗會刪掉剛複製的檔案
+- `src/lib/pickPhoto.ts`：相簿／相機權限，被拒時表單顯示提示（不跳系統對話框）
+- `src/db/useItems.ts`：讀取單品的 hooks
+- 三語字串新增 36 組；移除 `placeholder.closet`
+- 和計畫不同的地方：選完照片會顯示「自動去背會在第 3 階段接上，目前先顯示原圖」；新照片目前同時存成原圖與顯示圖（同一個檔案），第 3 階段改成顯示圖存去背結果
+- 驗證：Jest 69 項通過（新增 23 項）、tsc、lint 0 警告；`bash scripts/regression.sh` 4/4 全過（Web 視覺測試尚未涵蓋服裝頁，批次 C 補上）
