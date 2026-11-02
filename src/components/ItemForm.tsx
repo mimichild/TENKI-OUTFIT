@@ -13,6 +13,7 @@ import { resolvePhotoUri } from '@/lib/photoStorage';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme, type Theme } from '@/theme/useTheme';
 import { Chip } from './Chip';
+import { PHOTO_EDITOR_SUPPORTED, PhotoEditor } from './PhotoEditor';
 
 export const EMPTY_ITEM_INPUT: ItemInput = {
   name: '', brand: '', category: 'top', price: null, occasions: [], seasons: [], imageUri: null, originalUri: null,
@@ -62,11 +63,29 @@ export function ItemForm({ initial, onPickPhoto, onRemoveBackground, onSubmit, o
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [cutout, setCutout] = useState<CutoutState>(null);
+  const [editingPhoto, setEditingPhoto] = useState(false);
   /** 每次選照片 +1；較慢回來的舊去背結果比對不符就丟掉 */
   const pickSeq = useRef(0);
 
   const previewUri = photo.kind === 'replace' ? photo.imageUri : photo.kind === 'remove' ? null : initial.imageUri;
   const busy = saving || cutout === 'running';
+
+  /** 手動修改用的兩張圖：目前顯示圖 + 補回筆刷的來源（沒有原圖的舊資料就用顯示圖） */
+  const editable =
+    photo.kind === 'replace'
+      ? { imageUri: photo.imageUri, originalUri: photo.originalUri }
+      : photo.kind === 'keep' && initial.imageUri
+        ? {
+            imageUri: resolvePhotoUri(initial.imageUri)!,
+            originalUri: resolvePhotoUri(initial.originalUri ?? initial.imageUri)!,
+          }
+        : null;
+
+  const finishEditing = (uri: string) => {
+    if (editable) setPhoto({ kind: 'replace', originalUri: editable.originalUri, imageUri: uri });
+    setCutout(null);
+    setEditingPhoto(false);
+  };
   const update = (patch: Partial<ItemInput>) => setForm(f => ({ ...f, ...patch }));
 
   const pick = async (source: PhotoSource) => {
@@ -141,6 +160,9 @@ export function ItemForm({ initial, onPickPhoto, onRemoveBackground, onSubmit, o
         <View style={s.chipRow}>
           <Chip label={t(previewUri ? 'item.reupload' : 'item.pickLibrary')} selected={false} onPress={() => pick('library')} />
           <Chip label={t('item.takePhoto')} selected={false} onPress={() => pick('camera')} />
+          {PHOTO_EDITOR_SUPPORTED && editable && cutout !== 'running' && (
+            <Chip label={t('item.editPhoto')} selected={false} onPress={() => setEditingPhoto(true)} />
+          )}
           {previewUri && <Chip label={t('item.removePhoto')} selected={false} onPress={removePhoto} />}
         </View>
 
@@ -185,6 +207,14 @@ export function ItemForm({ initial, onPickPhoto, onRemoveBackground, onSubmit, o
         </Field>
         {error && <Text style={s.error}>{error}</Text>}
       </ScrollView>
+      {editingPhoto && editable && (
+        <PhotoEditor
+          imageUri={editable.imageUri}
+          originalUri={editable.originalUri}
+          onDone={finishEditing}
+          onCancel={() => setEditingPhoto(false)}
+        />
+      )}
 
       <View style={s.actions}>
         {onDelete && (

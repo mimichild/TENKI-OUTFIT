@@ -2,6 +2,20 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { ItemForm, EMPTY_ITEM_INPUT } from '@/components/ItemForm';
 import { DEFAULT_SETTINGS, useSettingsStore } from '@/store/settingsStore';
 
+jest.mock('@/components/PhotoEditor', () => {
+  const { Pressable, Text, View } = jest.requireActual('react-native');
+  return {
+    PHOTO_EDITOR_SUPPORTED: true,
+    PhotoEditor: (p: { imageUri: string; originalUri: string; onDone: (uri: string) => void; onCancel: () => void }) => (
+      <View>
+        <Text>{`editor:${p.imageUri}|${p.originalUri}`}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="mock-done" onPress={() => p.onDone('file:///cache/bg-removal/edited.png')} />
+        <Pressable accessibilityRole="button" accessibilityLabel="mock-cancel" onPress={p.onCancel} />
+      </View>
+    ),
+  };
+});
+
 beforeEach(() => useSettingsStore.setState({ ...DEFAULT_SETTINGS }));
 
 function setup(overrides: Partial<React.ComponentProps<typeof ItemForm>> = {}) {
@@ -136,5 +150,51 @@ describe('ItemForm', () => {
     expect(onDelete).toHaveBeenCalledTimes(1);
     await act(async () => reject(new Error('db')));
     expect(screen.getByText('儲存失敗，請再試一次')).toBeTruthy();
+  });
+
+  describe('manual cutout editing', () => {
+    it('edits the fresh cutout against the downscaled original and submits the edited image', async () => {
+      const { onSubmit } = setup();
+      fireEvent.press(screen.getByRole('button', { name: '從相簿選擇' }));
+      await waitFor(() => expect(screen.getByText('已自動去背')).toBeTruthy());
+      fireEvent.press(screen.getByRole('button', { name: '重新編輯照片' }));
+      expect(screen.getByText('editor:file:///cache/bg-removal/cut.png|file:///cache/bg-removal/cut.jpg')).toBeTruthy();
+      fireEvent.press(screen.getByRole('button', { name: 'mock-done' }));
+      expect(screen.queryByText(/^editor:/)).toBeNull();
+      fireEvent.press(screen.getByRole('button', { name: '儲存' }));
+      expect(onSubmit.mock.calls[0][1]).toEqual({
+        kind: 'replace', originalUri: 'file:///cache/bg-removal/cut.jpg', imageUri: 'file:///cache/bg-removal/edited.png',
+      });
+    });
+
+    it('edits a saved item photo using its stored original', () => {
+      const { onSubmit } = setup({ initial: { ...EMPTY_ITEM_INPUT, imageUri: 'file:///doc/photos/a.png', originalUri: 'file:///doc/photos/a.jpg' } });
+      fireEvent.press(screen.getByRole('button', { name: '重新編輯照片' }));
+      expect(screen.getByText('editor:file:///doc/photos/a.png|file:///doc/photos/a.jpg')).toBeTruthy();
+      fireEvent.press(screen.getByRole('button', { name: 'mock-done' }));
+      fireEvent.press(screen.getByRole('button', { name: '儲存' }));
+      expect(onSubmit.mock.calls[0][1]).toEqual({
+        kind: 'replace', originalUri: 'file:///doc/photos/a.jpg', imageUri: 'file:///cache/bg-removal/edited.png',
+      });
+    });
+
+    it('falls back to the display image when an item has no stored original', () => {
+      setup({ initial: { ...EMPTY_ITEM_INPUT, imageUri: 'file:///doc/photos/a.png', originalUri: null } });
+      fireEvent.press(screen.getByRole('button', { name: '重新編輯照片' }));
+      expect(screen.getByText('editor:file:///doc/photos/a.png|file:///doc/photos/a.png')).toBeTruthy();
+    });
+
+    it('cancelling the editor leaves the photo unchanged', () => {
+      const { onSubmit } = setup({ initial: { ...EMPTY_ITEM_INPUT, imageUri: 'file:///doc/photos/a.png', originalUri: 'file:///doc/photos/a.jpg' } });
+      fireEvent.press(screen.getByRole('button', { name: '重新編輯照片' }));
+      fireEvent.press(screen.getByRole('button', { name: 'mock-cancel' }));
+      fireEvent.press(screen.getByRole('button', { name: '儲存' }));
+      expect(onSubmit.mock.calls[0][1]).toEqual({ kind: 'keep' });
+    });
+
+    it('offers no editing without a photo', () => {
+      setup();
+      expect(screen.queryByRole('button', { name: '重新編輯照片' })).toBeNull();
+    });
   });
 });

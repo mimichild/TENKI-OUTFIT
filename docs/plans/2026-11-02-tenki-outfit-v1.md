@@ -170,3 +170,15 @@
 - 驗證：Jest 98 項通過（新增 8 項）、tsc、lint；`bash scripts/regression.sh` 4/4 全過（Web 一律走「不支援」路徑）
 - 和計畫不同的地方：沒有做「改用原圖／改用去背圖」切換；去背結果不好時改用批次 C 的手動修改
 - 回饋調整（2026-11-02）：原生模組多輸出縮小原圖 JPEG（`originalUri`）；去背成功時存「縮小原圖 + 去背 PNG」，丟掉原尺寸照片；去背沒成功時仍存使用者選的照片。Jest 98 項、regression 4/4 全過
+
+#### 批次 C — 完成（2026-11-02，編輯器本身待批次 D 在模擬器驗證）
+- 新增套件 `@shopify/react-native-skia` 2.2.12（`npx expo install`）
+- `src/lib/maskEditing.ts`：等比置中、觸控座標 → 圖片像素、存檔尺寸（長邊最多 1600）、筆畫新增／復原；筆畫存圖片像素座標
+- `src/components/PhotoEditor.tsx`：全螢幕編輯器（Modal + GestureHandlerRootView）。Skia 圖層：底圖 → 依序「擦除」（blendMode clear）與「補回」（原圖 ImageShader）；筆刷大／中／小、復原、完成時用 `drawAsImage` 輸出 PNG 到 `Caches/bg-removal/`；灰底讓透明區看得出來
+- `PhotoEditor.web.tsx`：Web 不載入 Skia、不顯示「重新編輯照片」
+- `ItemForm`：有照片且不在去背中時顯示「重新編輯照片」；新選的照片用（去背圖, 縮小原圖），已存的單品用（imageUri, originalUri，沒有原圖時用顯示圖）；完成後以 `replace` 存新去背圖、原圖沿用
+- Jest 用 `src/__mocks__/react-native-skia.ts` 取代 Skia（`moduleNameMapper`）
+- 三語字串新增 12 組
+- 驗證：Jest 111 項通過（新增 13 項）、tsc、lint；`bash scripts/regression.sh` 4/4 全過
+- 和計畫不同的地方：編輯器做成表單內的 Modal，不是獨立路由（結果要回到表單尚未存檔的狀態，Modal 最直接）
+- 已知限制：編輯已存單品時，存檔會把原圖再複製一份新檔、刪掉舊檔（`saveItem` 的 replace 流程），功能正確但多一次複製
