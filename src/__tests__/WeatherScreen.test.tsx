@@ -106,6 +106,13 @@ describe('WeatherScreen', () => {
     expect(prev).toBeDisabled();
   });
 
+  it('opens a new outfit for the day being viewed from the + button', async () => {
+    await setup({ result: { status: 'ok', days: [forecast('2026-11-03', 25), forecast('2026-11-04', 22)] } });
+    fireEvent.press(screen.getByRole('button', { name: '後一天' }));
+    fireEvent.press(screen.getByRole('button', { name: '新增穿搭' }));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/outfit/edit', params: { date: '2026-11-04' } });
+  });
+
   it('shows the error but keeps cached data', async () => {
     await setup({ seed: [cached('2026-11-03', 24)], result: { status: 'unauthorized' } });
     // 快取是一天前抓的，會重新抓 → 授權碼錯誤

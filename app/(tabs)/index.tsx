@@ -78,6 +78,18 @@ export default function WeatherScreen() {
   const [, m, d] = selected.split('-').map(Number);
   const dateLabel = t('weather.dateLabel', { m, d, wd: t(`weather.wd${weekdayOf(selected)}` as TranslationKey) });
 
+  // 穿搭不需要天氣資料：沒有授權碼時也能新增
+  const addButton = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t('outfit.new')}
+      onPress={() => router.push({ pathname: '/outfit/edit', params: { date: selected } })}
+      style={[styles.fab, { backgroundColor: theme.primary }]}
+    >
+      <Ionicons name="add" size={30} color="#FFFFFF" />
+    </Pressable>
+  );
+
   if (!weather.hasKey) {
     return (
       <View style={[styles.center, { backgroundColor: theme.background }]}>
@@ -90,59 +102,63 @@ export default function WeatherScreen() {
         >
           <Text style={styles.buttonText}>{t('weather.goSettings')}</Text>
         </Pressable>
+        {addButton}
       </View>
     );
   }
 
   return (
-    <ScrollView
-      style={{ backgroundColor: theme.background }}
-      contentContainerStyle={styles.content}
-      refreshControl={
-        <RefreshControl refreshing={weather.refreshing} onRefresh={weather.refresh} tintColor={theme.primary} colors={[theme.primary]} />
-      }
-    >
-      {weather.error && (
-        <View style={[styles.banner, { backgroundColor: theme.primarySoft }]} accessibilityRole="alert">
-          <Ionicons name="alert-circle-outline" size={18} color={theme.text} />
-          <Text style={[styles.bannerText, { color: theme.text }]}>{t(`weather.error.${weather.error}`)}</Text>
-        </View>
-      )}
-
-      <View {...pan.panHandlers} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-        <View style={styles.cardHeader}>
-          <NavButton icon="chevron-back" label={t('weather.prevDay')} disabled={!canPrev} onPress={() => move(-1)} theme={theme} />
-          {/* 切換日期時讓螢幕閱讀器念出新日期（Android） */}
-          <View style={styles.dateBlock} accessibilityLiveRegion="polite">
-            <Text style={[styles.date, { color: theme.text }]}>{dateLabel}</Text>
-            <View style={styles.subRow}>
-              {relative && <Text style={[styles.relative, { color: theme.primary }]}>{t(relative)}</Text>}
-              <Text style={[styles.county, { color: theme.textMuted }]}>{weather.county}</Text>
-            </View>
-          </View>
-          <NavButton icon="chevron-forward" label={t('weather.nextDay')} disabled={!canNext} onPress={() => move(1)} theme={theme} />
-        </View>
-
-        {day ? (
-          <DayDetails day={day} theme={theme} language={language} t={t} />
-        ) : weather.loading || days === undefined ? (
-          <View style={styles.placeholder}>
-            <ActivityIndicator color={theme.primary} />
-            <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.loading')}</Text>
-          </View>
-        ) : (
-          <View style={styles.placeholder}>
-            <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.noData')}</Text>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <ScrollView
+        style={{ backgroundColor: theme.background }}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={weather.refreshing} onRefresh={weather.refresh} tintColor={theme.primary} colors={[theme.primary]} />
+        }
+      >
+        {weather.error && (
+          <View style={[styles.banner, { backgroundColor: theme.primarySoft }]} accessibilityRole="alert">
+            <Ionicons name="alert-circle-outline" size={18} color={theme.text} />
+            <Text style={[styles.bannerText, { color: theme.text }]}>{t(`weather.error.${weather.error}`)}</Text>
           </View>
         )}
-      </View>
 
-      <View style={[styles.canvas, { borderColor: theme.border }]}>
-        <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.outfitsComing')}</Text>
-      </View>
+        <View {...pan.panHandlers} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <View style={styles.cardHeader}>
+            <NavButton icon="chevron-back" label={t('weather.prevDay')} disabled={!canPrev} onPress={() => move(-1)} theme={theme} />
+            {/* 切換日期時讓螢幕閱讀器念出新日期（Android） */}
+            <View style={styles.dateBlock} accessibilityLiveRegion="polite">
+              <Text style={[styles.date, { color: theme.text }]}>{dateLabel}</Text>
+              <View style={styles.subRow}>
+                {relative && <Text style={[styles.relative, { color: theme.primary }]}>{t(relative)}</Text>}
+                <Text style={[styles.county, { color: theme.textMuted }]}>{weather.county}</Text>
+              </View>
+            </View>
+            <NavButton icon="chevron-forward" label={t('weather.nextDay')} disabled={!canNext} onPress={() => move(1)} theme={theme} />
+          </View>
 
-      <Text style={[styles.source, { color: theme.textMuted }]}>{t('weather.source')}</Text>
-    </ScrollView>
+          {day ? (
+            <DayDetails day={day} theme={theme} language={language} t={t} />
+          ) : weather.loading || days === undefined ? (
+            <View style={styles.placeholder}>
+              <ActivityIndicator color={theme.primary} />
+              <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.loading')}</Text>
+            </View>
+          ) : (
+            <View style={styles.placeholder}>
+              <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.noData')}</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={[styles.canvas, { borderColor: theme.border }]}>
+          <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.outfitsComing')}</Text>
+        </View>
+
+        <Text style={[styles.source, { color: theme.textMuted }]}>{t('weather.source')}</Text>
+      </ScrollView>
+      {addButton}
+    </View>
   );
 }
 
@@ -205,7 +221,13 @@ function DayDetails({ day, theme, language, t }: {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, gap: 16, flexGrow: 1 },
+  // 底部留空間給右下 ＋
+  content: { padding: 16, paddingBottom: 96, gap: 16, flexGrow: 1 },
+  fab: {
+    position: 'absolute', right: 20, bottom: 20, width: 58, height: 58, borderRadius: 29,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 5,
+  },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 14 },
   message: { fontSize: 15, textAlign: 'center' },
   button: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 },

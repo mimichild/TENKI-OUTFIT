@@ -99,6 +99,30 @@ else
 fi
 npx agent-browser screenshot "$OUT_DIR/closet-added.png" > /dev/null 2>&1
 
+# ── 第 5 階段：從每日氣象按 ＋ 打開穿搭畫布，放上剛新增的單品並存檔 ──
+npx agent-browser find text 每日氣象 click > /dev/null 2>&1 || true
+npx agent-browser wait 1500 > /dev/null 2>&1
+npx agent-browser click '[aria-label="新增穿搭"]' > /dev/null 2>&1
+npx agent-browser wait 1500 > /dev/null 2>&1
+OUTFIT_TEXT=$(npx agent-browser get text body 2>/dev/null)
+echo "$OUTFIT_TEXT" > "$OUT_DIR/outfit-new.txt"
+for label in 新增穿搭 日期 加入單品 '總金額 —'; do
+  expect_text "穿搭畫布「${label}」存在" "$label" "$OUTFIT_TEXT"
+done
+if echo "$OUTFIT_TEXT" | grep -q "要先選日期才能儲存"; then log_fail "從每日氣象打開時沒有帶入日期"; else log_pass "從每日氣象打開時帶入日期"; fi
+npx agent-browser click '[data-testid="add-items"]' > /dev/null 2>&1 || true
+npx agent-browser wait 1000 > /dev/null 2>&1
+npx agent-browser click '[role="checkbox"][aria-label="E2E白襯衫"]' > /dev/null 2>&1 || log_fail "單品選擇清單裡找不到剛新增的單品"
+npx agent-browser wait 500 > /dev/null 2>&1
+npx agent-browser find text 完成 click > /dev/null 2>&1 || true
+npx agent-browser wait 1000 > /dev/null 2>&1
+OUTFIT_TEXT=$(npx agent-browser get text body 2>/dev/null)
+expect_text "放上單品後顯示總金額" '總金額 NT\$1,290' "$OUTFIT_TEXT"
+npx agent-browser screenshot "$OUT_DIR/outfit-canvas.png" > /dev/null 2>&1
+npx agent-browser click '[data-testid="save-outfit"]' > /dev/null 2>&1 || true
+npx agent-browser wait 1500 > /dev/null 2>&1
+if npx agent-browser get url 2>/dev/null | grep -q "/outfit/edit"; then log_fail "穿搭存檔後沒有關閉畫布"; else log_pass "穿搭存檔後關閉畫布"; fi
+
 # ── 第 4 階段：每日氣象（沒有授權碼時引導到設定）──
 WEATHER_TEXT=$(visit /)
 echo "$WEATHER_TEXT" > "$OUT_DIR/weather.txt"
