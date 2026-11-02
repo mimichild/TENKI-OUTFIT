@@ -8,6 +8,7 @@ import { COUNTIES, type County } from '@/constants/options';
 import { useTrashItems } from '@/db/useItems';
 import { THEME_COLOR_KEYS, THEME_COLORS } from '@/constants/themeColors';
 import { LANGUAGE_LABELS, LANGUAGES, useT, type Language } from '@/i18n';
+import { builtInCwaKey } from '@/lib/cwaKey';
 import { CURRENCIES, CURRENCY_CODES, type CurrencyCode } from '@/lib/currency';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme, type Theme } from '@/theme/useTheme';
@@ -22,6 +23,7 @@ export default function SettingsScreen() {
   const trash = useTrashItems();
   const [picker, setPicker] = useState<PickerKind>(null);
   const close = () => setPicker(null);
+  const hasBuiltInKey = builtInCwaKey() !== '';
 
   return (
     <ScrollView style={{ backgroundColor: theme.background }} contentContainerStyle={styles.content}>
@@ -55,11 +57,14 @@ export default function SettingsScreen() {
 
       <Section title={t('settings.sectionWeather')} theme={theme}>
         <Row theme={theme} label={t('settings.region')} value={settings.county} onPress={() => setPicker('region')} />
-        <View style={styles.keyBlock}>
-          <Text style={[styles.label, { color: theme.text }]}>{t('settings.cwaApiKey')}</Text>
-          <ApiKeyField theme={theme} />
-          <Text style={[styles.hint, { color: theme.textMuted }]}>{t('settings.cwaApiKeyHint')}</Text>
-        </View>
+        {/* App 內建授權碼時不顯示（使用者不用自己申請） */}
+        {!hasBuiltInKey && (
+          <View style={styles.keyBlock}>
+            <Text style={[styles.label, { color: theme.text }]}>{t('settings.cwaApiKey')}</Text>
+            <ApiKeyField theme={theme} />
+            <Text style={[styles.hint, { color: theme.textMuted }]}>{t('settings.cwaApiKeyHint')}</Text>
+          </View>
+        )}
       </Section>
 
       <Section title={t('settings.sectionData')} theme={theme}>

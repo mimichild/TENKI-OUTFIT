@@ -7,6 +7,11 @@ import type { Item } from '@/types/models';
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
+let mockBuiltInKey = '';
+jest.mock('@/lib/cwaKey', () => ({
+  builtInCwaKey: () => mockBuiltInKey,
+  effectiveCwaKey: (k: string) => mockBuiltInKey || k.trim(),
+}));
 jest.mock('@/lib/photoStorage', () => ({ clearCutoutCache: jest.fn(), savePhoto: jest.fn(), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
 
 const trashed: Item = {
@@ -27,6 +32,7 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 beforeEach(() => {
+  mockBuiltInKey = '';
   useSettingsStore.setState({ ...DEFAULT_SETTINGS });
   mockPush.mockClear();
 });
@@ -84,6 +90,14 @@ describe('SettingsScreen', () => {
     fireEvent.changeText(screen.getByLabelText('氣象署授權碼'), 'CWA-12');
     expect(screen.queryByText('已儲存')).toBeNull();
     expect(screen.getByText('尚未儲存')).toBeTruthy();
+  });
+
+  it('hides the CWA key field when the app has a built-in key', async () => {
+    mockBuiltInKey = 'CWA-BUILTIN';
+    await render(<SettingsScreen />);
+    expect(screen.queryByLabelText('氣象署授權碼')).toBeNull();
+    expect(screen.queryByRole('button', { name: '儲存授權碼' })).toBeNull();
+    expect(screen.getByText('地區')).toBeTruthy();
   });
 
   it('shows the trash count and opens the trash page', async () => {

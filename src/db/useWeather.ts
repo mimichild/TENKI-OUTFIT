@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { effectiveCwaKey } from '@/lib/cwaKey';
 import { taipeiDate } from '@/lib/cwaWeather';
 import { refreshWeather, type RefreshResult } from '@/lib/weatherService';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -24,7 +25,7 @@ export interface WeatherState {
 export function useWeather(): WeatherState {
   const { repository, fetcher, now } = useWeatherDeps();
   const county = useSettingsStore(s => s.county);
-  const apiKey = useSettingsStore(s => s.cwaApiKey);
+  const apiKey = effectiveCwaKey(useSettingsStore(s => s.cwaApiKey));
   const [days, setDays] = useState<WeatherDay[]>();
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
