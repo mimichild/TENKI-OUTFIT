@@ -13,9 +13,21 @@ export type FitRect = { x: number; y: number; width: number; height: number; sca
 export type BrushMode = 'erase' | 'restore';
 export type Stroke = { mode: BrushMode; width: number; points: Point[] };
 
-/** 筆刷粗細（畫面像素），換算成圖片像素後存進 Stroke */
-export const BRUSH_SIZES = { small: 12, medium: 28, large: 56 } as const;
-export type BrushSize = keyof typeof BRUSH_SIZES;
+/** 筆刷粗細範圍（畫面像素，滑桿拖拉選擇），換算成圖片像素後存進 Stroke */
+export const BRUSH_MIN = 4;
+export const BRUSH_MAX = 80;
+export const BRUSH_DEFAULT = 28;
+
+/** 滑桿位置（0 ~ trackWidth，可超出）→ 整數筆刷粗細 */
+export function brushFromSlider(x: number, trackWidth: number): number {
+  const ratio = trackWidth > 0 ? Math.min(1, Math.max(0, x / trackWidth)) : 0;
+  return Math.round(BRUSH_MIN + ratio * (BRUSH_MAX - BRUSH_MIN));
+}
+
+/** 筆刷粗細 → 滑桿圓鈕位置 */
+export function sliderFromBrush(size: number, trackWidth: number): number {
+  return ((size - BRUSH_MIN) / (BRUSH_MAX - BRUSH_MIN)) * trackWidth;
+}
 
 /** 等比縮放、置中放進框內 */
 export function containRect(image: Size, box: Size): FitRect {
@@ -35,8 +47,9 @@ export function outputSize(image: Size, max = BG_REMOVAL_MAX_SIZE): Size {
   return { width: Math.round(image.width * scale), height: Math.round(image.height * scale) };
 }
 
-export function startStroke(mode: BrushMode, size: BrushSize, p: Point, rect: FitRect): Stroke {
-  return { mode, width: BRUSH_SIZES[size] / rect.scale, points: [toImagePoint(p, rect)] };
+/** brushSize：畫面像素 */
+export function startStroke(mode: BrushMode, brushSize: number, p: Point, rect: FitRect): Stroke {
+  return { mode, width: brushSize / rect.scale, points: [toImagePoint(p, rect)] };
 }
 
 export function addPoint(stroke: Stroke, p: Point, rect: FitRect): Stroke {

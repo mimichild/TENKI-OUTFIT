@@ -1,6 +1,9 @@
 import {
-  BRUSH_SIZES,
+  BRUSH_MAX,
+  BRUSH_MIN,
   addPoint,
+  brushFromSlider,
+  sliderFromBrush,
   containRect,
   outputSize,
   startStroke,
@@ -44,12 +47,12 @@ describe('strokes', () => {
   const rect = { x: 0, y: 0, width: 200, height: 400, scale: 0.5 };
 
   it('starts a stroke with the brush width converted to image pixels', () => {
-    const s = startStroke('erase', 'medium', { x: 10, y: 20 }, rect);
-    expect(s).toEqual({ mode: 'erase', width: BRUSH_SIZES.medium / 0.5, points: [{ x: 20, y: 40 }] });
+    const s = startStroke('erase', 28, { x: 10, y: 20 }, rect);
+    expect(s).toEqual({ mode: 'erase', width: 56, points: [{ x: 20, y: 40 }] });
   });
 
   it('appends points without mutating the previous stroke', () => {
-    const s = startStroke('restore', 'small', { x: 0, y: 0 }, rect);
+    const s = startStroke('restore', 12, { x: 0, y: 0 }, rect);
     const next = addPoint(s, { x: 5, y: 5 }, rect);
     expect(next.points).toEqual([{ x: 0, y: 0 }, { x: 10, y: 10 }]);
     expect(s.points).toHaveLength(1);
@@ -60,5 +63,24 @@ describe('strokes', () => {
     const b: Stroke = { mode: 'restore', width: 2, points: [] };
     expect(undoStroke([a, b])).toEqual([a]);
     expect(undoStroke([])).toEqual([]);
+  });
+});
+
+describe('brush size slider', () => {
+  it('maps the track position to a whole-pixel brush size', () => {
+    expect(brushFromSlider(0, 200)).toBe(BRUSH_MIN);
+    expect(brushFromSlider(200, 200)).toBe(BRUSH_MAX);
+    expect(brushFromSlider(100, 200)).toBe(Math.round((BRUSH_MIN + BRUSH_MAX) / 2));
+  });
+
+  it('clamps drags past either end of the track', () => {
+    expect(brushFromSlider(-30, 200)).toBe(BRUSH_MIN);
+    expect(brushFromSlider(260, 200)).toBe(BRUSH_MAX);
+  });
+
+  it('places the thumb for a given size (inverse of brushFromSlider)', () => {
+    expect(sliderFromBrush(BRUSH_MIN, 200)).toBe(0);
+    expect(sliderFromBrush(BRUSH_MAX, 200)).toBe(200);
+    expect(brushFromSlider(sliderFromBrush(30, 200), 200)).toBe(30);
   });
 });

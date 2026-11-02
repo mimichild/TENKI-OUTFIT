@@ -19,18 +19,19 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-g
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useT } from '@/i18n';
 import {
+  BRUSH_DEFAULT,
   addPoint,
   containRect,
   outputSize,
   startStroke,
   undoStroke,
   type BrushMode,
-  type BrushSize,
   type Point,
   type Size,
   type Stroke,
 } from '@/lib/maskEditing';
 import { useTheme, type Theme } from '@/theme/useTheme';
+import { BrushSizeSlider } from './BrushSizeSlider';
 import { Chip } from './Chip';
 
 /** Web 版（PhotoEditor.web.tsx）為 false，表單就不顯示「重新編輯照片」 */
@@ -101,7 +102,7 @@ export function PhotoEditor({ imageUri, originalUri, onDone, onCancel }: Props) 
   const original = useImage(originalUri);
   const [box, setBox] = useState<LayoutRectangle | null>(null);
   const [mode, setMode] = useState<BrushMode>('erase');
-  const [brush, setBrush] = useState<BrushSize>('medium');
+  const [brush, setBrush] = useState(BRUSH_DEFAULT);
   const [strokes, setStrokes] = useState<DrawnStroke[]>([]);
   const [current, setCurrent] = useState<Stroke | null>(null);
   /** 手勢進行中的筆畫（state 更新是非同步的，手勢回呼以 ref 為準） */
@@ -209,9 +210,9 @@ export function PhotoEditor({ imageUri, originalUri, onDone, onCancel }: Props) 
             </View>
             <View style={s.row}>
               <Text style={s.label}>{t('editor.brush')}</Text>
-              {(['small', 'medium', 'large'] as const).map(b => (
-                <Chip key={b} role="radio" label={t(`editor.${b}`)} selected={brush === b} onPress={() => setBrush(b)} />
-              ))}
+              <View style={{ flex: 1 }}>
+                <BrushSizeSlider value={brush} onChange={setBrush} label={t('editor.brush')} />
+              </View>
             </View>
           </View>
         </SafeAreaView>
