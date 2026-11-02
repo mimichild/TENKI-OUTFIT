@@ -1,0 +1,53 @@
+import { deletePhotos, resolvePhotoUri, savePhoto } from '@/lib/photoStorage';
+
+const mockCopied: { from: string; to: string }[] = [];
+const mockDeleted: string[] = [];
+
+jest.mock('expo-file-system', () => {
+  class Directory {
+    uri: string;
+    constructor(...parts: (string | { uri: string })[]) {
+      this.uri = parts.map(p => (typeof p === 'string' ? p : p.uri)).join('/');
+    }
+    get exists() { return true; }
+    create() {}
+  }
+  class File {
+    uri: string;
+    constructor(...parts: (string | { uri: string })[]) {
+      this.uri = parts.map(p => (typeof p === 'string' ? p : p.uri)).join('/');
+    }
+    get exists() { return !this.uri.includes('missing'); }
+    copy(dest: { uri: string }) { mockCopied.push({ from: this.uri, to: dest.uri }); }
+    delete() { mockDeleted.push(this.uri); }
+  }
+  return { Directory, File, Paths: { document: new Directory('file:///doc') } };
+});
+jest.mock('expo-crypto', () => ({ randomUUID: () => 'uuid-1' }));
+
+
+beforeEach(() => { mockCopied.length = 0; mockDeleted.length = 0; });
+
+describe('photoStorage', () => {
+  it('copies a picked photo into the app photo folder and returns a relative path', () => {
+    // iOS 更新 App 後 Documents 的絕對路徑可能改變，所以 DB 只存相對路徑
+    const stored = savePhoto('file:///cache/IMG_1.HEIC');
+    expect(stored).toBe('photos/uuid-1.heic');
+    expect(mockCopied).toEqual([{ from: 'file:///cache/IMG_1.HEIC', to: 'file:///doc/photos/uuid-1.heic' }]);
+  });
+
+  it('defaults to .jpg when the source has no extension', () => {
+    expect(savePhoto('content://media/123')).toBe('photos/uuid-1.jpg');
+  });
+
+  it('resolves stored relative paths against the current document folder', () => {
+    expect(resolvePhotoUri('photos/a.jpg')).toBe('file:///doc/photos/a.jpg');
+    expect(resolvePhotoUri('file:///cache/temp.jpg')).toBe('file:///cache/temp.jpg');
+    expect(resolvePhotoUri(null)).toBeNull();
+  });
+
+  it('deletes only app-owned photos that exist and skips nulls and duplicates', () => {
+    deletePhotos(['photos/a.jpg', null, 'photos/a.jpg', 'file:///elsewhere/b.jpg', '../escape.jpg', 'photos/missing.jpg']);
+    expect(mockDeleted).toEqual(['file:///doc/photos/a.jpg']);
+  });
+});

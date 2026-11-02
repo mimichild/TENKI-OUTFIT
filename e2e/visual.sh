@@ -1,0 +1,108 @@
+#!/bin/bash
+set -e
+
+PORT=8092
+BASE_URL="http://localhost:$PORT"
+OUT_DIR="${TMPDIR:-/tmp}/tenki-e2e"
+mkdir -p "$OUT_DIR"
+PASS=0
+FAIL=0
+
+log_pass() { echo "  ✅ $1"; PASS=$((PASS+1)); }
+log_fail() { echo "  ❌ $1"; FAIL=$((FAIL+1)); }
+
+expect_text() {
+  local label="$1" needle="$2" body="$3"
+  if echo "$body" | grep -q "$needle"; then log_pass "$label"; else log_fail "${label}（找不到「${needle}」）"; fi
+}
+
+echo "🔨 Building web export..."
+if ! npx expo export --platform web > "$OUT_DIR/expo-export.log" 2>&1; then
+  echo "❌ Web export failed:"; tail -20 "$OUT_DIR/expo-export.log"; exit 1
+fi
+
+echo "🌐 Starting static server on port $PORT..."
+npx serve dist --listen $PORT > "$OUT_DIR/serve.log" 2>&1 &
+SERVER_PID=$!
+
+cleanup() {
+  kill $SERVER_PID 2>/dev/null || true
+  npx agent-browser close 2>/dev/null || true
+}
+trap cleanup EXIT
+
+for i in $(seq 1 15); do
+  if curl -s "$BASE_URL" > /dev/null 2>&1; then break; fi
+  sleep 1
+done
+
+# ── 首頁 = 每日氣象，四個分頁都要在 ──
+npx agent-browser open "$BASE_URL" > /dev/null 2>&1
+npx agent-browser wait --load networkidle > /dev/null 2>&1
+npx agent-browser wait 2000 > /dev/null 2>&1
+HOME_TEXT=$(npx agent-browser get text body 2>/dev/null)
+for tab in 設定 服裝 每日氣象 穿搭建議; do
+  expect_text "分頁「${tab}」存在" "$tab" "$HOME_TEXT"
+done
+npx agent-browser screenshot "$OUT_DIR/home.png" > /dev/null 2>&1
+
+# ── 設定頁 ──
+npx agent-browser close > /dev/null 2>&1 || true
+npx agent-browser open "$BASE_URL/settings" > /dev/null 2>&1
+npx agent-browser wait --load networkidle > /dev/null 2>&1
+npx agent-browser wait 3000 > /dev/null 2>&1
+SETTINGS_TEXT=$(npx agent-browser get text body 2>/dev/null)
+echo "$SETTINGS_TEXT" > "$OUT_DIR/settings.txt"
+for label in 語言 幣別 主題色 地區 氣象署授權碼 暫存區 匯出資料 匯入資料; do
+  expect_text "設定項目「${label}」存在" "$label" "$SETTINGS_TEXT"
+done
+npx agent-browser screenshot "$OUT_DIR/settings.png" > /dev/null 2>&1
+
+# ── 第 2 階段：服裝頁、新增單品頁、暫存區 ──
+visit() {
+  npx agent-browser close > /dev/null 2>&1 || true
+  npx agent-browser open "$BASE_URL$1" > /dev/null 2>&1
+  npx agent-browser wait --load networkidle > /dev/null 2>&1
+  npx agent-browser wait 3000 > /dev/null 2>&1
+  npx agent-browser get text body 2>/dev/null
+}
+
+expect_text "設定頁暫存區顯示件數" "0 件" "$SETTINGS_TEXT"
+
+CLOSET_TEXT=$(visit /closet)
+echo "$CLOSET_TEXT" > "$OUT_DIR/closet.txt"
+for label in 全部 上衣 下著 連身 外套 鞋子 包包 配件 其他 還沒有單品; do
+  expect_text "服裝頁「${label}」存在" "$label" "$CLOSET_TEXT"
+done
+npx agent-browser screenshot "$OUT_DIR/closet.png" > /dev/null 2>&1
+
+NEW_TEXT=$(visit /item/new)
+echo "$NEW_TEXT" > "$OUT_DIR/item-new.txt"
+for label in 新增單品 從相簿選擇 拍照 品牌 名稱 分類 價格 場合 季節 儲存 取消 'NT\$'; do
+  expect_text "新增頁「${label}」存在" "$label" "$NEW_TEXT"
+done
+npx agent-browser screenshot "$OUT_DIR/item-new.png" > /dev/null 2>&1
+
+# ── 實際操作：從服裝頁按 ＋ 新增一件單品，存檔後要出現在照片牆（證明 JS 有正常 hydrate）──
+visit /closet > /dev/null
+npx agent-browser click '[aria-label="新增單品"]' > /dev/null 2>&1
+npx agent-browser wait 1500 > /dev/null 2>&1
+npx agent-browser fill '[aria-label="名稱"]' 'E2E白襯衫' > /dev/null 2>&1
+npx agent-browser fill '[aria-label="價格"]' '1290' > /dev/null 2>&1
+npx agent-browser click '[aria-label="儲存"]' > /dev/null 2>&1
+npx agent-browser wait 1500 > /dev/null 2>&1
+if npx agent-browser eval '!!document.querySelector("[aria-label=\"E2E白襯衫\"]")' 2>/dev/null | grep -q true; then
+  log_pass "新增單品後出現在照片牆"
+else
+  log_fail "新增單品後沒有出現在照片牆"
+fi
+npx agent-browser screenshot "$OUT_DIR/closet-added.png" > /dev/null 2>&1
+
+TRASH_TEXT=$(visit /trash)
+for label in 暫存區 暫存區是空的; do
+  expect_text "暫存區頁「${label}」存在" "$label" "$TRASH_TEXT"
+done
+
+echo "截圖：$OUT_DIR"
+echo "✅ 通過: $PASS  ❌ 失敗: $FAIL"
+[ $FAIL -eq 0 ]
