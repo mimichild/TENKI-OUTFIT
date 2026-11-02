@@ -11,7 +11,7 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
   useNavigation: () => ({ setOptions: mockSetOptions }),
 }));
-jest.mock('@/lib/photoStorage', () => ({ savePhoto: jest.fn(), deletePhotos: jest.fn() }));
+jest.mock('@/lib/photoStorage', () => ({ savePhoto: jest.fn(), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
@@ -94,7 +94,7 @@ describe('ClosetScreen', () => {
   });
 
   it('shows the first-run empty state', async () => {
-    const repo = createMemoryItemRepository({ now: () => 'T', newId: () => 'n' });
+    const repo = createMemoryItemRepository({ now: () => '2026-11-02T00:00:00.000Z', newId: () => 'n' });
     renderRaw(<ItemRepositoryProvider repository={repo}><ClosetScreen /></ItemRepositoryProvider>);
     await act(async () => {});
     expect(screen.getByText('還沒有單品，按右下角 ＋ 新增第一件')).toBeTruthy();

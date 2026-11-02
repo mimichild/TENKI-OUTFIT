@@ -46,3 +46,9 @@ export function applyItemQuery(items: readonly Item[], query: ItemQuery): Item[]
 export function isQueryFiltered(query: ItemQuery): boolean {
   return query.seasons.length > 0 || query.occasions.length > 0;
 }
+
+/** 暫存區單品還剩幾天會被自動刪除（無條件進位，最小 0） */
+export function trashDaysLeft(deletedAt: string, nowIso: string, retentionDays: number): number {
+  const expiresAt = new Date(deletedAt).getTime() + retentionDays * 86_400_000;
+  return Math.max(0, Math.ceil((expiresAt - new Date(nowIso).getTime()) / 86_400_000));
+}

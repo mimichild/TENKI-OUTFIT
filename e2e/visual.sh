@@ -58,6 +58,51 @@ for label in 語言 幣別 主題色 地區 氣象署授權碼 暫存區 匯出�
 done
 npx agent-browser screenshot "$OUT_DIR/settings.png" > /dev/null 2>&1
 
+# ── 第 2 階段：服裝頁、新增單品頁、暫存區 ──
+visit() {
+  npx agent-browser close > /dev/null 2>&1 || true
+  npx agent-browser open "$BASE_URL$1" > /dev/null 2>&1
+  npx agent-browser wait --load networkidle > /dev/null 2>&1
+  npx agent-browser wait 3000 > /dev/null 2>&1
+  npx agent-browser get text body 2>/dev/null
+}
+
+expect_text "設定頁暫存區顯示件數" "0 件" "$SETTINGS_TEXT"
+
+CLOSET_TEXT=$(visit /closet)
+echo "$CLOSET_TEXT" > "$OUT_DIR/closet.txt"
+for label in 全部 上衣 下著 連身 外套 鞋子 包包 配件 其他 還沒有單品; do
+  expect_text "服裝頁「${label}」存在" "$label" "$CLOSET_TEXT"
+done
+npx agent-browser screenshot "$OUT_DIR/closet.png" > /dev/null 2>&1
+
+NEW_TEXT=$(visit /item/new)
+echo "$NEW_TEXT" > "$OUT_DIR/item-new.txt"
+for label in 新增單品 從相簿選擇 拍照 品牌 名稱 分類 價格 場合 季節 儲存 取消 'NT\$'; do
+  expect_text "新增頁「${label}」存在" "$label" "$NEW_TEXT"
+done
+npx agent-browser screenshot "$OUT_DIR/item-new.png" > /dev/null 2>&1
+
+# ── 實際操作：從服裝頁按 ＋ 新增一件單品，存檔後要出現在照片牆（證明 JS 有正常 hydrate）──
+visit /closet > /dev/null
+npx agent-browser click '[aria-label="新增單品"]' > /dev/null 2>&1
+npx agent-browser wait 1500 > /dev/null 2>&1
+npx agent-browser fill '[aria-label="名稱"]' 'E2E白襯衫' > /dev/null 2>&1
+npx agent-browser fill '[aria-label="價格"]' '1290' > /dev/null 2>&1
+npx agent-browser click '[aria-label="儲存"]' > /dev/null 2>&1
+npx agent-browser wait 1500 > /dev/null 2>&1
+if npx agent-browser eval '!!document.querySelector("[aria-label=\"E2E白襯衫\"]")' 2>/dev/null | grep -q true; then
+  log_pass "新增單品後出現在照片牆"
+else
+  log_fail "新增單品後沒有出現在照片牆"
+fi
+npx agent-browser screenshot "$OUT_DIR/closet-added.png" > /dev/null 2>&1
+
+TRASH_TEXT=$(visit /trash)
+for label in 暫存區 暫存區是空的; do
+  expect_text "暫存區頁「${label}」存在" "$label" "$TRASH_TEXT"
+done
+
 echo "截圖：$OUT_DIR"
 echo "✅ 通過: $PASS  ❌ 失敗: $FAIL"
 [ $FAIL -eq 0 ]

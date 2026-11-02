@@ -14,7 +14,7 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockParams,
   Stack: { Screen: ({ options }: { options: typeof mockScreenOptions }) => { mockScreenOptions = options; return null; } },
 }));
-jest.mock('@/lib/photoStorage', () => ({ savePhoto: jest.fn((u: string) => u), deletePhotos: jest.fn() }));
+jest.mock('@/lib/photoStorage', () => ({ savePhoto: jest.fn((u: string) => u), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
 jest.mock('@/lib/pickPhoto', () => ({ pickPhoto: jest.fn() }));
 
 
@@ -64,6 +64,13 @@ describe('item detail screen', () => {
     expect(mockBack).toHaveBeenCalled();
   });
 
+  it('treats an item in the trash as not found', async () => {
+    await repo.moveToTrash('id1');
+    mockParams = { id: 'id1' };
+    wrap(<ItemScreen />);
+    expect(await screen.findByText('找不到這件單品')).toBeTruthy();
+  });
+
   it('shows not-found for unknown ids', async () => {
     mockParams = { id: 'nope' };
     wrap(<ItemScreen />);
@@ -74,7 +81,7 @@ describe('item detail screen', () => {
 describe('new item screen', () => {
   it('preselects the category from params and saves', async () => {
     mockParams = { category: 'shoes' };
-    repo = createMemoryItemRepository({ now: () => 'T', newId: () => 'new1' });
+    repo = createMemoryItemRepository({ now: () => '2026-11-02T00:00:00.000Z', newId: () => 'new1' });
     wrap(<NewItemScreen />);
     fireEvent.changeText(screen.getByLabelText('名稱'), '球鞋');
     await act(async () => fireEvent.press(screen.getByRole('button', { name: '儲存' })));

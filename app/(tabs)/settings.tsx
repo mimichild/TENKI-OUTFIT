@@ -1,8 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { OptionPicker } from '@/components/OptionPicker';
 import { COUNTIES, type County } from '@/constants/options';
+import { useTrashItems } from '@/db/useItems';
 import { THEME_COLOR_KEYS, THEME_COLORS } from '@/constants/themeColors';
 import { LANGUAGE_LABELS, LANGUAGES, useT, type Language } from '@/i18n';
 import { CURRENCIES, CURRENCY_CODES, type CurrencyCode } from '@/lib/currency';
@@ -15,6 +17,8 @@ export default function SettingsScreen() {
   const t = useT();
   const theme = useTheme();
   const settings = useSettingsStore();
+  const router = useRouter();
+  const trash = useTrashItems();
   const [picker, setPicker] = useState<PickerKind>(null);
   const close = () => setPicker(null);
 
@@ -68,7 +72,12 @@ export default function SettingsScreen() {
       </Section>
 
       <Section title={t('settings.sectionData')} theme={theme}>
-        <Row theme={theme} label={t('settings.trash')} value={t('settings.comingSoon')} disabled />
+        <Row
+          theme={theme}
+          label={t('settings.trash')}
+          value={trash ? t('settings.trashCount', { count: trash.length }) : ''}
+          onPress={() => router.push('/trash')}
+        />
         <Row theme={theme} label={t('settings.export')} value={t('settings.comingSoon')} disabled />
         <Row theme={theme} label={t('settings.import')} value={t('settings.comingSoon')} disabled />
       </Section>

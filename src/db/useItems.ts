@@ -22,5 +22,9 @@ function useRepoQuery<T>(load: (repo: ItemRepository) => Promise<T>, key: string
 /** undefined = 讀取中 */
 export const useActiveItems = (): Item[] | undefined => useRepoQuery(r => r.list(), 'active');
 export const useTrashItems = (): Item[] | undefined => useRepoQuery(r => r.listTrash(), 'trash');
-/** undefined = 讀取中，null = 找不到 */
-export const useItem = (id: string): Item | null | undefined => useRepoQuery(r => r.get(id), `item:${id}`);
+/** undefined = 讀取中，null = 找不到或已在暫存區 */
+export const useItem = (id: string): Item | null | undefined =>
+  useRepoQuery(async r => {
+    const item = await r.get(id);
+    return item && item.deletedAt === null ? item : null;
+  }, `item:${id}`);

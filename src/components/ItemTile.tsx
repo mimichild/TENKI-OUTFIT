@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useT } from '@/i18n';
+import { resolvePhotoUri } from '@/lib/photoStorage';
 import { useTheme } from '@/theme/useTheme';
 import type { Item } from '@/types/models';
 
@@ -13,7 +14,7 @@ export function ItemTile({ item, onPress }: { item: Item; onPress: () => void })
     <Pressable testID="item-tile" accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={styles.cell}>
       <View style={[styles.inner, { borderColor: theme.border }]}>
         {item.imageUri ? (
-          <Image source={{ uri: item.imageUri }} style={styles.image} contentFit="contain" recyclingKey={item.id} />
+          <Image source={resolvePhotoUri(item.imageUri)} style={styles.image} contentFit="contain" recyclingKey={item.id} />
         ) : (
           <View style={styles.placeholder}>
             <Ionicons name="shirt-outline" size={28} color={theme.textMuted} />

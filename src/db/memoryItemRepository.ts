@@ -27,14 +27,17 @@ export function createMemoryItemRepository(deps: RepositoryDeps, seed: Item[] = 
     },
     async create(input) {
       const now = deps.now();
-      const item: Item = clone({ ...input, id: deps.newId(), createdAt: now, updatedAt: now, lastUsedAt: null, deletedAt: null });
+      const { name, brand, category, price, occasions, seasons, imageUri, originalUri } = input;
+      const item: Item = clone({ name, brand, category, price, occasions, seasons, imageUri, originalUri, id: deps.newId(), createdAt: now, updatedAt: now, lastUsedAt: null, deletedAt: null });
       store.set(item.id, item);
       return clone(item);
     },
     async update(id, input) {
       const existing = store.get(id);
       if (!existing) return null;
-      const item = clone({ ...existing, ...input, updatedAt: deps.now() });
+      // 只合併可編輯欄位，避免呼叫端帶進來的舊 id/deletedAt/lastUsedAt 覆蓋現值（與 SQLite 版一致）
+      const { name, brand, category, price, occasions, seasons, imageUri, originalUri } = input;
+      const item = clone({ ...existing, name, brand, category, price, occasions, seasons, imageUri, originalUri, updatedAt: deps.now() });
       store.set(id, item);
       return clone(item);
     },

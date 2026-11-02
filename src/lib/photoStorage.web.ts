@@ -3,4 +3,8 @@ export function savePhoto(sourceUri: string): string {
   return sourceUri;
 }
 
-export function deletePhotos(_uris: (string | null | undefined)[]): void {}
+export function resolvePhotoUri(stored: string | null): string | null {
+  return stored;
+}
+
+export function deletePhotos(_stored: (string | null | undefined)[]): void {}

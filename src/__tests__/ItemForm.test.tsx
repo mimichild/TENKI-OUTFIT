@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { ItemForm, EMPTY_ITEM_INPUT } from '@/components/ItemForm';
 import { DEFAULT_SETTINGS, useSettingsStore } from '@/store/settingsStore';
 
@@ -77,5 +77,16 @@ describe('ItemForm', () => {
     expect(screen.queryByRole('button', { name: '刪除' })).toBeNull();
     fireEvent.press(screen.getByRole('button', { name: '取消' }));
     expect(onCancel).toHaveBeenCalled();
+  });
+
+  it('locks the delete button while deleting and shows an error on failure', async () => {
+    let reject!: (e: Error) => void;
+    const onDelete = jest.fn(() => new Promise((_, r) => { reject = r; }));
+    setup({ onDelete });
+    fireEvent.press(screen.getByRole('button', { name: '刪除' }));
+    fireEvent.press(screen.getByRole('button', { name: '刪除' }));
+    expect(onDelete).toHaveBeenCalledTimes(1);
+    await act(async () => reject(new Error('db')));
+    expect(screen.getByText('儲存失敗，請再試一次')).toBeTruthy();
   });
 });

@@ -1,6 +1,6 @@
 # TENKI OUTFIT 天氣穿搭 — v1 開發計畫
 
-> 建立：2026-11-02　狀態：**第 2 階段進行中（批次 A、B 完成）**
+> 建立：2026-11-02　狀態：**第 2 階段完成，待第 3 階段**
 > 基礎設施沿用 `/Users/mimi/Documents/REUSABLE_INFRA.md`
 
 ## 技術選型（沿用基礎文件）
@@ -72,13 +72,13 @@
 - 設定頁可用：語言（繁中/英/日，即時切換）、幣別、主題色 6 色、地區（22 縣市）、氣象署授權碼輸入；暫存區/匯出/匯入先顯示「即將推出」
 - 設定以 Zustand + AsyncStorage 持久化；SQLite schema v1（items / outfits / outfit_items / weather_days），以 `PRAGMA user_version` 做版本遷移
 - 測試：Jest 20 項通過；`bash scripts/regression.sh` = tsc + lint + jest + Web 視覺測試（12 項斷言）全過
-- 待確認：Web 預覽截圖上 Ionicons 圖示未顯示，需在實機確認
+- 待確認：Web 預覽截圖上 Ionicons 圖示未顯示，需在實機確認（第 2 階段已找到原因並修正：見批次 C）
 - 地區目前只到縣市；鄉鎮清單在第 4 階段依氣象署資料集一起加入
 - 程式碼審查後修正：設定存檔值不合法時退回預設（避免啟動當掉）、啟動畫面等設定讀完才收起、金額 -0 顯示修正、遷移檔加上外鍵注意事項。
 - 測試現為 23 項，回歸腳本全過
 - 氣象署授權碼改存 expo-secure-store（iOS Keychain / Android Keystore），不再寫入 AsyncStorage；Web 預覽只放記憶體。測試 26 項全過
 
-### 第 2 階段 — 進行中（分支 `feat/phase-2-closet`，每批 commit）
+### 第 2 階段 — 完成（2026-11-02，分支 `feat/phase-2-closet`，每批 commit）
 
 拆成三批：A 資料層 → B 服裝牆與新增/編輯頁 → C 暫存區頁面、視覺測試、收尾。
 - 去背維持第 3 階段做；第 2 階段的新增流程預留「去背結果」步驟，原圖（`original_uri`）與顯示圖（`image_uri`）分開存
@@ -105,3 +105,24 @@
 - 三語字串新增 36 組；移除 `placeholder.closet`
 - 和計畫不同的地方：選完照片會顯示「自動去背會在第 3 階段接上，目前先顯示原圖」；新照片目前同時存成原圖與顯示圖（同一個檔案），第 3 階段改成顯示圖存去背結果
 - 驗證：Jest 69 項通過（新增 23 項）、tsc、lint 0 警告；`bash scripts/regression.sh` 4/4 全過（Web 視覺測試尚未涵蓋服裝頁，批次 C 補上）
+
+#### 批次 C — 完成（2026-11-02）
+- 暫存區頁 `app/trash.tsx`：最近刪除的在前、顯示「剩 N 天後自動刪除」、還原、永久刪除（點兩次確認，不用系統對話框）；設定頁「暫存區」顯示件數並可點進去
+- **修正第 1 階段就存在的 Web 預覽問題**：`zustand/middleware` 的 `import.meta` 讓 Web bundle 一載入就 SyntaxError，React 從未掛載（之前的視覺測試只讀到伺服器預先產生的靜態 HTML 所以沒發現；Ionicons 不顯示也是同一原因）。新增 `babel.config.js`（`unstable_transformImportMeta: true`）並把 `babel-preset-expo` 加進 devDependencies
+- 視覺測試新增：服裝頁、新增頁、暫存區頁文字檢查，以及「按 ＋ → 填名稱與價格 → 儲存 → 照片牆出現該單品」的實際操作（同時證明 JS 有正常 hydrate）
+- Code review 修正：
+  - 照片改存相對路徑（`photos/<uuid>.jpg`），顯示時用 `resolvePhotoUri` 組完整路徑（iOS 更新 App 後絕對路徑會變）
+  - 永久刪除改用 `withExclusiveTransactionAsync`，`outfit_items` 與 `items` 一起成功或一起失敗
+  - 記憶體版 update 只合併可編輯欄位；單品頁傳給表單的初始值只挑可編輯欄位
+  - 已在暫存區的單品從單品頁打開視為「找不到」
+  - 表單「刪除」加上防連點與失敗提示；`update` 找不到單品時回收新照片、不刪舊照片
+  - 清單分隔符號、暫存天數改為 i18n 參數；分類分頁加 `tablist`、遮罩加 role
+- 驗證：Jest 83 項通過；`bash scripts/regression.sh` 4/4 全過（視覺測試 38 項）
+
+#### 留待之後處理
+- **待使用者決定（第 5 階段前）**：單品被永久刪除（含 30 天自動清除）時，已排定的穿搭會少掉這件單品。可選：(a) 穿搭變空就一起刪 (b) 被穿搭用到的單品不能永久刪除或先提示 (c) 保留穿搭紀錄、單品顯示為「已刪除」
+- 自動清除目前只在開 App 時跑；之後可在 App 回到前景時也跑一次
+- `File.copy` 是同步的，大張照片存檔可能頓一下；第 3 階段接去背時改非同步
+- 英文單複數（1 days / 1 items）
+- 讀取單品失敗時目前只記錄 log，畫面停在讀取中；之後加錯誤狀態與重試
+- 實機（相簿／相機選照片、SQLite）尚未驗證，第 3 階段做 dev build 時一起驗

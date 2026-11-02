@@ -24,6 +24,7 @@ export const ja: Record<keyof typeof zhTW, string> = {
   'settings.sectionData': 'データ',
   'common.done': '完了',
   'common.cancel': 'キャンセル',
+  'common.listSeparator': '、',
 
   'theme.sky': 'スカイ',
   'theme.sakura': 'さくら',
@@ -92,4 +93,12 @@ export const ja: Record<keyof typeof zhTW, string> = {
   'item.libraryDenied': '写真へのアクセス許可が必要です',
   'item.cameraDenied': 'カメラへのアクセス許可が必要です',
   'item.saveFailed': '保存に失敗しました。もう一度お試しください',
+
+  'trash.title': 'ゴミ箱',
+  'trash.empty': 'ゴミ箱は空です',
+  'trash.hint': '削除したアイテムは{days}日間保管され、復元または完全に削除できます',
+  'trash.daysLeft': 'あと{days}日で自動削除',
+  'trash.restore': '復元',
+  'trash.purge': '完全に削除',
+  'trash.confirmPurge': '完全に削除しますか？',
 };

@@ -24,6 +24,7 @@ export const en: Record<keyof typeof zhTW, string> = {
   'settings.sectionData': 'Data',
   'common.done': 'Done',
   'common.cancel': 'Cancel',
+  'common.listSeparator': ', ',
 
   'theme.sky': 'Sky',
   'theme.sakura': 'Sakura',
@@ -92,4 +93,12 @@ export const en: Record<keyof typeof zhTW, string> = {
   'item.libraryDenied': 'Photo library permission is required',
   'item.cameraDenied': 'Camera permission is required',
   'item.saveFailed': 'Save failed, please try again',
+
+  'trash.title': 'Trash',
+  'trash.empty': 'Trash is empty',
+  'trash.hint': 'Deleted items are kept for {days} days. Restore or delete them permanently.',
+  'trash.daysLeft': 'Auto-deletes in {days} days',
+  'trash.restore': 'Restore',
+  'trash.purge': 'Delete forever',
+  'trash.confirmPurge': 'Delete forever?',
 };

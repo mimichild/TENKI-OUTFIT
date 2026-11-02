@@ -35,6 +35,11 @@ export async function saveItem(
     throw e;
   }
 
+  if (result === null) {
+    // 單品已不存在：回收剛複製的新照片，舊照片不動
+    if (photo.kind === 'replace') deletePhotos([photos.imageUri]);
+    return null;
+  }
   if (existing && photo.kind !== 'keep') deletePhotos([existing.imageUri, existing.originalUri]);
   notifyChanged();
   return result;

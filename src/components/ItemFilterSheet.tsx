@@ -25,7 +25,7 @@ export function ItemFilterSheet({ visible, query, onChange, onClose }: Props) {
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel={t('common.done')} />
+      <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.done')} />
       <View style={[styles.sheet, { backgroundColor: theme.surface, paddingBottom: insets.bottom + 12 }]}>
         <View style={[styles.header, { borderColor: theme.border }]}>
           <Pressable onPress={() => onChange({ ...query, seasons: [], occasions: [] })} hitSlop={12} accessibilityRole="button">

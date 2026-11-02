@@ -8,6 +8,7 @@ import { useT } from '@/i18n';
 import { CURRENCIES } from '@/lib/currency';
 import type { PhotoChange } from '@/lib/itemService';
 import type { PhotoSource } from '@/lib/pickPhoto';
+import { resolvePhotoUri } from '@/lib/photoStorage';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme, type Theme } from '@/theme/useTheme';
 import { Chip } from './Chip';
@@ -23,7 +24,7 @@ interface Props {
   onSubmit: (input: ItemInput, photo: PhotoChange) => void | Promise<unknown>;
   onCancel: () => void;
   /** 有傳才顯示「刪除」（移到暫存區） */
-  onDelete?: () => void;
+  onDelete?: () => void | Promise<unknown>;
 }
 
 /** '' → null；不合法 → undefined */
@@ -61,14 +62,18 @@ export function ItemForm({ initial, onPickPhoto, onSubmit, onCancel, onDelete }:
     }
   };
 
+  /** 非同步動作期間鎖住按鈕，失敗時顯示錯誤（避免連點、避免未處理的 rejection） */
+  const runLocked = (result: void | Promise<unknown>) => {
+    if (!(result instanceof Promise)) return;
+    setSaving(true);
+    result.catch(() => setError(t('item.saveFailed'))).finally(() => setSaving(false));
+  };
+
   const submit = () => {
     const price = parsePrice(priceText);
     if (price === undefined) return setError(t('item.priceInvalid'));
     setError(null);
-    const result = onSubmit({ ...form, name: form.name.trim(), brand: form.brand.trim(), price }, photo);
-    if (!(result instanceof Promise)) return;
-    setSaving(true);
-    result.catch(() => setError(t('item.saveFailed'))).finally(() => setSaving(false));
+    runLocked(onSubmit({ ...form, name: form.name.trim(), brand: form.brand.trim(), price }, photo));
   };
 
   const s = makeStyles(theme);
@@ -78,7 +83,7 @@ export function ItemForm({ initial, onPickPhoto, onSubmit, onCancel, onDelete }:
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
         <View style={s.photoBox}>
           {previewUri ? (
-            <Image source={{ uri: previewUri }} style={s.photo} contentFit="contain" />
+            <Image source={resolvePhotoUri(previewUri)} style={s.photo} contentFit="contain" />
           ) : (
             <View style={s.photoEmpty}>
               <Ionicons name="image-outline" size={40} color={theme.textMuted} />
@@ -137,7 +142,14 @@ export function ItemForm({ initial, onPickPhoto, onSubmit, onCancel, onDelete }:
 
       <View style={s.actions}>
         {onDelete && (
-          <Pressable accessibilityRole="button" accessibilityLabel={t('item.delete')} onPress={onDelete} style={[s.action, s.deleteAction]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('item.delete')}
+            accessibilityState={{ disabled: saving }}
+            disabled={saving}
+            onPress={() => runLocked(onDelete())}
+            style={[s.action, s.deleteAction]}
+          >
             <Text style={s.deleteText}>{t('item.delete')}</Text>
           </Pressable>
         )}

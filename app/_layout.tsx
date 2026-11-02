@@ -48,6 +48,7 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="item/new" options={{ presentation: 'modal' }} />
             <Stack.Screen name="item/[id]" />
+            <Stack.Screen name="trash" />
           </Stack>
           <StatusBar style="auto" />
         </DatabaseProvider>

@@ -71,6 +71,15 @@ describe('memory item repository', () => {
     expect((await repo.listTrash()).map(i => i.id)).toEqual(['id2']);
   });
 
+  it('update ignores non-editable fields passed by callers', async () => {
+    await repo.create(input);
+    await repo.moveToTrash('id1');
+    const stale = { ...input, id: 'hack', deletedAt: null, lastUsedAt: '1999-01-01' } as unknown as ItemInput;
+    const updated = await repo.update('id1', stale);
+    expect(updated).toMatchObject({ id: 'id1', lastUsedAt: null });
+    expect(updated?.deletedAt).not.toBeNull();
+  });
+
   it('returns copies so callers cannot mutate stored data', async () => {
     const created = await repo.create(input);
     created.occasions.push('formal');
@@ -99,6 +108,7 @@ describe('sqlite item repository', () => {
       runAsync: jest.fn().mockResolvedValue({ changes: 1 }),
       getFirstAsync: jest.fn(),
       getAllAsync: jest.fn(),
+      withExclusiveTransactionAsync: jest.fn(),
     };
     const repo = createSqliteItemRepository(db as never, { now: () => 'T', newId: () => 'x' });
     const created = await repo.create(input);
@@ -108,16 +118,43 @@ describe('sqlite item repository', () => {
     expect(params).toEqual(['x', '白襯衫', 'UNIQLO', 'top', 790, '["work"]', '["spring","autumn"]', 'file:///cut.png', 'file:///orig.jpg', 'T', 'T']);
   });
 
-  it('purgeExpired deletes rows older than the cutoff', async () => {
+  function txDb(rows: unknown[] = []) {
+    const tx = { runAsync: jest.fn().mockResolvedValue({ changes: 1 }) };
     const db = {
       runAsync: jest.fn().mockResolvedValue({ changes: 1 }),
-      getFirstAsync: jest.fn(),
-      getAllAsync: jest.fn().mockResolvedValue([{ ...row, deleted_at: '2026-01-01T00:00:00.000Z' }]),
+      getFirstAsync: jest.fn().mockResolvedValue(row),
+      getAllAsync: jest.fn().mockResolvedValue(rows),
+      withExclusiveTransactionAsync: jest.fn(async (fn: (t: typeof tx) => Promise<void>) => fn(tx)),
     };
+    return { db, tx };
+  }
+
+  it('purge removes the item and its outfit placements inside one exclusive transaction', async () => {
+    const { db, tx } = txDb();
+    const repo = createSqliteItemRepository(db as never, { now: () => 'T', newId: () => 'x' });
+    expect((await repo.purge('x'))?.id).toBe('x');
+    expect(db.withExclusiveTransactionAsync).toHaveBeenCalledTimes(1);
+    expect(tx.runAsync.mock.calls).toEqual([
+      ['DELETE FROM outfit_items WHERE item_id = ?', 'x'],
+      ['DELETE FROM items WHERE id = ?', 'x'],
+    ]);
+    expect(db.runAsync).not.toHaveBeenCalled();
+  });
+
+  it('purge propagates a failed transaction', async () => {
+    const { db } = txDb();
+    db.withExclusiveTransactionAsync.mockRejectedValue(new Error('locked'));
+    const repo = createSqliteItemRepository(db as never, { now: () => 'T', newId: () => 'x' });
+    await expect(repo.purge('x')).rejects.toThrow('locked');
+  });
+
+  it('purgeExpired deletes rows older than the cutoff', async () => {
+    const { db, tx } = txDb([{ ...row, deleted_at: '2026-01-01T00:00:00.000Z' }]);
     const repo = createSqliteItemRepository(db as never, { now: () => '2026-11-02T00:00:00.000Z', newId: () => 'x' });
     const removed = await repo.purgeExpired(30);
     expect(removed.map(i => i.id)).toEqual(['x']);
     expect(db.getAllAsync.mock.calls[0][1]).toBe('2026-10-03T00:00:00.000Z');
-    expect(db.runAsync).toHaveBeenCalledWith('DELETE FROM items WHERE id = ?', 'x');
+    expect(tx.runAsync).toHaveBeenCalledWith('DELETE FROM items WHERE id = ?', 'x');
+    expect(db.withExclusiveTransactionAsync).toHaveBeenCalledTimes(1);
   });
 });

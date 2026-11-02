@@ -11,6 +11,7 @@ import { useT } from '@/i18n';
 import { formatPrice } from '@/lib/currency';
 import { moveItemToTrash, saveItem } from '@/lib/itemService';
 import { pickPhoto } from '@/lib/pickPhoto';
+import { resolvePhotoUri } from '@/lib/photoStorage';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme } from '@/theme/useTheme';
 
@@ -39,7 +40,10 @@ export default function ItemScreen() {
       <>
         <Stack.Screen options={{ title: t('item.edit'), headerRight: undefined }} />
         <ItemForm
-          initial={item}
+          initial={{
+            name: item.name, brand: item.brand, category: item.category, price: item.price,
+            occasions: item.occasions, seasons: item.seasons, imageUri: item.imageUri, originalUri: item.originalUri,
+          }}
           onPickPhoto={pickPhoto}
           onSubmit={async (input, photo) => {
             await saveItem(repo, item, input, photo);
@@ -60,8 +64,8 @@ export default function ItemScreen() {
     [t('item.brand'), item.brand || '—'],
     [t('item.category'), t(`category.${item.category}`)],
     [t('item.price'), formatPrice(item.price, currency)],
-    [t('item.occasions'), item.occasions.length ? item.occasions.map(o => t(`occasion.${o}`)).join('、') : t('item.allOccasions')],
-    [t('item.seasons'), item.seasons.length ? item.seasons.map(s => t(`season.${s}`)).join('、') : t('item.allSeasons')],
+    [t('item.occasions'), item.occasions.length ? item.occasions.map(o => t(`occasion.${o}`)).join(t('common.listSeparator')) : t('item.allOccasions')],
+    [t('item.seasons'), item.seasons.length ? item.seasons.map(s => t(`season.${s}`)).join(t('common.listSeparator')) : t('item.allSeasons')],
   ];
 
   return (
@@ -79,7 +83,7 @@ export default function ItemScreen() {
       <ScrollView style={{ backgroundColor: theme.background }} contentContainerStyle={styles.content}>
         <View style={[styles.photoBox, { borderColor: theme.border }]}>
           {item.imageUri ? (
-            <Image source={{ uri: item.imageUri }} style={{ flex: 1 }} contentFit="contain" />
+            <Image source={resolvePhotoUri(item.imageUri)} style={{ flex: 1 }} contentFit="contain" />
           ) : (
             <View style={styles.noPhoto}>
               <Ionicons name="image-outline" size={40} color={theme.textMuted} />

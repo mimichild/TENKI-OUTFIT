@@ -46,4 +46,13 @@ describe('saveItem', () => {
     expect(savePhoto).not.toHaveBeenCalled();
     expect(deletePhotos).not.toHaveBeenCalled();
   });
+
+  it('if the item vanished, discards the newly copied photo and keeps the old ones', async () => {
+    const r = repo();
+    const ghost = { ...(await r.create(EMPTY_ITEM_INPUT)), id: 'gone', imageUri: 'photos/old.jpg', originalUri: 'photos/old.jpg' };
+    const result = await saveItem(r, ghost, ghost, { kind: 'replace', uri: 'file:///cache/new.jpg' });
+    expect(result).toBeNull();
+    expect(deletePhotos).toHaveBeenCalledTimes(1);
+    expect(deletePhotos).toHaveBeenCalledWith(['file:///doc/photos/new.jpg']);
+  });
 });

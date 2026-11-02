@@ -22,6 +22,7 @@ export const zhTW = {
   'settings.sectionData': '資料',
   'common.done': '完成',
   'common.cancel': '取消',
+  'common.listSeparator': '、',
 
   'theme.sky': '天空藍',
   'theme.sakura': '櫻花粉',
@@ -90,4 +91,12 @@ export const zhTW = {
   'item.libraryDenied': '需要相簿權限才能選照片',
   'item.cameraDenied': '需要相機權限才能拍照',
   'item.saveFailed': '儲存失敗，請再試一次',
+
+  'trash.title': '暫存區',
+  'trash.empty': '暫存區是空的',
+  'trash.hint': '刪除的單品會保留 {days} 天，期間可以還原或永久刪除',
+  'trash.daysLeft': '剩 {days} 天後自動刪除',
+  'trash.restore': '還原',
+  'trash.purge': '永久刪除',
+  'trash.confirmPurge': '確定永久刪除？',
 };

@@ -38,7 +38,7 @@ export default function ClosetScreen() {
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
       <View style={[styles.tabsBar, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
+        <ScrollView horizontal accessibilityRole="tablist" showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
           {TABS.map(c => (
             <Chip key={c} role="tab" label={t(`category.${c}`)} selected={query.category === c} onPress={() => setQuery(q => ({ ...q, category: c }))} />
           ))}

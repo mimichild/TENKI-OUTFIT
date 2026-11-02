@@ -3,7 +3,7 @@ import { CATEGORIES, OCCASIONS, SEASONS } from '@/constants/options';
 import type { Category, Item, Occasion, Season } from '@/types/models';
 import { trashCutoff, type ItemRepository, type RepositoryDeps } from './itemRepository';
 
-type Db = Pick<SQLiteDatabase, 'runAsync' | 'getFirstAsync' | 'getAllAsync'>;
+type Db = Pick<SQLiteDatabase, 'runAsync' | 'getFirstAsync' | 'getAllAsync' | 'withExclusiveTransactionAsync'>;
 
 export interface ItemRow {
   id: string;
@@ -54,10 +54,15 @@ export function createSqliteItemRepository(db: Db, deps: RepositoryDeps): ItemRe
     return row ? rowToItem(row) : null;
   };
 
-  const remove = async (id: string) => {
-    // 永久刪除時一併從已排定的穿搭移除（outfit_items 的外鍵沒有 CASCADE）
-    await db.runAsync('DELETE FROM outfit_items WHERE item_id = ?', id);
-    await db.runAsync('DELETE FROM items WHERE id = ?', id);
+  /** 永久刪除時一併從已排定的穿搭移除（outfit_items 的外鍵沒有 CASCADE）；全部包在同一個排他交易 */
+  const removeAll = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    await db.withExclusiveTransactionAsync(async tx => {
+      for (const id of ids) {
+        await tx.runAsync('DELETE FROM outfit_items WHERE item_id = ?', id);
+        await tx.runAsync('DELETE FROM items WHERE id = ?', id);
+      }
+    });
   };
 
   return {
@@ -103,7 +108,7 @@ export function createSqliteItemRepository(db: Db, deps: RepositoryDeps): ItemRe
     },
     async purge(id) {
       const item = await get(id);
-      if (item) await remove(id);
+      if (item) await removeAll([id]);
       return item;
     },
     async purgeExpired(days) {
@@ -111,7 +116,7 @@ export function createSqliteItemRepository(db: Db, deps: RepositoryDeps): ItemRe
         'SELECT * FROM items WHERE deleted_at IS NOT NULL AND deleted_at < ?',
         trashCutoff(deps.now(), days),
       );
-      for (const row of rows) await remove(row.id);
+      await removeAll(rows.map(r => r.id));
       return rows.map(rowToItem);
     },
   };
