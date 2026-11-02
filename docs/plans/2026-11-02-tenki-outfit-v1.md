@@ -1,6 +1,6 @@
 # TENKI OUTFIT 天氣穿搭 — v1 開發計畫
 
-> 建立：2026-11-02　狀態：**第 1 階段完成，待第 2 階段**
+> 建立：2026-11-02　狀態：**第 2 階段進行中（批次 A 完成）**
 > 基礎設施沿用 `/Users/mimi/Documents/REUSABLE_INFRA.md`
 
 ## 技術選型（沿用基礎文件）
@@ -77,3 +77,20 @@
 - 程式碼審查後修正：設定存檔值不合法時退回預設（避免啟動當掉）、啟動畫面等設定讀完才收起、金額 -0 顯示修正、遷移檔加上外鍵注意事項。
 - 測試現為 23 項，回歸腳本全過
 - 氣象署授權碼改存 expo-secure-store（iOS Keychain / Android Keystore），不再寫入 AsyncStorage；Web 預覽只放記憶體。測試 26 項全過
+
+### 第 2 階段 — 進行中（分支 `feat/phase-2-closet`，每批 commit）
+
+拆成三批：A 資料層 → B 服裝牆與新增/編輯頁 → C 暫存區頁面、視覺測試、收尾。
+- 去背維持第 3 階段做；第 2 階段的新增流程預留「去背結果」步驟，原圖（`original_uri`）與顯示圖（`image_uri`）分開存
+- 篩選：季節、場合複選；單品沒填季節/場合時視為全部適用（與推薦規則一致）
+- 不需要改 DB schema
+
+#### 批次 A — 完成（2026-11-02）
+- `src/lib/itemQueries.ts`：分類、季節、場合篩選＋四種排序（新→舊、舊→新、最近使用、未使用）
+- `src/db/itemRepository.ts`（介面）、`sqliteItemRepository.ts`（實機）、`memoryItemRepository.ts`（Web 預覽／測試）：新增、修改、移到暫存區、還原、永久刪除、清除超過 30 天的暫存單品
+- `src/db/ItemRepositoryContext.tsx`：App 啟動時自動清除過期暫存單品並刪照片檔；`useItemsVersion` 通知畫面重新讀取
+- `src/lib/photoStorage.ts`（+ `.web.ts`）：照片複製到 App 的 `photos/` 資料夾；刪除時只刪 App 自己的檔案
+- `src/lib/ids.ts`：新增套件 `expo-crypto` 產生 UUID
+- `DatabaseProvider`（native / web）掛上單品資料層
+- 和計畫不同的地方：永久刪除單品時，同時刪掉 `outfit_items` 裡用到這件單品的紀錄（外鍵沒有 CASCADE，不刪會擋住刪除）
+- 驗證：Jest 46 項通過（新增 20 項）；`bash scripts/regression.sh` 4/4 全過
