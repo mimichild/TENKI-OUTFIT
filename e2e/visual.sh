@@ -17,7 +17,8 @@ expect_text() {
 }
 
 echo "🔨 Building web export..."
-if ! npx expo export --platform web > "$OUT_DIR/expo-export.log" 2>&1; then
+# 視覺測試固定用「沒有內建授權碼」的版本：不把 .env.local 的授權碼編進 dist，也不會從瀏覽器打氣象署
+if ! EXPO_PUBLIC_CWA_API_KEY= npx expo export --platform web > "$OUT_DIR/expo-export.log" 2>&1; then
   echo "❌ Web export failed:"; tail -20 "$OUT_DIR/expo-export.log"; exit 1
 fi
 
@@ -97,6 +98,22 @@ else
   log_fail "新增單品後沒有出現在照片牆"
 fi
 npx agent-browser screenshot "$OUT_DIR/closet-added.png" > /dev/null 2>&1
+
+# ── 第 4 階段：每日氣象（沒有授權碼時引導到設定）──
+WEATHER_TEXT=$(visit /)
+echo "$WEATHER_TEXT" > "$OUT_DIR/weather.txt"
+for label in 請先到設定輸入氣象署授權碼 前往設定; do
+  expect_text "每日氣象頁「${label}」存在" "$label" "$WEATHER_TEXT"
+done
+if echo "$WEATHER_TEXT" | grep -q "第 4–5 階段"; then log_fail "每日氣象頁還有舊的佔位文字"; else log_pass "每日氣象頁沒有舊的佔位文字"; fi
+npx agent-browser screenshot "$OUT_DIR/weather-nokey.png" > /dev/null 2>&1
+npx agent-browser find text 前往設定 click > /dev/null 2>&1 || true
+npx agent-browser wait 1500 > /dev/null 2>&1
+if npx agent-browser get url 2>/dev/null | grep -q "/settings"; then log_pass "「前往設定」切到設定頁"; else log_fail "「前往設定」沒有切到設定頁"; fi
+SETTINGS_KEY_TEXT=$(npx agent-browser get text body 2>/dev/null)
+for label in 氣象署授權碼 儲存; do
+  expect_text "設定頁授權碼欄位「${label}」存在（沒有內建授權碼時）" "$label" "$SETTINGS_KEY_TEXT"
+done
 
 TRASH_TEXT=$(visit /trash)
 for label in 暫存區 暫存區是空的; do
