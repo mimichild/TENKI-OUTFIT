@@ -345,3 +345,4 @@
 - 三語字串新增 11 組（`view.*`、`calendar.*`、`weather.noOutfit`、`outfit.openLabel`、`trash.archiveNote`），移除 `weather.outfitsComing`
 - 驗證：Jest 243 項通過（新增 7 項：每日氣象頁穿搭 6、暫存區說明 1）、tsc、lint；`bash scripts/regression.sh` 4/4 全過（視覺 56 項，新增 5 項：存檔後日檢視出現穿搭與總金額、週檢視、月曆標示今天有穿搭、暫存區說明）
 - 和計畫不同的地方：日／週／月切換放在頁面內容右上（不是導覽列的 headerRight），比較好測試，看起來一樣在右上
+- APK（批次 A～C）：`SPARK-Builds/TENKI-OUTFIT/tenki-outfit-v0.1.0-20261102-2219.apk`，已確認含批次 C 程式碼與內建授權碼；Google Drive 上傳中途網路逾時後停在「等待重試」，重新複製檔案後 22:34 上傳完成；**待使用者實機檢測**
