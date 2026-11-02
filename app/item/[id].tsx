@@ -11,6 +11,7 @@ import { useT } from '@/i18n';
 import { formatPrice } from '@/lib/currency';
 import { moveItemToTrash, saveItem } from '@/lib/itemService';
 import { pickPhoto } from '@/lib/pickPhoto';
+import { removeBackground } from '@/lib/backgroundRemoval';
 import { resolvePhotoUri } from '@/lib/photoStorage';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme } from '@/theme/useTheme';
@@ -45,6 +46,7 @@ export default function ItemScreen() {
             occasions: item.occasions, seasons: item.seasons, imageUri: item.imageUri, originalUri: item.originalUri,
           }}
           onPickPhoto={pickPhoto}
+          onRemoveBackground={removeBackground}
           onSubmit={async (input, photo) => {
             await saveItem(repo, item, input, photo);
             setEditing(false);

@@ -8,6 +8,7 @@ function setup(overrides: Partial<React.ComponentProps<typeof ItemForm>> = {}) {
   const props = {
     initial: EMPTY_ITEM_INPUT,
     onPickPhoto: jest.fn().mockResolvedValue('file:///cache/picked.jpg'),
+    onRemoveBackground: jest.fn().mockResolvedValue({ status: 'ok', uri: 'file:///cache/bg-removal/cut.png', width: 1, height: 1 }),
     onSubmit: jest.fn(),
     onCancel: jest.fn(),
     ...overrides,
@@ -48,13 +49,60 @@ describe('ItemForm', () => {
     expect(screen.getByText('請輸入有效的金額')).toBeTruthy();
   });
 
-  it('picks a photo and reports it as a replacement', async () => {
-    const { onSubmit, onPickPhoto } = setup();
+  it('picks a photo, removes the background and submits original + cutout', async () => {
+    const { onSubmit, onPickPhoto, onRemoveBackground } = setup();
     fireEvent.press(screen.getByRole('button', { name: '從相簿選擇' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: '刪除照片' })).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('已自動去背')).toBeTruthy());
     expect(onPickPhoto).toHaveBeenCalledWith('library');
+    expect(onRemoveBackground).toHaveBeenCalledWith('file:///cache/picked.jpg');
     fireEvent.press(screen.getByRole('button', { name: '儲存' }));
-    expect(onSubmit.mock.calls[0][1]).toEqual({ kind: 'replace', uri: 'file:///cache/picked.jpg' });
+    expect(onSubmit.mock.calls[0][1]).toEqual({
+      kind: 'replace', originalUri: 'file:///cache/picked.jpg', imageUri: 'file:///cache/bg-removal/cut.png',
+    });
+  });
+
+  it.each([
+    ['unavailable', '這台裝置不支援自動去背，先使用原圖'],
+    ['noSubject', '照片中找不到衣物主體，先使用原圖'],
+    ['failed', '自動去背失敗，先使用原圖'],
+  ])('falls back to the original when background removal is %s', async (status, message) => {
+    const { onSubmit } = setup({ onRemoveBackground: jest.fn().mockResolvedValue({ status, error: new Error('x') }) });
+    fireEvent.press(screen.getByRole('button', { name: '從相簿選擇' }));
+    await waitFor(() => expect(screen.getByText(message)).toBeTruthy());
+    fireEvent.press(screen.getByRole('button', { name: '儲存' }));
+    expect(onSubmit.mock.calls[0][1]).toEqual({
+      kind: 'replace', originalUri: 'file:///cache/picked.jpg', imageUri: 'file:///cache/picked.jpg',
+    });
+  });
+
+  it('cannot save while the background is being removed', async () => {
+    let finish!: (r: unknown) => void;
+    const { onSubmit } = setup({ onRemoveBackground: jest.fn(() => new Promise(r => { finish = r; })) });
+    fireEvent.press(screen.getByRole('button', { name: '從相簿選擇' }));
+    await waitFor(() => expect(screen.getByText('正在自動去背…')).toBeTruthy());
+    fireEvent.press(screen.getByRole('button', { name: '儲存' }));
+    expect(onSubmit).not.toHaveBeenCalled();
+    await act(async () => finish({ status: 'ok', uri: 'file:///cache/bg-removal/cut.png', width: 1, height: 1 }));
+    fireEvent.press(screen.getByRole('button', { name: '儲存' }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a slow cutout result after a newer photo was picked', async () => {
+    const finishers: ((r: unknown) => void)[] = [];
+    const onPickPhoto = jest.fn()
+      .mockResolvedValueOnce('file:///cache/first.jpg')
+      .mockResolvedValueOnce('file:///cache/second.jpg');
+    const { onSubmit } = setup({ onPickPhoto, onRemoveBackground: jest.fn(() => new Promise(r => { finishers.push(r); })) });
+    fireEvent.press(screen.getByRole('button', { name: '從相簿選擇' }));
+    await waitFor(() => expect(finishers).toHaveLength(1));
+    fireEvent.press(screen.getByRole('button', { name: '拍照' }));
+    await waitFor(() => expect(finishers).toHaveLength(2));
+    await act(async () => finishers[1]({ status: 'ok', uri: 'file:///cache/bg-removal/second.png', width: 1, height: 1 }));
+    await act(async () => finishers[0]({ status: 'ok', uri: 'file:///cache/bg-removal/first.png', width: 1, height: 1 }));
+    fireEvent.press(screen.getByRole('button', { name: '儲存' }));
+    expect(onSubmit.mock.calls[0][1]).toEqual({
+      kind: 'replace', originalUri: 'file:///cache/second.jpg', imageUri: 'file:///cache/bg-removal/second.png',
+    });
   });
 
   it('removing an existing photo reports removal', () => {

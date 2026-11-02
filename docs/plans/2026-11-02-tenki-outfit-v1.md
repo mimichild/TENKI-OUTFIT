@@ -131,7 +131,7 @@
 #### 留待之後處理
 - ~~待使用者決定~~ → 已決定（2026-11-02），見「我做的決定」：過去穿搭保留、未來穿搭移除，第 5 階段實作
 - 自動清除目前只在開 App 時跑；之後可在 App 回到前景時也跑一次
-- `File.copy` 是同步的，大張照片存檔可能頓一下；第 3 階段接去背時改非同步
+- ~~`File.copy` 是同步的，大張照片存檔可能頓一下~~ → 第 3 階段批次 B 改用 `copyAsync`
 - 英文單複數（1 days / 1 items）
 - 讀取單品失敗時目前只記錄 log，畫面停在讀取中；之後加錯誤狀態與重試
 - 實機（相簿／相機選照片、SQLite）尚未驗證，第 3 階段做 dev build 時一起驗
@@ -143,6 +143,7 @@
 - 不改 DB：遮罩從去背 PNG 的透明度反推（重新編輯 = 原圖 + 目前去背圖）
 - 顯示圖改存 `.png`（透明背景），原圖維持原格式
 - 每批 commit
+- 自動去背只支援 iOS 17+（Expo SDK 54 最低 iOS 15.1，iOS 14 無法安裝）；iOS 15.1–16 不內建 Core ML 模型，退回原圖＋批次 C 的手動筆刷（使用者確認 2026-11-02）
 
 拆成四批：
 - **A｜去背原生模組**：專案內 Expo 本機模組 `modules/tenki-bg-removal`（iOS Vision `VNGenerateForegroundInstanceMaskRequest`，iOS 17+；Android ML Kit Subject Segmentation）；JS 包裝 `src/lib/backgroundRemoval.ts`（+ `.web.ts` 一律回報不支援），先縮到長邊 1600px 再去背；單元測試用假原生模組
@@ -159,3 +160,11 @@
 - `src/lib/backgroundRemoval.ts`（+ `.web.ts`）：`removeBackground(uri)` 不丟例外，回傳 `ok / unavailable / noSubject / failed`；`BG_REMOVAL_MAX_SIZE = 1600`
 - 驗證：Jest 90 項通過（新增 7 項）；`bash scripts/regression.sh` 4/4 全過（視覺 38 項）
 - **尚未驗證**：Swift / Kotlin 還沒編譯過（還沒 prebuild），批次 D 做 dev build 時才會編譯；Android 本階段只做 Gradle 編譯檢查
+
+#### 批次 B — 完成（2026-11-02）
+- `ItemForm`：選照片後立刻顯示原圖並開始去背（顯示「正在自動去背…」、儲存按鈕暫時停用），成功換成去背圖並顯示「已自動去背」；不支援／找不到主體／失敗時保留原圖並顯示對應提示；去背還沒回來又選了新照片時，丟掉舊結果；刪除照片會取消進行中的去背
+- `PhotoChange.replace` 改成 `{ originalUri, imageUri }`；`saveItem` 分別複製原圖與去背圖（沒去背時只複製一次），任一張失敗就回收已複製的檔案
+- `photoStorage.savePhoto` 改為非同步（`expo-file-system/legacy` 的 `copyAsync`），保留 `.png` 副檔名
+- 新增／單品頁注入 `removeBackground`；三語字串新增 5 組、移除 `item.cutoutPending`
+- 驗證：Jest 98 項通過（新增 8 項）、tsc、lint；`bash scripts/regression.sh` 4/4 全過（Web 一律走「不支援」路徑）
+- 和計畫不同的地方：沒有做「改用原圖／改用去背圖」切換；去背結果不好時改用批次 C 的手動修改
