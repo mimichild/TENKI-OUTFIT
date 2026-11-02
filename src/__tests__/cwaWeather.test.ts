@@ -31,6 +31,22 @@ describe('buildForecastUrl', () => {
   });
 });
 
+type InlinePeriod = [string, { MaxTemperature: string; MinTemperature: string; PoP: string; wx: [string, string] }];
+function inline(periods: InlinePeriod[]) {
+  const el = (name: string, value: (p: InlinePeriod[1]) => Record<string, string>) => ({
+    ElementName: name,
+    Time: periods.map(([start, p]) => ({ StartTime: start, EndTime: start, ElementValue: [value(p)] })),
+  });
+  return {
+    records: { Locations: [{ Location: [{ LocationName: '臺北市', WeatherElement: [
+      el('最高溫度', p => ({ MaxTemperature: p.MaxTemperature })),
+      el('最低溫度', p => ({ MinTemperature: p.MinTemperature })),
+      el('12小時降雨機率', p => ({ ProbabilityOfPrecipitation: p.PoP })),
+      el('天氣現象', p => ({ WeatherCode: p.wx[0], Weather: p.wx[1] })),
+    ] }] }] },
+  };
+}
+
 describe('parseForecast', () => {
   const days = parseForecast(fixture, '臺北市');
 
@@ -38,13 +54,17 @@ describe('parseForecast', () => {
     expect(days.map(d => d.date)).toEqual(['2026-11-02', '2026-11-03', '2026-11-04']);
   });
 
-  it('takes extremes for temperatures and the larger rain chance', () => {
+  // 做法 B（使用者決定 2026-11-02）：最高溫／降雨／天氣看當天白天 06–18，最低溫看前一晚 18:00–當天 06:00
+  it('uses the daytime period for highs, rain and weather, and the previous night for lows', () => {
     expect(days[1]).toEqual({
       date: '2026-11-03',
-      maxT: 26, minT: 16, maxAT: 27, minAT: 14, pop: 70,
-      wxCode: '08', wxText: '短暫陣雨', hasDaytime: true,
+      maxT: 26, maxAT: 27, pop: 70, wxCode: '08', wxText: '短暫陣雨', // 11/3 白天
+      minT: 17, minAT: 15, // 11/2 18:00–11/3 06:00
+      hasDaytime: true,
     });
+    expect(days[2]).toMatchObject({ date: '2026-11-04', maxT: 25, minT: 16, maxAT: 24, minAT: 14 });
   });
+
 
   it('uses the night period only when the day has no daytime period', () => {
     expect(days[0]).toMatchObject({ maxT: 21, minT: 17, pop: 20, wxCode: '04', wxText: '多雲', hasDaytime: false });
@@ -52,6 +72,21 @@ describe('parseForecast', () => {
 
   it('treats "-" rain chance as unknown', () => {
     expect(days[2]).toMatchObject({ pop: null, wxCode: '01', hasDaytime: true });
+  });
+
+  it('ignores a rainy night when rating the day', () => {
+    const json = inline([
+      ['2026-11-05T06:00:00+08:00', { MaxTemperature: '22', MinTemperature: '16', PoP: '10', wx: ['01', '晴天'] }],
+      ['2026-11-05T18:00:00+08:00', { MaxTemperature: '16', MinTemperature: '12', PoP: '70', wx: ['08', '短暫陣雨'] }],
+    ]);
+    expect(parseForecast(json, '臺北市')).toEqual([
+      { date: '2026-11-05', maxT: 22, minT: 16, maxAT: null, minAT: null, pop: 10, wxCode: '01', wxText: '晴天', hasDaytime: true },
+    ]);
+  });
+
+  it('falls back to the daytime low when the previous night is not in the forecast', () => {
+    const json = inline([['2026-11-05T06:00:00+08:00', { MaxTemperature: '22', MinTemperature: '16', PoP: '10', wx: ['01', '晴天'] }]]);
+    expect(parseForecast(json, '臺北市')[0]).toMatchObject({ minT: 16 });
   });
 
   it('returns [] when the county is missing or the shape is unexpected', () => {

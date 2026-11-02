@@ -17,8 +17,11 @@ const EL = {
 } as const;
 
 /**
- * 一天 = 當天白天（06–18）＋當晚（18–隔天 06）兩個時段，和氣象署網站「白天／晚上」的分法一致。
- * 所以 minT / minAT 可能是隔天清晨的低溫；pop 取兩個時段中較大的。
+ * 以「出門時段」為主（使用者決定 2026-11-02，做法 B）：
+ * - maxT / maxAT / pop / wx：當天白天 06:00–18:00
+ * - minT / minAT：前一晚 18:00–當天 06:00（預報裡沒有前一晚時，用白天的最低溫）
+ * - 晚上才抓的「今天」只剩當晚時段：全部用當晚時段，hasDaytime = false
+ * 和氣象署網站「白天／晚上」欄位的分法不同（網站把晚上算在前一天）。
  */
 export interface DailyForecast {
   /** YYYY-MM-DD（台灣時間） */
@@ -118,57 +121,64 @@ function findLocation(json: unknown, county: string): Obj | null {
   return null;
 }
 
+interface Slots {
+  day?: Obj;
+  night?: Obj;
+}
+
 export function parseForecast(json: unknown, county: string): DailyForecast[] {
   const loc = findLocation(json, county);
   if (!loc) return [];
-  const elements = new Map<string, Period[]>();
+
+  // 每個欄位：開始日期 → 白天／當晚時段的值
+  const elements = new Map<string, Map<string, Slots>>();
+  const dates = new Set<string>();
   for (const e of arr(pick(loc, 'WeatherElement'))) {
-    if (isObj(e) && typeof pick(e, 'ElementName') === 'string') {
-      elements.set(pick(e, 'ElementName') as string, periodsOf(e));
+    if (!isObj(e) || typeof pick(e, 'ElementName') !== 'string') continue;
+    const byDate = new Map<string, Slots>();
+    for (const p of periodsOf(e)) {
+      const slots = byDate.get(p.date) ?? {};
+      slots[p.daytime ? 'day' : 'night'] = p.values;
+      byDate.set(p.date, slots);
+      dates.add(p.date);
     }
+    elements.set(pick(e, 'ElementName') as string, byDate);
   }
+  const slotsOf = (name: string, date: string): Slots => elements.get(name)?.get(date) ?? {};
+  const hasDay = (date: string) => [...elements.values()].some(m => m.get(date)?.day !== undefined);
 
-  const days = new Map<string, DailyForecast>();
-  const dayOf = (date: string) => {
-    let d = days.get(date);
-    if (!d) {
-      d = { date, maxT: null, minT: null, maxAT: null, minAT: null, pop: null, wxCode: null, wxText: null, hasDaytime: false };
-      days.set(date, d);
-    }
-    return d;
-  };
-  const extreme = (name: string, key: string, field: 'maxT' | 'minT' | 'maxAT' | 'minAT' | 'pop', pickMax: boolean) => {
-    for (const p of elements.get(name) ?? []) {
-      const n = numberIn(p.values, key);
-      const d = dayOf(p.date);
-      if (p.daytime) d.hasDaytime = true;
-      if (n === null) continue;
-      const cur = d[field];
-      d[field] = cur === null ? n : pickMax ? Math.max(cur, n) : Math.min(cur, n);
-    }
-  };
-  extreme(EL.maxT, 'MaxTemperature', 'maxT', true);
-  extreme(EL.minT, 'MinTemperature', 'minT', false);
-  extreme(EL.maxAT, 'MaxApparentTemperature', 'maxAT', true);
-  extreme(EL.minAT, 'MinApparentTemperature', 'minAT', false);
-  extreme(EL.pop, 'ProbabilityOfPrecipitation', 'pop', true);
+  const days: DailyForecast[] = [];
+  for (const date of [...dates].sort()) {
+    const daytime = hasDay(date);
+    const prev = addDaysIso(date, -1);
+    // 白天時段；沒有白天（晚上才抓的今天）就用當晚
+    const main = (name: string) => (daytime ? slotsOf(name, date).day : slotsOf(name, date).night);
+    // 最低溫：前一晚；沒有前一晚時退回 main
+    const low = (name: string) => (daytime ? slotsOf(name, prev).night ?? slotsOf(name, date).day : slotsOf(name, date).night);
+    // 沒有白天的日期正常只會是預報的第一天（晚上才抓的今天）；其他日期缺白天時段就跳過，不用夜間數字假裝成一整天
+    if (!daytime && days.length > 0) continue;
 
-  // 天氣現象：有白天時段用白天，否則用當天第一個時段
-  const wxFromDaytime = new Set<string>();
-  for (const p of elements.get(EL.wx) ?? []) {
-    const d = dayOf(p.date);
-    if (p.daytime) d.hasDaytime = true;
-    const code = p.values.WeatherCode;
-    const text = p.values.Weather;
-    if (typeof code !== 'string' && typeof text !== 'string') continue;
-    const alreadySet = d.wxCode !== null || d.wxText !== null;
-    if (alreadySet && (wxFromDaytime.has(p.date) || !p.daytime)) continue;
-    d.wxCode = typeof code === 'string' ? code.padStart(2, '0') : null;
-    d.wxText = typeof text === 'string' ? text : null;
-    if (p.daytime) wxFromDaytime.add(p.date);
+    const num = (values: Obj | undefined, key: string) => (values ? numberIn(values, key) : null);
+    const wx = main(EL.wx);
+    const code = wx?.WeatherCode;
+    const text = wx?.Weather;
+    days.push({
+      date,
+      maxT: num(main(EL.maxT), 'MaxTemperature'),
+      minT: num(low(EL.minT), 'MinTemperature'),
+      maxAT: num(main(EL.maxAT), 'MaxApparentTemperature'),
+      minAT: num(low(EL.minAT), 'MinApparentTemperature'),
+      pop: num(main(EL.pop), 'ProbabilityOfPrecipitation'),
+      wxCode: typeof code === 'string' ? code.padStart(2, '0') : null,
+      wxText: typeof text === 'string' ? text : null,
+      hasDaytime: daytime,
+    });
   }
+  return days;
+}
 
-  return [...days.values()].sort((a, b) => a.date.localeCompare(b.date));
+function addDaysIso(date: string, n: number): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 }
 
 // ---- 連線 ----
