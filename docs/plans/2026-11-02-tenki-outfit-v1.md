@@ -428,3 +428,4 @@
 - 實測回饋 3（2026-11-03）：**使用者決定改回四格排版**（取代實測回饋 2 的疊法）——上衣左上、下著左下（比上衣長、格子比較大）、外套右上、包包右中、配件在包包左邊、鞋子右下；連身佔整個左半邊（使用者沒指定）
   - `layoutOutfit` 改為每個分類一個固定格子（`SPOTS`），衣服依量到的實際範圍等比放大塞滿格子、置中；格子之間不重疊。照片範圍量測（`photoBounds`、`usePieceShapes`）保留
   - 測試：`outfitLayout.test.ts` 疊法測試換成格子測試（6 項）；Jest 307 項、tsc、lint；`bash scripts/regression.sh` 4/4 全過（視覺 56 項）
+  - APK `tenki-outfit-v0.1.0-20261103-1016.apk` 已上傳 Google Drive，待實機檢測
