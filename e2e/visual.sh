@@ -145,6 +145,41 @@ npx agent-browser screenshot "$OUT_DIR/weather-month.png" > /dev/null 2>&1
 npx agent-browser click '[role="tab"][aria-label="日"]' > /dev/null 2>&1 || true
 
 
+# ── 第 6 階段：穿搭建議（同一個工作階段，沿用剛新增的白襯衫，再加一件下著）──
+npx agent-browser click 'a[href="/closet"]' > /dev/null 2>&1 || log_fail "切不到服裝分頁"
+npx agent-browser wait 1500 > /dev/null 2>&1
+npx agent-browser click '[aria-label="新增單品"]' > /dev/null 2>&1 || log_fail "服裝頁找不到「新增單品」"
+npx agent-browser wait 1500 > /dev/null 2>&1
+npx agent-browser fill '[aria-label="名稱"]' 'E2E牛仔褲' > /dev/null 2>&1 || log_fail "新增頁找不到「名稱」"
+npx agent-browser click '[role="button"][aria-label="下著"]' > /dev/null 2>&1 || log_fail "新增頁找不到分類「下著」"
+npx agent-browser click '[aria-label="儲存"]' > /dev/null 2>&1 || log_fail "新增頁找不到「儲存」"
+npx agent-browser wait 1500 > /dev/null 2>&1
+npx agent-browser click 'a[href="/suggest"]' > /dev/null 2>&1 || log_fail "切不到穿搭建議分頁"
+npx agent-browser wait 2000 > /dev/null 2>&1
+SUGGEST_TEXT=$(npx agent-browser get text body 2>/dev/null)
+echo "$SUGGEST_TEXT" > "$OUT_DIR/suggest.txt"
+for label in 今日 明日 全部場合 上班 沒有這天的天氣資料 'E2E白襯衫搭配E2E牛仔褲' '目前沒有這天的天氣資料，這套只依場合挑選。' '缺少：鞋子' '總金額 NT\$1,290' 更新 存成穿搭; do
+  expect_text "穿搭建議頁「${label}」存在" "$label" "$SUGGEST_TEXT"
+done
+if echo "$SUGGEST_TEXT" | grep -q "第 6 階段"; then log_fail "穿搭建議頁還有舊的佔位文字"; else log_pass "穿搭建議頁沒有舊的佔位文字"; fi
+npx agent-browser screenshot "$OUT_DIR/suggest.png" > /dev/null 2>&1
+npx agent-browser click '[role="button"][aria-label="更新"]' > /dev/null 2>&1 || log_fail "找不到「更新」"
+npx agent-browser wait 800 > /dev/null 2>&1
+expect_text "只有一種組合時按更新顯示「沒有其他組合了」" "沒有其他組合了" "$(npx agent-browser get text body 2>/dev/null)"
+npx agent-browser click '[role="tab"][aria-label="明日"]' > /dev/null 2>&1 || log_fail "找不到「明日」"
+npx agent-browser wait 800 > /dev/null 2>&1
+npx agent-browser click '[role="button"][aria-label="存成穿搭"]' > /dev/null 2>&1 || log_fail "找不到「存成穿搭」"
+npx agent-browser wait 1500 > /dev/null 2>&1
+if npx agent-browser get url 2>/dev/null | grep -q "/outfit/edit"; then log_pass "「存成穿搭」打開穿搭畫布"; else log_fail "「存成穿搭」沒有打開穿搭畫布"; fi
+SUGGEST_CANVAS_TEXT=$(npx agent-browser get text body 2>/dev/null)
+echo "$SUGGEST_CANVAS_TEXT" > "$OUT_DIR/suggest-canvas.txt"
+expect_text "畫布帶入建議的單品（總金額）" '總金額 NT\$1,290' "$SUGGEST_CANVAS_TEXT"
+if echo "$SUGGEST_CANVAS_TEXT" | grep -q "要先選日期才能儲存"; then log_fail "畫布沒有帶入建議的日期"; else log_pass "畫布帶入建議的日期"; fi
+npx agent-browser screenshot "$OUT_DIR/suggest-canvas.png" > /dev/null 2>&1
+
+SUGGEST_EMPTY_TEXT=$(visit /suggest)
+expect_text "穿搭建議頁衣櫃空的提示" "衣櫃裡還沒有單品" "$SUGGEST_EMPTY_TEXT"
+
 # ── 第 4 階段：每日氣象（沒有授權碼時引導到設定）──
 WEATHER_TEXT=$(visit /)
 echo "$WEATHER_TEXT" > "$OUT_DIR/weather.txt"
