@@ -423,4 +423,5 @@
   - `src/lib/usePieceShapes.ts`：建議頁與「存成穿搭」都等量測完才排版（避免畫面跳動）
   - `suggestionLayout`、`presetPieces` 改用新排版（接受 shapes）；取代實測回饋 1 的四格排版
   - 測試：新增 `outfitLayout.test.ts` 11 項，移除四格排版測試 1 項；Jest 308 項、tsc、lint；`bash scripts/regression.sh` 4/4 全過（視覺 56 項）
+  - APK `tenki-outfit-v0.1.0-20261103-1007.apk` 已上傳 Google Drive，待實機檢測
   - 已知限制：衣服實際長短不知道，各分類的寬度是估的（上衣 0.52、下著 0.44、鞋子 0.24、包包 0.36、配件 0.28 畫布寬）；手機上的量測只能實機驗證
