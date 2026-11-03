@@ -6,8 +6,9 @@ import { Chip } from '@/components/Chip';
 import { HeaderIconButton } from '@/components/HeaderIconButton';
 import { ItemFilterSheet } from '@/components/ItemFilterSheet';
 import { ItemTile } from '@/components/ItemTile';
+import { LoadError } from '@/components/LoadError';
 import { CATEGORIES } from '@/constants/options';
-import { useActiveItems } from '@/db/useItems';
+import { useActiveItemsQuery } from '@/db/useItems';
 import { useT } from '@/i18n';
 import { applyItemQuery, DEFAULT_ITEM_QUERY, isQueryFiltered, type ItemQuery } from '@/lib/itemQueries';
 import { useTheme } from '@/theme/useTheme';
@@ -19,7 +20,7 @@ export default function ClosetScreen() {
   const theme = useTheme();
   const router = useRouter();
   const navigation = useNavigation();
-  const items = useActiveItems();
+  const { value: items, error, retry } = useActiveItemsQuery();
   const [query, setQuery] = useState<ItemQuery>(DEFAULT_ITEM_QUERY);
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -45,7 +46,7 @@ export default function ClosetScreen() {
         </ScrollView>
       </View>
 
-      {items === undefined ? null : visible.length === 0 ? (
+      {items === undefined ? (error ? <LoadError fill onRetry={retry} /> : null) : visible.length === 0 ? (
         <View style={styles.empty}>
           <Ionicons name="shirt-outline" size={44} color={theme.primary} />
           <Text style={[styles.emptyText, { color: theme.textMuted }]}>

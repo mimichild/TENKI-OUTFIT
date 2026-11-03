@@ -20,6 +20,13 @@ export const dictionaries: Record<Language, Record<TranslationKey, string>> = {
   ja,
 };
 
+/**
+ * 模板語法：
+ * - `{name}` → 參數值
+ * - `{count|item|items}` → 參數值＋單數或複數字（值為 1 用第一個，其他用第二個），例如「1 item」「2 items」
+ */
+const PARAM_RE = /\{(\w+)(?:\|([^|{}]*)\|([^|{}]*))?\}/g;
+
 export function translate(
   language: Language,
   key: TranslationKey,
@@ -27,9 +34,12 @@ export function translate(
 ): string {
   const template = dictionaries[language][key] ?? dictionaries['zh-TW'][key] ?? key;
   if (!params) return template;
-  return template.replace(/\{(\w+)\}/g, (match, name) =>
-    name in params ? String(params[name]) : match,
-  );
+  return template.replace(PARAM_RE, (match, name: string, one?: string, other?: string) => {
+    if (!(name in params)) return match;
+    const value = params[name];
+    if (one === undefined) return String(value);
+    return `${value} ${Number(value) === 1 ? one : other}`;
+  });
 }
 
 export function useT() {

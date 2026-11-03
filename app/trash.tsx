@@ -3,9 +3,10 @@ import { Image } from 'expo-image';
 import { Stack } from 'expo-router';
 import { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { LoadError } from '@/components/LoadError';
 import { TRASH_RETENTION_DAYS } from '@/constants/options';
 import { useItemRepository } from '@/db/ItemRepositoryContext';
-import { useTrashItems } from '@/db/useItems';
+import { useTrashItemsQuery } from '@/db/useItems';
 import { useT } from '@/i18n';
 import { trashDaysLeft } from '@/lib/itemQueries';
 import { purgeItem, restoreItem } from '@/lib/itemService';
@@ -16,7 +17,7 @@ export default function TrashScreen() {
   const t = useT();
   const theme = useTheme();
   const repo = useItemRepository();
-  const items = useTrashItems();
+  const { value: items, error, retry } = useTrashItemsQuery();
   // 永久刪除要點兩次：第一次只標記，第二次才真的刪（不用系統對話框）
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const now = new Date(Date.now()).toISOString();
@@ -46,6 +47,8 @@ export default function TrashScreen() {
               <Ionicons name="trash-outline" size={40} color={theme.textMuted} />
               <Text style={{ color: theme.textMuted, fontSize: 15 }}>{t('trash.empty')}</Text>
             </View>
+          ) : error ? (
+            <LoadError onRetry={retry} />
           ) : null
         }
         renderItem={({ item }) => {

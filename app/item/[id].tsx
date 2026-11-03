@@ -4,9 +4,10 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ItemForm } from '@/components/ItemForm';
+import { LoadError } from '@/components/LoadError';
 import { ScreenPlaceholder } from '@/components/ScreenPlaceholder';
 import { useItemRepository } from '@/db/ItemRepositoryContext';
-import { useItem } from '@/db/useItems';
+import { useItemQuery } from '@/db/useItems';
 import { useT } from '@/i18n';
 import { formatPrice } from '@/lib/currency';
 import { moveItemToTrash, saveItem } from '@/lib/itemService';
@@ -23,10 +24,17 @@ export default function ItemScreen() {
   const repo = useItemRepository();
   const currency = useSettingsStore(s => s.currency);
   const { id } = useLocalSearchParams<{ id: string }>();
-  const item = useItem(id);
+  const { value: item, error, retry } = useItemQuery(id);
   const [editing, setEditing] = useState(false);
 
-  if (item === undefined) return <Stack.Screen options={{ title: t('item.detail') }} />;
+  if (item === undefined) {
+    return (
+      <>
+        <Stack.Screen options={{ title: t('item.detail') }} />
+        {error ? <LoadError fill onRetry={retry} /> : null}
+      </>
+    );
+  }
   if (item === null) {
     return (
       <>

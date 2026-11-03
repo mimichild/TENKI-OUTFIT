@@ -1,16 +1,17 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Chip } from '@/components/Chip';
+import { LoadError } from '@/components/LoadError';
 import { OutfitCanvasView } from '@/components/OutfitCanvasView';
 import { OCCASIONS } from '@/constants/options';
-import { useActiveItems } from '@/db/useItems';
+import { useActiveItemsQuery } from '@/db/useItems';
 import { useWeather } from '@/db/useWeather';
 import { useT, type TranslationKey } from '@/i18n';
 import { formatPrice } from '@/lib/currency';
 import { outfitTotal } from '@/lib/outfitTotals';
-import { candidatesFor, suggestOutfit, suggestionLayout, type Suggestion } from '@/lib/suggestion';
+import { candidatesFor, suggestOutfit, suggestionLayout, type Suggestion, type SuggestionInput } from '@/lib/suggestion';
 import { describeSuggestion } from '@/lib/suggestionText';
 import { usePieceShapes } from '@/lib/usePieceShapes';
 import { addDays } from '@/lib/weatherDates';
@@ -23,6 +24,8 @@ type Day = 'today' | 'tomorrow';
 interface Picked {
   /** 日期＋場合＋天氣條件；變了就重抽 */
   key: string;
+  /** 抽籤時的輸入；衣櫃或條件變了才需要檢查要不要重抽 */
+  input: SuggestionInput;
   suggestion: Suggestion;
 }
 
@@ -33,7 +36,7 @@ export default function SuggestScreen() {
   const language = useSettingsStore(s => s.language);
   const currency = useSettingsStore(s => s.currency);
   const window = useWindowDimensions();
-  const items = useActiveItems();
+  const { value: items, error: itemsError, retry: retryItems } = useActiveItemsQuery();
   const weather = useWeather();
   const [day, setDay] = useState<Day>('today');
   const [occasion, setOccasion] = useState<Occasion | null>(null);
@@ -48,24 +51,25 @@ export default function SuggestScreen() {
   const key = probe ? `${date}|${occasion ?? ''}|${probe.band}|${probe.outerwear}` : '';
   const byId = useMemo(() => new Map((items ?? []).map(i => [i.id, i])), [items]);
 
-  // 換日期／場合／天氣條件、或原本沒有建議而衣櫃變了 → 重抽；
-  // 建議裡的單品不見了、改了分類、或改到不符合目前的季節／場合 → 也重抽
-  useEffect(() => {
-    if (!ready || !probe) return;
-    setPicked(prev => {
-      const stillFits = (p: Item) => {
-        const cur = byId.get(p.id);
-        return !!cur && cur.category === p.category && candidatesFor([cur], cur.category, { band: probe.band, occasion }).length > 0;
-      };
-      const stale = !prev || prev.key !== key || prev.suggestion.status === 'empty' || !prev.suggestion.pieces.every(stillFits);
-      return stale ? { key, suggestion: suggestOutfit(input) } : prev;
-    });
-  }, [ready, probe, key, input, byId, occasion]);
+  // 換日期／場合／天氣條件 → 重抽；衣櫃變了時，原本沒有建議、或建議裡的單品不見了、
+  // 改了分類、改到不符合目前的季節／場合 → 也重抽。
+  // 在 render 時就換掉（React 允許依目前輸入調整 state），不經過 effect，卡片才不會中間閃一幀空白
+  if (ready && probe) {
+    const stillFits = (p: Item) => {
+      const cur = byId.get(p.id);
+      return !!cur && cur.category === p.category && candidatesFor([cur], cur.category, { band: probe.band, occasion }).length > 0;
+    };
+    const stale =
+      !picked ||
+      picked.key !== key ||
+      (picked.input !== input && (picked.suggestion.status === 'empty' || !picked.suggestion.pieces.every(stillFits)));
+    if (stale) setPicked({ key, input, suggestion: suggestOutfit(input) });
+  }
 
   const shuffle = () => {
     if (!picked) return;
     const next = suggestOutfit(input, { previous: picked.suggestion.pieces.map(p => p.id) });
-    setPicked({ key, suggestion: next });
+    setPicked({ key, input, suggestion: next });
     // accessibilityLiveRegion 只有 Android 有效，iOS 另外念
     if (next.noAlternative) AccessibilityInfo.announceForAccessibility(t('suggest.noAlternative'));
   };
@@ -145,10 +149,17 @@ export default function SuggestScreen() {
         ))}
       </ScrollView>
 
-      {!ready || !shown ? null : (items ?? []).length === 0 ? (
+      {items === undefined && itemsError ? <LoadError onRetry={retryItems} /> : !ready || !shown ? null : (items ?? []).length === 0 ? (
         <Message icon="shirt-outline" text={t('suggest.emptyCloset')} color={theme.textMuted} />
       ) : shown.status === 'empty' ? (
-        <Message icon="search-outline" text={t('suggest.noMatch')} hint={t('suggest.noMatchHint')} color={theme.textMuted} />
+        <Message
+          icon="search-outline"
+          text={t('suggest.noMatch')}
+          hints={(shown.emptyReason?.need ?? []).map(c =>
+            t(shown.emptyReason!.filtered.includes(c) ? `suggest.filtered.${c}` : `suggest.need.${c}`),
+          )}
+          color={theme.textMuted}
+        />
       ) : (
         <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View
@@ -162,7 +173,7 @@ export default function SuggestScreen() {
               pieces={canvasPieces ?? lastCanvas.current}
             />
           </View>
-          <Text style={[styles.pieceNames, { color: theme.textMuted }]}>{pieceNames}</Text>
+          <Text numberOfLines={2} style={[styles.pieceNames, { color: theme.textMuted }]}>{pieceNames}</Text>
           {total !== null && (
             <Text style={[styles.total, { color: theme.text }]}>{t('outfit.total', { amount: formatPrice(total, currency) })}</Text>
           )}
@@ -203,12 +214,12 @@ export default function SuggestScreen() {
   );
 }
 
-function Message({ icon, text, hint, color }: { icon: keyof typeof Ionicons.glyphMap; text: string; hint?: string; color: string }) {
+function Message({ icon, text, hints = [], color }: { icon: keyof typeof Ionicons.glyphMap; text: string; hints?: string[]; color: string }) {
   return (
     <View style={styles.message}>
       <Ionicons name={icon} size={40} color={color} accessible={false} importantForAccessibility="no" />
       <Text style={[styles.messageText, { color }]}>{text}</Text>
-      {hint && <Text style={[styles.messageHint, { color }]}>{hint}</Text>}
+      {hints.map(h => <Text key={h} style={[styles.messageHint, { color }]}>{h}</Text>)}
     </View>
   );
 }

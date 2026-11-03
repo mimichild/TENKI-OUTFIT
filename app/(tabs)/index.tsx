@@ -2,14 +2,15 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, PanResponder, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { LoadError } from '@/components/LoadError';
 import { MonthGrid } from '@/components/MonthGrid';
 import { OutfitCard } from '@/components/OutfitCard';
 import { ViewModeSwitch, type ViewMode } from '@/components/ViewModeSwitch';
-import { useOutfitsInRange } from '@/db/useOutfits';
+import { useOutfitsInRangeQuery } from '@/db/useOutfits';
 import { useWeather } from '@/db/useWeather';
 import { useT, type TranslationKey } from '@/i18n';
 import { wxCategory, type WxCategory } from '@/lib/cwaWeather';
-import { addMonths, monthGrid, monthOf, weekOf } from '@/lib/calendar';
+import { addMonths, monthGrid, monthOf, weekOf, weekTitle } from '@/lib/calendar';
 import { addDays, browsableRange, weekdayOf } from '@/lib/weatherDates';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme, type Theme } from '@/theme/useTheme';
@@ -93,13 +94,14 @@ export default function WeatherScreen() {
     mode === 'week' ? [week[0], week[6]]
       : mode === 'month' ? [minDate(grid[0][0], selected), maxDate(grid[grid.length - 1][6], selected)]
         : [selected, selected];
-  const outfits = useOutfitsInRange(from, to);
+  const { value: outfits, error: outfitsError, retry: retryOutfits } = useOutfitsInRangeQuery(from, to);
+  const outfitsFailed = outfits === undefined && !!outfitsError;
   const outfitsOn = (date: string) => (outfits ?? []).filter(o => o.date === date);
   const marked = useMemo(() => new Set((outfits ?? []).map(o => o.date ?? '')), [outfits]);
 
-  const labelOf = (date: string) => {
-    const [, m, d] = date.split('-').map(Number);
-    return t('weather.dateLabel', { m, d, wd: t(`weather.wd${weekdayOf(date)}` as TranslationKey) });
+  const labelOf = (date: string, withYear = false) => {
+    const [y, m, d] = date.split('-').map(Number);
+    return t(withYear ? 'weather.dateLabelYear' : 'weather.dateLabel', { y, m, d, wd: t(`weather.wd${weekdayOf(date)}` as TranslationKey) });
   };
   const day = days?.find(d => d.date === selected);
   const relative: TranslationKey | null =
@@ -120,6 +122,7 @@ export default function WeatherScreen() {
   const cardWidth = Math.min(window.width - 32, 360);
 
   const dayOutfits = (date: string) => {
+    if (outfitsFailed) return <LoadError onRetry={retryOutfits} />;
     if (outfits === undefined) return <ActivityIndicator color={theme.primary} />;
     const list = outfitsOn(date);
     if (list.length === 0) {
@@ -179,10 +182,11 @@ export default function WeatherScreen() {
       <View style={styles.cardHeader}>
         <NavButton icon="chevron-back" label={t('calendar.prevWeek')} disabled={false} onPress={() => setSelected(s => addDays(s, -7))} theme={theme} />
         <Text style={[styles.weekTitle, { color: theme.text }]} accessibilityLiveRegion="polite">
-          {`${labelOf(week[0])} – ${labelOf(week[6])}`}
+          {weekTitle(week[0], week[6], labelOf)}
         </Text>
         <NavButton icon="chevron-forward" label={t('calendar.nextWeek')} disabled={false} onPress={() => setSelected(s => addDays(s, 7))} theme={theme} />
       </View>
+      {outfitsFailed && <LoadError onRetry={retryOutfits} />}
       {week.map(date => {
         const w = days?.find(d => d.date === date);
         const list = outfitsOn(date);

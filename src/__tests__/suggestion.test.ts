@@ -171,6 +171,40 @@ describe('suggestOutfit', () => {
     expect(r.pieces).toEqual([]);
   });
 
+  describe('emptyReason', () => {
+    it('needs a bottom when there are only tops', () => {
+      const r = suggestOutfit(base([item('top'), item('shoes')]), { rng: () => 0 });
+      expect(r.status).toBe('empty');
+      expect(r.emptyReason).toEqual({ need: ['bottom'], filtered: [] });
+    });
+
+    it('needs a top when there are only bottoms', () => {
+      const r = suggestOutfit(base([item('bottom')]), { rng: () => 0 });
+      expect(r.emptyReason).toEqual({ need: ['top'], filtered: [] });
+    });
+
+    it('needs both when there are only shoes', () => {
+      const r = suggestOutfit(base([item('shoes')]), { rng: () => 0 });
+      expect(r.emptyReason).toEqual({ need: ['top', 'bottom'], filtered: [] });
+    });
+
+    it('says the bottom is filtered out when it only fits winter on a warm day', () => {
+      const r = suggestOutfit(base([item('top'), item('bottom', { seasons: ['winter'] })], { weather: weather(30, 28) }), { rng: () => 0 });
+      expect(r.emptyReason).toEqual({ need: ['bottom'], filtered: ['bottom'] });
+    });
+
+    it('says the top is filtered out by occasion', () => {
+      const r = suggestOutfit(base([item('top', { occasions: ['sport'] }), item('bottom')], { occasion: 'work' }), { rng: () => 0 });
+      expect(r.emptyReason).toEqual({ need: ['top'], filtered: ['top'] });
+    });
+
+    it('is null when an outfit is found', () => {
+      const r = suggestOutfit(base([item('onepiece')]), { rng: () => 0 });
+      expect(r.status).toBe('ok');
+      expect(r.emptyReason).toBeNull();
+    });
+  });
+
   it('respects the occasion filter', () => {
     const workTop = item('top', { occasions: ['work'] });
     const sportTop = item('top', { occasions: ['sport'] });

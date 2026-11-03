@@ -7,7 +7,7 @@
 **Architecture:** 不改資料庫結構（沒有遷移）、不改備份格式。錯誤狀態集中在共用的查詢 hook；照片範圍改存在 App 資料夾的 JSON 快取檔；清理工作都在 App 啟動（以及回到前景）時跑。
 **Tech Stack:** Expo SDK 54、RN 0.81、Expo Router、TypeScript strict、Zustand、expo-sqlite、expo-file-system、Jest + RNTL、agent-browser 視覺測試
 **Complexity Path:** `E2E path`（多數項目是畫面行為，沿用 `bash scripts/regression.sh` 的 Web 視覺測試＋最後實機驗收）
-**Status:** In Progress（計畫已核准 2026-11-03，尚未開工）
+**Status:** In Progress（批次 A 完成 2026-11-03；下一步批次 B）
 
 ---
 
@@ -112,6 +112,19 @@ journey
 
 **批次 A 驗收：** `bash scripts/regression.sh` 全過；`e2e/visual.sh` 加：建議頁只有上衣時的提示、英文件數；commit；更新計畫檔。
 
+#### 批次 A 執行紀錄（2026-11-03，完成）
+- **A1 ✅** 新增 `src/db/useQuery.ts`（`{ value, error, retry }`；key 變了不回傳舊結果與舊錯誤；重試時先清掉錯誤；deps 變了重讀時仍顯示同 key 上一次的結果）。`useItems.ts`／`useOutfits.ts` 改用它，既有 hook 簽章不變，另加 `useActiveItemsQuery`、`useTrashItemsQuery`、`useItemQuery`、`useOutfitQuery`、`useOutfitsInRangeQuery`。測試 `useQuery.test.tsx`（5）
+- **A2 ✅** 新增 `src/components/LoadError.tsx`；服裝、每日氣象（日／週／月）、穿搭建議、暫存區、單品詳細、穿搭畫布（新增／編輯）都在「還沒有資料且讀取失敗」時顯示「讀取失敗＋重試」。i18n 三語 `common.loadFailed`、`common.retry`。測試輔助 `src/__tests__/helpers/failingRepo.ts`（`withFailures`）；新增 `OutfitEditScreen.test.tsx`
+- **A3 ✅** `Suggestion.emptyReason: { need, filtered }`；建議頁標題改「還湊不成一套」，下方逐類說明「還差一件上衣／下著（或一件連身）」或「有上衣／下著，但季節或場合不符合今天」；移除 `suggest.noMatchHint`
+- **A4 ✅** `translate` 支援 `{count|item|items}`；英文改寫 `settings.trashCount`、`trash.hint`、`trash.daysLeft`、`outfit.openLabel`、`backup.summary`／`imported`／`summaryNoDate`；測試確認英文不再有 `(s)`
+- **A5 ✅** `src/lib/calendar.ts` `weekTitle()`＋i18n `weather.dateLabelYear`（跨年兩端帶年份）；建議頁改在 render 時就重抽（React「依輸入調整 state」寫法），不再經過 effect，換今日／明日或場合時卡片不閃空白；名稱列 `numberOfLines={2}`
+- **驗證：** `bash scripts/regression.sh` 全過（tsc、ESLint、Jest 46 套件 436 測試、視覺 80 項）；`e2e/visual.sh` 新增「英文介面 1 item」「只有上衣時提示還差下著／不顯示舊提示」
+- **偏離計畫：**
+  - A1 `useQuery` 讀取失敗時，若同一個 key 之前讀成功過，仍保留舊資料（畫面只在「沒有資料＋錯誤」時顯示 LoadError），避免資料版本變動後重讀失敗把整個畫面換成錯誤
+  - A3 計畫寫「移除 `suggest.noMatchHint`」，另外也把標題 `suggest.noMatch` 從「沒有符合的單品」改成「還湊不成一套」（原文字在缺類時同樣誤導）；兩個舊測試的斷言隨之更新
+  - A5 Picked 多存 `input`，「衣櫃變了才檢查要不要重抽」改用 `picked.input !== input` 判斷（原本靠 effect deps），避免 render 中無限重抽
+  - code-reviewer 依計畫留到 C2 一起審查全部 v2 變更
+
 ### 批次 B｜效能與清理
 
 #### Task B1: 匯入用預備語句
@@ -172,9 +185,9 @@ journey
 - **v1 使用者升級** → 同一把鑰匙、versionCode 遞增，直接覆蓋安裝；不改 DB，所以不需要遷移
 
 ## Success Criteria
-- [ ] 讀取失敗的畫面都有錯誤與重試
-- [ ] 建議頁湊不成一套時說出缺哪一類與原因
-- [ ] 英文單複數、跨年週標題正確；建議卡片不閃
+- [x] 讀取失敗的畫面都有錯誤與重試
+- [x] 建議頁湊不成一套時說出缺哪一類與原因
+- [x] 英文單複數、跨年週標題正確；建議卡片不閃
 - [ ] 匯入用預備語句；啟動清除孤兒照片；回到前景清除過期暫存區
 - [ ] 照片範圍重開 App 不重量
 - [ ] 設定頁可填自己的授權碼
