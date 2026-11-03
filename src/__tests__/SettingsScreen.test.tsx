@@ -12,7 +12,7 @@ jest.mock('@/lib/cwaKey', () => ({
   builtInCwaKey: () => mockBuiltInKey,
   effectiveCwaKey: (k: string) => mockBuiltInKey || k.trim(),
 }));
-jest.mock('@/lib/photoStorage', () => ({ clearCutoutCache: jest.fn(), savePhoto: jest.fn(), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
+jest.mock('@/lib/photoStorage', () => ({ clearCutoutCache: jest.fn(), clearBackupTemp: jest.fn(), savePhoto: jest.fn(), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
 
 const trashed: Item = {
   id: 't', name: '舊T', brand: '', category: 'top', price: null, occasions: [], seasons: [],
@@ -105,5 +105,12 @@ describe('SettingsScreen', () => {
     expect(await screen.findByText('1 件')).toBeTruthy();
     fireEvent.press(screen.getByRole('button', { name: '暫存區（刪除的單品）' }));
     expect(mockPush).toHaveBeenCalledWith('/trash');
+  });
+
+  it('opens the backup page', async () => {
+    await render(<SettingsScreen />);
+    expect(screen.getByText('匯出／匯入')).toBeTruthy();
+    fireEvent.press(screen.getByRole('button', { name: '備份與還原' }));
+    expect(mockPush).toHaveBeenCalledWith('/backup');
   });
 });

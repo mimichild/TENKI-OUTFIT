@@ -1,0 +1,15 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'tw.kyoangel.tenkifileexport'
+version = '1.0.0'
+
+android {
+  namespace "tw.kyoangel.tenkifileexport"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+}

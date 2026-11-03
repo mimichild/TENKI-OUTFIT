@@ -1,6 +1,6 @@
 # TENKI OUTFIT 天氣穿搭 — v1 開發計畫
 
-> 建立：2026-11-02　狀態：**第 7 階段進行中（批次 A）**
+> 建立：2026-11-02　狀態：**第 7 階段進行中（批次 B 待實機檢測）**
 > 基礎設施沿用 `/Users/mimi/Documents/REUSABLE_INFRA.md`
 
 ## 技術選型（沿用基礎文件）
@@ -492,3 +492,28 @@
 - 和計畫不同的地方：
   - 只做 SQLite 版，沒做記憶體版（Web 預覽不支援備份，批次 C 顯示「僅手機版支援」）
   - 合併時照片、設定、檔案處理放到批次 B 的 service（這批只有資料）
+
+#### 批次 B｜zip 與畫面 — 完成（2026-11-03，待實機檢測）
+- 新增套件（`npx expo install`）：`react-native-zip-archive` 9.5.3（原生 zip，只解出指定檔案；內建擋 `../` 路徑）、`expo-sharing`、`expo-document-picker`、`expo-build-properties`（zip 套件要求 iOS 15.5 → `ios.deploymentTarget` 15.5）
+- 新增本機模組 `modules/tenki-file-export`（只有 Android）：`copyToContentUriAsync` 把 zip 串流複製到「選資料夾」取得的 content:// 檔案（expo-file-system 的 copy 不支援 SAF，`File.write` 要把整個檔案讀進 JS）
+- `src/lib/backupService.ts`（依賴注入，可測）：
+  - `exportBackup`：dump → `manifest.json` ＋ 用到的照片複製到工作資料夾 → zip 到 `cache/backup-export/tenki-outfit-backup-YYYYMMDD-HHmm.zip`（台灣時間）→ 刪工作資料夾；手機上找不到的照片檔略過
+  - `prepareImport`：列出 zip 內容、只解出 `manifest.json`、檢查 → 摘要
+  - `applyImport`：（合併時先 `filterNewRows`）→ 只解出要用的照片 → 複製成新檔名 → 一個交易寫入 → 刪除沒有單品用到的照片 → 覆蓋時套用設定 → 通知畫面重新讀取（單品、天氣）。任何一步失敗刪掉這次複製的照片，DB 與原本照片不動
+- `src/lib/backupPlatform.ts`（+ `.web.ts` 一律不支援）：檔案／zip 實作、分享（`application/zip`）、存到資料夾（Android，`Directory.pickDirectoryAsync` + 原生串流複製；取消回傳 false）、選檔（`*/*`，由檢查擋下非備份檔）
+- `src/lib/backupDeps.ts`、`src/db/BackupStoreContext.tsx`（手機版 `DatabaseProvider` 掛上；Web 為 null）
+- `useWeatherVersion`：匯入後天氣畫面重新讀取本機快取
+- `photoStorage`：`listPhotoPaths`、`clearBackupTemp`（App 啟動時清 `cache/backup-work`、`cache/backup-export`）
+- 畫面：設定頁「資料」區的「匯出資料／匯入資料（即將推出）」改為一列「備份與還原 → 匯出／匯入」，打開 `app/backup.tsx`（`BackupPanel`）
+  - 匯出：說明、「分享備份檔」「存到資料夾」（只有 Android）、進度、「已存成 檔名」、失敗提示
+  - 匯入：「選擇備份檔」→ 讀取中 → 摘要（備份時間、單品／暫存區／穿搭數）→ 選「覆蓋」或「保留原本資料」（radio，各有說明）→「匯入」→「再按一次確認覆蓋／匯入」（換方式要重新確認）→ 進度 → 結果；不是備份檔／版本太新／損壞／讀不到各有提示；「取消」
+  - 進行中按鈕停用並防連點
+- 三語字串新增 31 組（`settings.backup*`、`backup.*`），移除 `settings.export`／`settings.import`／`settings.comingSoon`
+- 版本號 1.0.0（`app.json` `version`、`android.versionCode` 2）；`expo prebuild --platform android`（不 clean）更新 `versionName`／`versionCode`，簽章維持 debug
+- 測試：`backupService.test.ts` 11 項（假檔案系統＋真 SQLite：匯出內容、缺照片、摘要、非備份、版本太新、覆蓋、合併、DB 失敗回復、照片複製失敗回復、備份缺照片）、`BackupPanel.test.tsx` 14 項、設定頁打開備份頁 1 項；其他測試的 `photoStorage` mock 補上 `clearBackupTemp`；視覺測試的設定項目改為「備份與還原」
+- 驗證：Jest 374 項通過（新增 26 項）、tsc、lint；`bash scripts/regression.sh` 4/4 全過（視覺 72 項，設定頁兩個項目合成一個）
+- APK：`SPARK-Builds/TENKI-OUTFIT/tenki-outfit-v1.0.0-20261103-1127.apk`（約 126 MB），已上傳 Google Drive；已確認 dex 含 `TenkiFileExport`、`RNZipArchive`、zip4j、`ExpoSharing`、`ExpoDocumentPicker`，bundle 含備份程式碼與內建授權碼；**待使用者實機檢測**
+- 和計畫不同的地方：
+  - 設定頁合成一列「備份與還原」，匯出與匯入在同一頁
+  - 「存到資料夾」只有 Android（iOS 的分享選單本來就有「儲存到檔案」）
+  - 進度只顯示轉圈與文字，沒有百分比

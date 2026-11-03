@@ -74,8 +74,7 @@ export default function SettingsScreen() {
           value={trash ? t('settings.trashCount', { count: trash.length }) : ''}
           onPress={() => router.push('/trash')}
         />
-        <Row theme={theme} label={t('settings.export')} value={t('settings.comingSoon')} disabled />
-        <Row theme={theme} label={t('settings.import')} value={t('settings.comingSoon')} disabled />
+        <Row theme={theme} label={t('settings.backup')} value={t('settings.backupValue')} onPress={() => router.push('/backup')} />
       </Section>
 
       <OptionPicker<Language>

@@ -10,3 +10,9 @@ export function resolvePhotoUri(stored: string | null): string | null {
 export function deletePhotos(_stored: (string | null | undefined)[]): void {}
 
 export function clearCutoutCache(): void {}
+
+export function listPhotoPaths(): string[] {
+  return [];
+}
+
+export function clearBackupTemp(): void {}

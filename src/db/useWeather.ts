@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
+import { create } from 'zustand';
 import { effectiveCwaKey } from '@/lib/cwaKey';
 import { taipeiDate } from '@/lib/cwaWeather';
 import { refreshWeather, type RefreshResult } from '@/lib/weatherService';
@@ -32,10 +33,17 @@ function msUntilTaipeiMidnight(iso: string): number {
   return 86_400_000 - (local % 86_400_000);
 }
 
+/** 匯入備份後 +1，讓天氣畫面重新讀取本機快取 */
+export const useWeatherVersion = create<{ version: number; bump: () => void }>(set => ({
+  version: 0,
+  bump: () => set(s => ({ version: s.version + 1 })),
+}));
+
 export function useWeather(): WeatherState {
   const { repository, fetcher, now } = useWeatherDeps();
   const county = useSettingsStore(s => s.county);
   const apiKey = effectiveCwaKey(useSettingsStore(s => s.cwaApiKey));
+  const weatherVersion = useWeatherVersion(s => s.version);
   const [days, setDays] = useState<WeatherDay[]>();
   const [today, setToday] = useState(() => taipeiDate(now()));
   const [loading, setLoading] = useState(false);
@@ -77,7 +85,9 @@ export function useWeather(): WeatherState {
         }
       }
     },
-    [repository, fetcher, now, county, apiKey],
+    // weatherVersion：匯入備份後重新讀取
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [repository, fetcher, now, county, apiKey, weatherVersion],
   );
 
   useEffect(() => {

@@ -4,7 +4,7 @@ import { ItemRepositoryProvider, useItemsVersion } from '@/db/ItemRepositoryCont
 import { createMemoryDatabase } from '@/db/memoryItemRepository';
 import { EMPTY_ITEM_INPUT } from '@/components/ItemForm';
 
-jest.mock('@/lib/photoStorage', () => ({ deletePhotos: jest.fn(), clearCutoutCache: jest.fn() }));
+jest.mock('@/lib/photoStorage', () => ({ deletePhotos: jest.fn(), clearCutoutCache: jest.fn(), clearBackupTemp: jest.fn() }));
 
 it('refreshes screens after the startup purge even when it only archived items', async () => {
   // 開 App 時（台灣 12/5）：一件 31 天前進暫存區、但過去穿搭還用到的單品 → 只會被封存

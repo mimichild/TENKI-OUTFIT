@@ -54,7 +54,7 @@ npx agent-browser wait --load networkidle > /dev/null 2>&1
 npx agent-browser wait 3000 > /dev/null 2>&1
 SETTINGS_TEXT=$(npx agent-browser get text body 2>/dev/null)
 echo "$SETTINGS_TEXT" > "$OUT_DIR/settings.txt"
-for label in 語言 幣別 主題色 地區 氣象署授權碼 暫存區 匯出資料 匯入資料; do
+for label in 語言 幣別 主題色 地區 氣象署授權碼 暫存區 備份與還原; do
   expect_text "設定項目「${label}」存在" "$label" "$SETTINGS_TEXT"
 done
 npx agent-browser screenshot "$OUT_DIR/settings.png" > /dev/null 2>&1

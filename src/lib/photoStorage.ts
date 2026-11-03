@@ -50,6 +50,27 @@ export function deletePhotos(stored: (string | null | undefined)[]): void {
   }
 }
 
+/** 照片資料夾裡的全部檔案（相對路徑 `photos/<檔名>`），匯入後清除沒用到的照片用 */
+export function listPhotoPaths(): string[] {
+  return photoDir()
+    .list()
+    .filter((f): f is File => f instanceof File)
+    .map(f => `${PHOTO_DIR}/${f.name}`)
+    .filter(isOwnedPhotoPath);
+}
+
+/** 備份匯出／匯入留在暫存資料夾的檔案；App 啟動時呼叫 */
+export function clearBackupTemp(): void {
+  for (const name of ['backup-work', 'backup-export']) {
+    try {
+      const dir = new Directory(Paths.cache, name);
+      if (dir.exists) dir.delete();
+    } catch (e) {
+      console.warn('清除備份暫存檔失敗', name, e);
+    }
+  }
+}
+
 /**
  * 清掉去背／編輯器留在暫存資料夾的檔案（取消、被新照片取代、已複製進 photos/ 的都不再需要）。
  * App 啟動時呼叫，此時不會有進行中的去背。
