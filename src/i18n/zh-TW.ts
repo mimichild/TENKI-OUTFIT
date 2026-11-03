@@ -2,7 +2,7 @@ export const zhTW = {
   'app.name': 'TENKI OUTFIT 天氣穿搭',
   'tab.settings': '設定',
   'tab.closet': '服裝',
-  'tab.weather': '每日氣象',
+  'tab.weather': '天氣穿搭',
   'tab.suggest': '穿搭建議',
 
   'settings.language': '語言',
@@ -90,7 +90,6 @@ export const zhTW = {
   'weather.error.badResponse': '氣象署資料無法解讀，請稍後再試',
   'weather.error.storage': '無法讀取本機天氣資料',
   'weather.tempsLabel': '最高 {max}，最低 {min}',
-  'weather.updatedAt': '更新於 {time}',
   'weather.source': '資料來源：中央氣象署',
   'wx.clear': '晴',
   'wx.partlyCloudy': '晴時多雲',

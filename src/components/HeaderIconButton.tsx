@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { useTheme } from '@/theme/useTheme';
+import { TAB_BAR_TEXT } from '@/theme/tabScreenOptions';
 
 interface Props {
   icon: ComponentProps<typeof Ionicons>['name'];
@@ -12,11 +12,10 @@ interface Props {
 }
 
 export function HeaderIconButton({ icon, label, onPress, active }: Props) {
-  const theme = useTheme();
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} hitSlop={10} style={styles.button}>
-      <Ionicons name={icon} size={22} color={theme.text} />
-      {active && <View style={[styles.dot, { backgroundColor: theme.primary }]} />}
+      <Ionicons name={icon} size={22} color={TAB_BAR_TEXT} />
+      {active && <View style={[styles.dot, { backgroundColor: TAB_BAR_TEXT }]} />}
     </Pressable>
   );
 }

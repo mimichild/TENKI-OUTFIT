@@ -1,19 +1,20 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useT } from '@/i18n';
+import { TAB_BAR_TEXT } from '@/theme/tabScreenOptions';
 import { useTheme } from '@/theme/useTheme';
 
 export type ViewMode = 'day' | 'week' | 'month';
 const MODES: ViewMode[] = ['day', 'week', 'month'];
 
-/** 每日氣象頁右上：月曆圖示＋日／週／月 */
+/** 天氣穿搭頁標題列右側：月曆圖示＋日／週／月（底色是主題色，所以用白色系） */
 export function ViewModeSwitch({ mode, onChange }: { mode: ViewMode; onChange: (mode: ViewMode) => void }) {
   const t = useT();
   const theme = useTheme();
   return (
     <View style={styles.row}>
-      <Ionicons name="calendar-outline" size={18} color={theme.textMuted} accessible={false} importantForAccessibility="no" />
-      <View style={[styles.group, { borderColor: theme.border }]} accessibilityRole="tablist" accessibilityLabel={t('view.label')}>
+      <Ionicons name="calendar-outline" size={18} color={TAB_BAR_TEXT} accessible={false} importantForAccessibility="no" />
+      <View style={[styles.group, { borderColor: `${TAB_BAR_TEXT}99` }]} accessibilityRole="tablist" accessibilityLabel={t('view.label')}>
         {MODES.map(m => {
           const selected = m === mode;
           return (
@@ -23,9 +24,9 @@ export function ViewModeSwitch({ mode, onChange }: { mode: ViewMode; onChange: (
               accessibilityLabel={t(`view.${m}`)}
               accessibilityState={{ selected }}
               onPress={() => onChange(m)}
-              style={[styles.option, selected && { backgroundColor: theme.primary }]}
+              style={[styles.option, selected && { backgroundColor: TAB_BAR_TEXT }]}
             >
-              <Text style={{ color: selected ? theme.onPrimary : theme.text, fontSize: 14 }}>{t(`view.${m}`)}</Text>
+              <Text style={{ color: selected ? theme.primaryText : TAB_BAR_TEXT, fontSize: 14 }}>{t(`view.${m}`)}</Text>
             </Pressable>
           );
         })}
@@ -35,7 +36,7 @@ export function ViewModeSwitch({ mode, onChange }: { mode: ViewMode; onChange: (
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 12 },
   group: { flexDirection: 'row', borderWidth: 1, borderRadius: 16, overflow: 'hidden' },
   option: { paddingHorizontal: 14, paddingVertical: 5 },
 });

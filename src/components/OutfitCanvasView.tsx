@@ -23,7 +23,7 @@ export function PieceImage({ item }: { item: Item }) {
   );
 }
 
-/** 唯讀的穿搭畫布（每日氣象頁、清單縮圖） */
+/** 唯讀的穿搭畫布（天氣穿搭頁、清單縮圖） */
 export function OutfitCanvasView({ pieces, width }: { pieces: OutfitPiece[]; width: number }) {
   return (
     <View style={[styles.canvas, { width, height: width * CANVAS_HEIGHT_RATIO }]} pointerEvents="none">

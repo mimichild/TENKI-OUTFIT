@@ -73,7 +73,7 @@ export default function ClosetScreen() {
         }
         style={[styles.fab, { backgroundColor: theme.primary }]}
       >
-        <Ionicons name="add" size={30} color={theme.onPrimary} />
+        <Ionicons name="add" size={30} color="#FFFFFF" />
       </Pressable>
 
       <ItemFilterSheet visible={sheetOpen} query={query} onChange={setQuery} onClose={() => setSheetOpen(false)} />

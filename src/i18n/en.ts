@@ -4,7 +4,7 @@ export const en: Record<keyof typeof zhTW, string> = {
   'app.name': 'TENKI OUTFIT',
   'tab.settings': 'Settings',
   'tab.closet': 'Closet',
-  'tab.weather': 'Weather',
+  'tab.weather': 'Outfit',
   'tab.suggest': 'Suggest',
 
   'settings.language': 'Language',
@@ -92,7 +92,6 @@ export const en: Record<keyof typeof zhTW, string> = {
   'weather.error.badResponse': 'Couldn’t read the weather data. Try again later',
   'weather.error.storage': 'Couldn’t read the saved weather data',
   'weather.tempsLabel': 'High {max}, low {min}',
-  'weather.updatedAt': 'Updated {time}',
   'weather.source': 'Source: Central Weather Administration',
   'wx.clear': 'Clear',
   'wx.partlyCloudy': 'Partly cloudy',

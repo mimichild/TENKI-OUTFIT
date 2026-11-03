@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { useState, type ReactNode } from 'react';
 import { AppState, RefreshControl, type AppStateStatus } from 'react-native';
 import WeatherScreen from '../../app/(tabs)/index';
 import { WeatherProvider } from '@/db/WeatherContext';
@@ -13,7 +14,19 @@ import type { WeatherRepository } from '@/db/weatherRepository';
 import { withFailures } from './helpers/failingRepo';
 
 const mockPush = jest.fn();
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
+// 標題列：WeatherScreen 用 navigation.setOptions 放 headerRight，測試裡用 WithHeader 把它畫出來
+type HeaderOptions = { headerRight?: () => ReactNode };
+let mockApplyOptions: (o: HeaderOptions) => void = () => {};
+const mockSetOptions = jest.fn((o: HeaderOptions) => mockApplyOptions(o));
+jest.mock('expo-router', () => {
+  const navigation = { setOptions: (o: HeaderOptions) => mockSetOptions(o) };
+  return { useRouter: () => ({ push: mockPush }), useNavigation: () => navigation };
+});
+function WithHeader({ children }: { children: ReactNode }) {
+  const [options, setOptions] = useState<HeaderOptions>({});
+  mockApplyOptions = o => setOptions(prev => ({ ...prev, ...o }));
+  return <>{options.headerRight?.()}{children}</>;
+}
 let mockBuiltInKey = '';
 jest.mock('@/lib/cwaKey', () => ({
   builtInCwaKey: () => mockBuiltInKey,
@@ -55,7 +68,9 @@ async function setup({ apiKey = 'KEY', result, seed = [], fetcher: customFetcher
   render(
     <OutfitRepositoryProvider repository={db.outfits}>
       <WeatherProvider repository={repo} fetcher={fetcher} now={() => currentNow}>
-        <WeatherScreen />
+        <WithHeader>
+          <WeatherScreen />
+        </WithHeader>
       </WeatherProvider>
     </OutfitRepositoryProvider>,
   );
@@ -65,6 +80,7 @@ async function setup({ apiKey = 'KEY', result, seed = [], fetcher: customFetcher
 
 beforeEach(() => {
   mockPush.mockClear();
+  mockSetOptions.mockClear();
   mockBuiltInKey = '';
   currentNow = NOW;
 });
@@ -111,6 +127,23 @@ describe('WeatherScreen', () => {
     expect(screen.getByText('19°')).toBeTruthy();
     expect(screen.getByText('體感 17°–26°')).toBeTruthy();
     expect(screen.getByText('降雨機率 70%')).toBeTruthy();
+  });
+
+  it('日／週／月切換放在標題列右側，不在頁面內容裡', async () => {
+    await setup({ result: { status: 'ok', days: [forecast('2026-11-03', 25)] } });
+    const headerRight = mockSetOptions.mock.calls.at(-1)?.[0].headerRight;
+    expect(headerRight).toBeDefined();
+    const header = render(<>{headerRight!()}</>);
+    expect(header.getByRole('tab', { name: '日' })).toBeSelected();
+    expect(header.getByRole('tab', { name: '週' })).toBeTruthy();
+    expect(header.getByRole('tab', { name: '月' })).toBeTruthy();
+    header.unmount();
+  });
+
+  it('不顯示更新時間與資料來源', async () => {
+    await setup({ result: { status: 'ok', days: [forecast('2026-11-03', 25)] } });
+    expect(screen.queryByText(/更新於/)).toBeNull();
+    expect(screen.queryByText('資料來源：中央氣象署')).toBeNull();
   });
 
   it('moves between cached dates and stops at both ends', async () => {
@@ -325,7 +358,9 @@ describe('WeatherScreen outfit load error', () => {
     render(
       <OutfitRepositoryProvider repository={repo}>
         <WeatherProvider repository={createMemoryWeatherRepository([])} fetcher={jest.fn().mockResolvedValue({ status: 'ok', days: [] })} now={() => currentNow}>
-          <WeatherScreen />
+          <WithHeader>
+            <WeatherScreen />
+          </WithHeader>
         </WeatherProvider>
       </OutfitRepositoryProvider>,
     );

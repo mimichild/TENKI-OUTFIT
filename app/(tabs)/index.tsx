@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigation, useRouter } from 'expo-router';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, PanResponder, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { LoadError } from '@/components/LoadError';
 import { MonthGrid } from '@/components/MonthGrid';
@@ -35,19 +35,12 @@ const maxDate = (a: string, b: string) => (a > b ? a : b);
 const num = (n: number | null) => (n === null ? '—' : String(Math.round(n)));
 const deg = (n: number | null) => `${num(n)}°`;
 
-/** fetchedAt（ISO）→ 台灣時間 M/D HH:mm */
-function taipeiStamp(iso: string): string {
-  const d = new Date(new Date(iso).getTime() + 8 * 3_600_000);
-  const hh = String(d.getUTCHours()).padStart(2, '0');
-  const mm = String(d.getUTCMinutes()).padStart(2, '0');
-  return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${hh}:${mm}`;
-}
-
 export default function WeatherScreen() {
   const t = useT();
   const language = useSettingsStore(s => s.language);
   const theme = useTheme();
   const router = useRouter();
+  const navigation = useNavigation();
   const window = useWindowDimensions();
   const weather = useWeather();
   const { today, days } = weather;
@@ -114,6 +107,11 @@ export default function WeatherScreen() {
     if (next === 'month') setMonth(monthOf(selected));
     setMode(next);
   };
+  // 日／週／月放在標題列右側；changeMode 會用到 selected，所以 selected 變了也要更新
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerRight: () => <ViewModeSwitch mode={mode} onChange={changeMode} /> });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigation, mode, selected]);
   const openDay = (date: string) => {
     setSelected(date);
     setMode('day');
@@ -121,13 +119,14 @@ export default function WeatherScreen() {
   const openOutfit = (id: string) => router.push({ pathname: '/outfit/edit', params: { id } });
   const cardWidth = Math.min(window.width - 32, 360);
 
-  const dayOutfits = (date: string) => {
+  /** fill：日檢視時，沒有穿搭的空白框撐滿剩下的高度（到分頁列） */
+  const dayOutfits = (date: string, fill = false) => {
     if (outfitsFailed) return <LoadError onRetry={retryOutfits} />;
     if (outfits === undefined) return <ActivityIndicator color={theme.primaryText} />;
     const list = outfitsOn(date);
     if (list.length === 0) {
       return (
-        <View style={[styles.canvas, { borderColor: theme.border }]}>
+        <View style={[styles.canvas, fill && styles.canvasFill, { borderColor: theme.border }]}>
           <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.noOutfit')}</Text>
         </View>
       );
@@ -140,7 +139,7 @@ export default function WeatherScreen() {
   };
 
   const weatherCard = (
-    <View {...pan.panHandlers} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+    <View {...pan.panHandlers} style={[styles.card, styles.weatherCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
       <View style={styles.cardHeader}>
         <NavButton icon="chevron-back" label={t('weather.prevDay')} disabled={!canPrev} onPress={() => move(-1)} theme={theme} />
         {/* 切換日期時讓螢幕閱讀器念出新日期（Android） */}
@@ -241,13 +240,11 @@ export default function WeatherScreen() {
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <ScrollView
         style={{ backgroundColor: theme.background }}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, mode === 'day' && styles.contentDay]}
         refreshControl={
           <RefreshControl refreshing={weather.refreshing} onRefresh={weather.refresh} tintColor={theme.primaryText} colors={[theme.primaryText]} />
         }
       >
-        <ViewModeSwitch mode={mode} onChange={changeMode} />
-
         {weather.hasKey && weather.error && (
           <View style={[styles.banner, { backgroundColor: theme.primarySoft }]} accessibilityRole="alert">
             <Ionicons name="alert-circle-outline" size={18} color={theme.text} />
@@ -258,13 +255,11 @@ export default function WeatherScreen() {
         {mode === 'day' && (
           <>
             {weatherCard}
-            {dayOutfits(selected)}
+            {dayOutfits(selected, true)}
           </>
         )}
         {mode === 'week' && weekView}
         {mode === 'month' && monthView}
-
-        <Text style={[styles.source, { color: theme.textMuted }]}>{t('weather.source')}</Text>
       </ScrollView>
       {/* 穿搭不需要天氣資料：沒有授權碼時也能新增 */}
       <Pressable
@@ -273,7 +268,7 @@ export default function WeatherScreen() {
         onPress={() => router.push({ pathname: '/outfit/edit', params: { date: selected } })}
         style={[styles.fab, { backgroundColor: theme.primary }]}
       >
-        <Ionicons name="add" size={30} color={theme.onPrimary} />
+        <Ionicons name="add" size={30} color="#FFFFFF" />
       </Pressable>
     </View>
   );
@@ -306,7 +301,7 @@ function DayDetails({ day, theme, language, t }: {
   return (
     <View style={styles.details}>
       <View style={styles.mainRow}>
-        <Ionicons name={WX_ICONS[category]} size={64} color={theme.primaryText} accessible={false} importantForAccessibility="no" />
+        <Ionicons name={WX_ICONS[category]} size={40} color={theme.primaryText} accessible={false} importantForAccessibility="no" />
         <View
           style={styles.temps}
           accessible
@@ -316,8 +311,8 @@ function DayDetails({ day, theme, language, t }: {
           <Text style={[styles.slash, { color: theme.textMuted }]}>/</Text>
           <Text style={[styles.minT, { color: theme.textMuted }]}>{deg(day.minT)}</Text>
         </View>
+        <Text style={[styles.wx, { color: theme.text }]}>{wxLabel}</Text>
       </View>
-      <Text style={[styles.wx, { color: theme.text }]}>{wxLabel}</Text>
       <View style={styles.metaRow}>
         <View style={styles.meta}>
           <Ionicons name="body-outline" size={16} color={theme.textMuted} accessible={false} importantForAccessibility="no" />
@@ -332,7 +327,6 @@ function DayDetails({ day, theme, language, t }: {
           </Text>
         </View>
       </View>
-      <Text style={[styles.updated, { color: theme.textMuted }]}>{t('weather.updatedAt', { time: taipeiStamp(day.fetchedAt) })}</Text>
     </View>
   );
 }
@@ -340,6 +334,8 @@ function DayDetails({ day, theme, language, t }: {
 const styles = StyleSheet.create({
   // 底部留空間給右下 ＋
   content: { padding: 16, paddingBottom: 96, gap: 16, flexGrow: 1 },
+  // 日檢視：穿搭框要延伸到分頁列，＋浮在框上
+  contentDay: { paddingBottom: 16, gap: 12 },
   fab: {
     position: 'absolute', right: 20, bottom: 20, width: 58, height: 58, borderRadius: 29,
     alignItems: 'center', justifyContent: 'center',
@@ -351,29 +347,30 @@ const styles = StyleSheet.create({
   banner: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12 },
   bannerText: { flex: 1, fontSize: 14 },
   card: { borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, padding: 16 },
+  weatherCard: { paddingVertical: 10 },
   cardHeader: { flexDirection: 'row', alignItems: 'center' },
   nav: { padding: 6 },
   dateBlock: { flex: 1, alignItems: 'center' },
-  date: { fontSize: 20, fontWeight: '700' },
+  date: { fontSize: 18, fontWeight: '700' },
   subRow: { flexDirection: 'row', gap: 8, marginTop: 2 },
   relative: { fontSize: 13, fontWeight: '600' },
   county: { fontSize: 13 },
   placeholder: { alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 170 },
-  details: { alignItems: 'center', paddingTop: 12, gap: 8 },
-  mainRow: { flexDirection: 'row', alignItems: 'center', gap: 20 },
-  temps: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  maxT: { fontSize: 48, fontWeight: '300' },
-  slash: { fontSize: 28 },
-  minT: { fontSize: 28 },
-  wx: { fontSize: 17, fontWeight: '600' },
+  details: { alignItems: 'center', paddingTop: 6, gap: 6 },
+  mainRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  temps: { flexDirection: 'row', alignItems: 'baseline', gap: 2 },
+  maxT: { fontSize: 32, fontWeight: '300' },
+  slash: { fontSize: 20 },
+  minT: { fontSize: 20 },
+  wx: { fontSize: 16, fontWeight: '600' },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 18, rowGap: 6 },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   metaText: { fontSize: 14 },
-  updated: { fontSize: 12, marginTop: 4 },
   canvas: {
     minHeight: 200, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth,
     backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', padding: 24,
   },
+  canvasFill: { flex: 1 },
   outfitList: { alignItems: 'center', gap: 16 },
   sectionTitle: { fontSize: 16, fontWeight: '600' },
   weekTitle: { flex: 1, textAlign: 'center', fontSize: 15, fontWeight: '600' },
@@ -384,5 +381,4 @@ const styles = StyleSheet.create({
   weekTemp: { fontSize: 12 },
   weekOutfits: { gap: 6, alignItems: 'center', minHeight: 40 },
   weekEmpty: { fontSize: 14, paddingHorizontal: 4 },
-  source: { fontSize: 11, textAlign: 'center' },
 });

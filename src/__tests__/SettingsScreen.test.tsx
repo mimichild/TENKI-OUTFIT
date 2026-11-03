@@ -52,6 +52,11 @@ describe('SettingsScreen', () => {
     expect(useSettingsStore.getState().themeColor).toBe('matcha');
   });
 
+  it('天氣區塊標示資料來源：中央氣象署', async () => {
+    await render(<SettingsScreen />);
+    expect(screen.getByText('資料來源：中央氣象署')).toBeTruthy();
+  });
+
   it('changes region and resets the town', async () => {
     await render(<SettingsScreen />);
     fireEvent.press(screen.getByRole('button', { name: '地區' }));

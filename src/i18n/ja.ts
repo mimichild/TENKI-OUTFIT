@@ -4,7 +4,7 @@ export const ja: Record<keyof typeof zhTW, string> = {
   'app.name': 'TENKI OUTFIT 天気コーデ',
   'tab.settings': '設定',
   'tab.closet': 'クローゼット',
-  'tab.weather': '毎日の天気',
+  'tab.weather': '天気コーデ',
   'tab.suggest': 'コーデ提案',
 
   'settings.language': '言語',
@@ -92,7 +92,6 @@ export const ja: Record<keyof typeof zhTW, string> = {
   'weather.error.badResponse': '天気データを読み取れません。しばらくしてから再試行してください',
   'weather.error.storage': '保存した天気データを読み込めません',
   'weather.tempsLabel': '最高 {max}、最低 {min}',
-  'weather.updatedAt': '更新 {time}',
   'weather.source': 'データ提供：中央気象署',
   'wx.clear': '晴れ',
   'wx.partlyCloudy': '晴れ時々曇り',

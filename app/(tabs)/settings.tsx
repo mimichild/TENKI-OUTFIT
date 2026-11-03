@@ -63,6 +63,8 @@ export default function SettingsScreen() {
           <ApiKeyField theme={theme} />
           <Text style={[styles.hint, { color: theme.textMuted }]}>{t('settings.cwaApiKeyHint')}</Text>
           {hasBuiltInKey && <Text style={[styles.hint, { color: theme.textMuted }]}>{t('settings.cwaApiKeyBuiltIn')}</Text>}
+          {/* 政府資料開放授權條款要求標示來源 */}
+          <Text style={[styles.hint, { color: theme.textMuted }]}>{t('weather.source')}</Text>
         </View>
       </Section>
 

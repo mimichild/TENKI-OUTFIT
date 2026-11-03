@@ -117,7 +117,7 @@ export default function SuggestScreen() {
               onPress={() => setDay(d)}
               style={[styles.segmentOption, selected && { backgroundColor: theme.primary }]}
             >
-              <Text style={{ color: selected ? theme.onPrimary : theme.text, fontSize: 15, fontWeight: '500' }}>{t(`suggest.tab.${d}`)}</Text>
+              <Text style={{ color: selected ? '#FFFFFF' : theme.text, fontSize: 15, fontWeight: '500' }}>{t(`suggest.tab.${d}`)}</Text>
             </Pressable>
           );
         })}
