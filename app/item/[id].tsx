@@ -1,8 +1,8 @@
-import { Image } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { FittedPhoto } from '@/components/FittedPhoto';
 import { ItemForm } from '@/components/ItemForm';
 import { LoadError } from '@/components/LoadError';
 import { ScreenPlaceholder } from '@/components/ScreenPlaceholder';
@@ -13,7 +13,7 @@ import { formatPrice } from '@/lib/currency';
 import { moveItemToTrash, saveItem } from '@/lib/itemService';
 import { pickPhoto } from '@/lib/pickPhoto';
 import { removeBackground } from '@/lib/backgroundRemoval';
-import { resolvePhotoUri } from '@/lib/photoStorage';
+import { ITEM_PHOTO_ASPECT } from '@/lib/photoFit';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme } from '@/theme/useTheme';
 
@@ -93,7 +93,7 @@ export default function ItemScreen() {
       <ScrollView style={{ backgroundColor: theme.background }} contentContainerStyle={styles.content}>
         <View style={[styles.photoBox, { borderColor: theme.border }]}>
           {item.imageUri ? (
-            <Image source={resolvePhotoUri(item.imageUri)} style={{ flex: 1 }} contentFit="contain" />
+            <FittedPhoto uri={item.imageUri} />
           ) : (
             <View style={styles.noPhoto}>
               <Ionicons name="image-outline" size={40} color={theme.textMuted} />
@@ -117,7 +117,7 @@ export default function ItemScreen() {
 
 const styles = StyleSheet.create({
   content: { padding: 16, gap: 16 },
-  photoBox: { aspectRatio: 1, borderRadius: 16, overflow: 'hidden', backgroundColor: '#FFFFFF', borderWidth: 1 },
+  photoBox: { aspectRatio: ITEM_PHOTO_ASPECT, borderRadius: 16, overflow: 'hidden', backgroundColor: '#FFFFFF', borderWidth: 1 },
   noPhoto: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
   title: { fontSize: 22, fontWeight: '700' },
   card: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },

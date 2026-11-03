@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -9,7 +8,9 @@ import { CURRENCIES } from '@/lib/currency';
 import type { BgRemovalResult } from '@/lib/backgroundRemoval';
 import type { PhotoChange } from '@/lib/itemService';
 import type { PhotoSource } from '@/lib/pickPhoto';
+import { ITEM_PHOTO_ASPECT } from '@/lib/photoFit';
 import { resolvePhotoUri } from '@/lib/photoStorage';
+import { FittedPhoto } from './FittedPhoto';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme, type Theme } from '@/theme/useTheme';
 import { Chip } from './Chip';
@@ -148,7 +149,7 @@ export function ItemForm({ initial, onPickPhoto, onRemoveBackground, onSubmit, o
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
         <View style={s.photoBox}>
           {previewUri ? (
-            <Image source={resolvePhotoUri(previewUri)} style={s.photo} contentFit="contain" />
+            <FittedPhoto uri={previewUri} />
           ) : (
             <View style={s.photoEmpty}>
               <Ionicons name="image-outline" size={40} color={theme.textMuted} />
@@ -266,8 +267,7 @@ const makeStyles = (theme: Theme) =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: theme.background },
     content: { padding: 16, gap: 18, paddingBottom: 32 },
-    photoBox: { aspectRatio: 1, borderRadius: 16, overflow: 'hidden', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: theme.border },
-    photo: { flex: 1 },
+    photoBox: { aspectRatio: ITEM_PHOTO_ASPECT, borderRadius: 16, overflow: 'hidden', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: theme.border },
     photoEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
     muted: { color: theme.textMuted, fontSize: 13 },
     cutoutRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: -8 },

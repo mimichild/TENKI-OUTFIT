@@ -1,11 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Image } from 'expo-image';
 import { useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CATEGORIES } from '@/constants/options';
 import { useT } from '@/i18n';
-import { resolvePhotoUri } from '@/lib/photoStorage';
+import { ITEM_PHOTO_ASPECT } from '@/lib/photoFit';
+import { FittedPhoto } from './FittedPhoto';
 import { useTheme } from '@/theme/useTheme';
 import type { Category, Item } from '@/types/models';
 import { Chip } from './Chip';
@@ -64,7 +64,7 @@ export function ItemPickerSheet({ visible, items, selectedIds, onToggle, onClose
               >
                 <View style={[styles.tile, { borderColor: selected ? theme.primary : theme.border, borderWidth: selected ? 2 : StyleSheet.hairlineWidth }]}>
                   {item.imageUri ? (
-                    <Image source={resolvePhotoUri(item.imageUri)} style={styles.image} contentFit="contain" recyclingKey={item.id} />
+                    <FittedPhoto uri={item.imageUri} recyclingKey={item.id} />
                   ) : (
                     <View style={styles.placeholder}>
                       <Ionicons name="shirt-outline" size={24} color={theme.textMuted} />
@@ -94,9 +94,8 @@ const styles = StyleSheet.create({
   tabsBar: { flexGrow: 0 },
   tabs: { gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
   list: { paddingHorizontal: 2 },
-  cell: { width: '33.3333%', aspectRatio: 1, padding: 2 },
+  cell: { width: '33.3333%', aspectRatio: ITEM_PHOTO_ASPECT, padding: 2 },
   tile: { flex: 1, backgroundColor: '#FFFFFF' },
-  image: { flex: 1 },
   placeholder: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, padding: 4 },
   name: { fontSize: 12, textAlign: 'center' },
   check: { position: 'absolute', top: 4, right: 4, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },

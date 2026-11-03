@@ -1,8 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Image } from 'expo-image';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useT } from '@/i18n';
-import { resolvePhotoUri } from '@/lib/photoStorage';
+import { ITEM_PHOTO_ASPECT } from '@/lib/photoFit';
+import { FittedPhoto } from './FittedPhoto';
 import { useTheme } from '@/theme/useTheme';
 import type { Item } from '@/types/models';
 
@@ -14,7 +14,7 @@ export function ItemTile({ item, onPress }: { item: Item; onPress: () => void })
     <Pressable testID="item-tile" accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={styles.cell}>
       <View style={[styles.inner, { borderColor: theme.border }]}>
         {item.imageUri ? (
-          <Image source={resolvePhotoUri(item.imageUri)} style={styles.image} contentFit="contain" recyclingKey={item.id} />
+          <FittedPhoto uri={item.imageUri} recyclingKey={item.id} />
         ) : (
           <View style={styles.placeholder}>
             <Ionicons name="shirt-outline" size={28} color={theme.textMuted} />
@@ -27,10 +27,9 @@ export function ItemTile({ item, onPress }: { item: Item; onPress: () => void })
 }
 
 const styles = StyleSheet.create({
-  cell: { width: '33.3333%', aspectRatio: 1, padding: 1 },
+  cell: { width: '33.3333%', aspectRatio: ITEM_PHOTO_ASPECT, padding: 1 },
   // 去背後的單品放在白底上最好看，深色模式也維持白底
   inner: { flex: 1, backgroundColor: '#FFFFFF', borderWidth: StyleSheet.hairlineWidth },
-  image: { flex: 1 },
   placeholder: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, padding: 6 },
   name: { fontSize: 12, textAlign: 'center' },
 });

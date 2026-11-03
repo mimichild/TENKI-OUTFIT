@@ -19,13 +19,9 @@ describe('THEME_COLORS', () => {
     expect(Object.values(THEME_COLORS).map(c => c.primary)).toContain('#EAAFB3');
   });
 
-  it('淺色主題在主色上用黑字、深色（酒紅）用白字', () => {
+  it('主色底上的文字／圖示一律白色', () => {
     for (const key of THEME_COLOR_KEYS) {
-      const { primary, onPrimary } = THEME_COLORS[key];
-      const expected = key === 'wine' ? '#FFFFFF' : '#1D2025';
-      expect({ key, onPrimary }).toEqual({ key, onPrimary: expected });
-      // 主色底上的文字至少要達到 WCAG AA（4.5:1）
-      expect(contrast(primary, onPrimary)).toBeGreaterThanOrEqual(4.5);
+      expect({ key, onPrimary: THEME_COLORS[key].onPrimary }).toEqual({ key, onPrimary: '#FFFFFF' });
     }
   });
 

@@ -1,3 +1,4 @@
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render as renderRaw, screen } from '@testing-library/react-native';
 import ClosetScreen from '../../app/(tabs)/closet';
 import { ItemRepositoryProvider } from '@/db/ItemRepositoryContext';
@@ -61,6 +62,12 @@ describe('ClosetScreen', () => {
   it('shows active items newest first and hides trashed ones', async () => {
     await setup();
     expect(tileNames()).toEqual(['毛衣', '牛仔褲', '白T']);
+  });
+
+  it('單品方塊是直式 3:4', async () => {
+    await setup();
+    const style = StyleSheet.flatten(screen.getAllByTestId('item-tile')[0].props.style);
+    expect(style.aspectRatio).toBe(3 / 4);
   });
 
   it('filters by category tab', async () => {
