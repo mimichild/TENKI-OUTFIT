@@ -15,7 +15,7 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockParams,
   Stack: { Screen: ({ options }: { options: typeof mockScreenOptions }) => { mockScreenOptions = options; return null; } },
 }));
-jest.mock('@/lib/photoStorage', () => ({ clearCutoutCache: jest.fn(), clearBackupTemp: jest.fn(), savePhoto: jest.fn((u: string) => u), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
+jest.mock('@/lib/photoStorage', () => ({ listPhotoFiles: () => [], clearCutoutCache: jest.fn(), clearBackupTemp: jest.fn(), savePhoto: jest.fn((u: string) => u), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
 jest.mock('@/lib/pickPhoto', () => ({ pickPhoto: jest.fn() }));
 
 

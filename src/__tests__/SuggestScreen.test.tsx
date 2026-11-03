@@ -11,6 +11,10 @@ import { withFailures } from './helpers/failingRepo';
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
+jest.mock('@/lib/photoStorage', () => ({
+  ...jest.requireActual('@/lib/photoStorage'),
+  clearCutoutCache: jest.fn(), clearBackupTemp: jest.fn(), deletePhotos: jest.fn(), listPhotoFiles: () => [],
+}));
 jest.mock('@/lib/cwaKey', () => ({ builtInCwaKey: () => '', effectiveCwaKey: () => '' }));
 // 記錄畫布掛載次數：卡片在換日期／場合時若中間閃一幀空白，畫布會被卸掉再掛上
 let mockCanvasMounts = 0;
@@ -199,10 +203,11 @@ describe('SuggestScreen', () => {
   });
 
   it('describes the latest temperatures when re-read weather stays in the same band', async () => {
-    let onChange: ((s: AppStateStatus) => void) | undefined;
+    // 天氣與單品的 Provider 都會監聽回到前景
+    const handlers: ((s: AppStateStatus) => void)[] = [];
     const original = AppState.addEventListener;
     AppState.addEventListener = ((_type: string, handler: (s: AppStateStatus) => void) => {
-      onChange = handler;
+      handlers.push(handler);
       return { remove: () => {} };
     }) as typeof AppState.addEventListener;
     try {
@@ -213,7 +218,7 @@ describe('SuggestScreen', () => {
         [{ date: '2026-11-03', maxT: 28, minT: 18, maxAT: 28, minAT: 18, pop: 70, wxCode: '01', wxText: '晴天', hasDaytime: true }],
         NOW,
       );
-      await act(async () => { onChange?.('active'); });
+      await act(async () => { handlers.forEach(h => h('active')); });
       expect(screen.getByText('體感 18°–28°')).toBeTruthy();
       expect(screen.getByText(/^今天體感 18–28°/)).toBeTruthy();
       expect(screen.getByText(/^白色短袖搭配牛仔褲/).props.children).toBe(first);

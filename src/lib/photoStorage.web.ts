@@ -1,4 +1,6 @@
 // Web 預覽沒有本機檔案系統：直接沿用選到的網址
+import type { PhotoFile } from './photoGc';
+
 export async function savePhoto(sourceUri: string): Promise<string> {
   return sourceUri;
 }
@@ -16,3 +18,7 @@ export async function adoptPhoto(sourceUri: string): Promise<string> {
 }
 
 export function clearBackupTemp(): void {}
+
+export function listPhotoFiles(): PhotoFile[] {
+  return [];
+}

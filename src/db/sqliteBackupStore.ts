@@ -44,10 +44,20 @@ const WEATHER_COLS = [
   'county', 'town', 'date', 'max_t', 'min_t', 'max_at', 'min_at', 'pop', 'wx_code', 'wx_text', 'fetched_at',
 ] as const satisfies readonly (keyof BackupWeatherRow)[];
 
-async function insertAll<T>(tx: Tx, table: string, cols: readonly (keyof T & string)[], list: T[]): Promise<void> {
+/** 匯入用的交易：另外需要預備語句 */
+type WriteTx = Tx & Pick<SQLiteDatabase, 'prepareAsync'>;
+
+/** 同一個預備語句重複執行（大量匯入時不必每筆重新解析 SQL）；失敗也一定 finalize */
+async function insertAll<T>(tx: WriteTx, table: string, cols: readonly (keyof T & string)[], list: T[]): Promise<void> {
+  if (list.length === 0) return;
   const sql = `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`;
-  for (const row of list) {
-    await tx.runAsync(sql, ...cols.map(c => row[c] as string | number | null));
+  const stmt = await tx.prepareAsync(sql);
+  try {
+    for (const row of list) {
+      await stmt.executeAsync(...cols.map(c => row[c] as string | number | null));
+    }
+  } finally {
+    await stmt.finalizeAsync();
   }
 }
 
@@ -75,7 +85,7 @@ async function keysOf(db: Pick<SQLiteDatabase, 'getAllAsync'>): Promise<Existing
   };
 }
 
-async function insertData(tx: Tx, data: BackupData): Promise<void> {
+async function insertData(tx: WriteTx, data: BackupData): Promise<void> {
   // 順序：單品、穿搭先寫，位置參照兩者（外鍵）
   await insertAll(tx, 'items', ITEM_COLS, data.items);
   await insertAll(tx, 'outfits', OUTFIT_COLS, data.outfits);

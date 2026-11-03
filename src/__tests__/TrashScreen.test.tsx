@@ -9,7 +9,7 @@ import type { Item } from '@/types/models';
 import { withFailures } from './helpers/failingRepo';
 
 jest.mock('expo-router', () => ({ Stack: { Screen: () => null } }));
-jest.mock('@/lib/photoStorage', () => ({ clearCutoutCache: jest.fn(), clearBackupTemp: jest.fn(), savePhoto: jest.fn(), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
+jest.mock('@/lib/photoStorage', () => ({ listPhotoFiles: () => [], clearCutoutCache: jest.fn(), clearBackupTemp: jest.fn(), savePhoto: jest.fn(), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
 
 const base: Omit<Item, 'id' | 'name' | 'deletedAt'> = {
   brand: '', category: 'top', price: null, occasions: [], seasons: [], imageUri: null, originalUri: null,

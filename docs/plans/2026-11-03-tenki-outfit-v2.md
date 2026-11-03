@@ -7,7 +7,7 @@
 **Architecture:** 不改資料庫結構（沒有遷移）、不改備份格式。錯誤狀態集中在共用的查詢 hook；照片範圍改存在 App 資料夾的 JSON 快取檔；清理工作都在 App 啟動（以及回到前景）時跑。
 **Tech Stack:** Expo SDK 54、RN 0.81、Expo Router、TypeScript strict、Zustand、expo-sqlite、expo-file-system、Jest + RNTL、agent-browser 視覺測試
 **Complexity Path:** `E2E path`（多數項目是畫面行為，沿用 `bash scripts/regression.sh` 的 Web 視覺測試＋最後實機驗收）
-**Status:** In Progress（批次 A 完成 2026-11-03；下一步批次 B）
+**Status:** In Progress（批次 A 完成；批次 B 完成，B5 筆畫路徑一項待使用者決定 2026-11-03）
 
 ---
 
@@ -158,6 +158,21 @@ journey
 
 **批次 B 驗收：** `bash scripts/regression.sh` 全過；commit；更新計畫檔；/build-apk 給使用者實測（重開 App 穿搭畫面速度、匯入大備份）。
 
+#### 批次 B 執行紀錄（2026-11-03）
+- **B1 ✅** `insertAll` 改 `tx.prepareAsync` → 迴圈 `executeAsync` → `finally finalizeAsync`；空清單不準備語句。測試輔助 `nodeSqlite.ts` 補 `prepareAsync`；`backupStore.test.ts` 新增「1000 件每表只準備一次、全部 finalize」「中途失敗也 finalize」，原本的 `failOnRun` 改成 `failOnExecute`（對 statement 注入）
+- **B2 ✅** 新增 `src/lib/photoGc.ts`（`orphanPhotos`：只刪 `photos/<檔名>`、沒被參照、修改時間超過 1 小時；修改時間讀不到的不刪）；`photoStorage.listPhotoFiles()`（web 版回傳空陣列）；`ItemRepository.photoPaths()`（記憶體、SQLite 兩個實作，含暫存區、已封存）。啟動流程：清暫存 → 過期清除 → 孤兒照片清除，每步失敗只記錄
+- **B3 ✅** `ItemRepositoryProvider` 抽出 `runStartupCleanup`；`AppState` 回到 active 且台灣日期（`taipeiDate`）和上次清除不同 → 再跑一次過期清除（不重跑孤兒照片清除）；Provider 加 `now` prop 供測試
+- **B4 ✅** 新增 `src/lib/photoBoundsCache.ts`（＋`.web.ts`）：`documents/photo-bounds.json`，讀一次進記憶體、500 ms 合併寫入；JSON 壞掉／版本不對／單筆格式不對都當作沒有、不丟例外；讀寫失敗只記錄。`measurePhoto` 對 `photos/…` 先查檔案快取、量完寫入（暫存檔與量測失敗不寫）；`deletePhotos` 同時移除快取項目；`saveItem` 換照片成功後立刻量（不等待）
+- **B5（部分）**
+  - ✅ 重新編輯已存單品的去背時，原圖就是已存的照片 → 沿用、不再複製；舊照片只刪被取代的去背圖，存檔失敗也不刪沿用的原圖
+  - ⏸ 筆畫路徑每次移動重建：Skia 2.2.12 reconciler 的 `prepareUpdate` 以 shallowEq 比對 props，原地 `lineTo` 同一個 SkPath 不會觸發重繪；要做到「只追加」需改成每次 `path.copy()`（新參照）或 Reanimated shared value＋`notifyChange`，畫面正確性只能實機確認。依計畫「改動範圍超出預期就停下回報」，未實作，待使用者決定
+- **其他修改：** 8 個測試檔的 photoStorage mock 補 `listPhotoFiles`；`SuggestScreen.test.tsx` 加 photoStorage mock，並把 AppState 測試改成通知所有監聽器（單品 Provider 也會監聽）
+- **驗證：** `bash scripts/regression.sh` 全過（tsc、ESLint、Jest 468 測試、視覺 80 項）
+- **偏離計畫：**
+  - B3 測試寫在既有的 `src/__tests__/ItemRepositoryProvider.test.tsx`（計畫寫 `ItemRepositoryContext.test.tsx`）；台灣日期用 `src/lib/cwaWeather.ts` 的 `taipeiDate`（`weatherDates.ts` 裡沒有）
+  - 過期清除失敗時現在也會通知畫面重新讀取（原本只在成功時），無副作用
+  - B4 `photoStorage.ts` 刪照片時移除快取項目的同時，孤兒照片清除也會一併清掉對應快取
+
 ### 批次 C｜授權碼與收尾
 
 #### Task C1: 使用者自己的授權碼優先
@@ -188,8 +203,8 @@ journey
 - [x] 讀取失敗的畫面都有錯誤與重試
 - [x] 建議頁湊不成一套時說出缺哪一類與原因
 - [x] 英文單複數、跨年週標題正確；建議卡片不閃
-- [ ] 匯入用預備語句；啟動清除孤兒照片；回到前景清除過期暫存區
-- [ ] 照片範圍重開 App 不重量
+- [x] 匯入用預備語句；啟動清除孤兒照片；回到前景清除過期暫存區
+- [x] 照片範圍重開 App 不重量（待實機確認）
 - [ ] 設定頁可填自己的授權碼
 - [ ] `bash scripts/regression.sh` 全過，v1.1.0 APK 實機驗收通過
 - [ ] 沒有 DB schema 變更

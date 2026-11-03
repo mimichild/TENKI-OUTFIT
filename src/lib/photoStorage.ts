@@ -1,6 +1,8 @@
 import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 import { copyAsync, moveAsync } from 'expo-file-system/legacy';
+import { boundsCache } from './photoBoundsCache';
+import type { PhotoFile } from './photoGc';
 import { isOwnedPhotoPath } from './photoPath';
 
 /**
@@ -46,8 +48,9 @@ export async function adoptPhoto(sourceUri: string): Promise<string> {
 
 /** 刪除 App 自己存的照片；不是 photos/ 底下的相對路徑一律不碰 */
 export function deletePhotos(stored: (string | null | undefined)[]): void {
-  for (const path of new Set(stored)) {
-    if (!isOwnedPhotoPath(path)) continue;
+  const owned = [...new Set(stored)].filter(isOwnedPhotoPath);
+  if (owned.length > 0) boundsCache.remove(owned).catch(e => console.warn('移除照片範圍快取失敗', e));
+  for (const path of owned) {
     try {
       const file = new File(Paths.document, path);
       if (file.exists) file.delete();
@@ -55,6 +58,16 @@ export function deletePhotos(stored: (string | null | undefined)[]): void {
       console.warn('刪除照片失敗', path, e);
     }
   }
+}
+
+/** photos/ 裡的檔案（相對路徑＋修改時間，毫秒）；清除孤兒照片用。子資料夾不列 */
+export function listPhotoFiles(): PhotoFile[] {
+  const dir = new Directory(Paths.document, PHOTO_DIR);
+  if (!dir.exists) return [];
+  return dir
+    .list()
+    .filter((e): e is File => e instanceof File)
+    .map(f => ({ path: `${PHOTO_DIR}/${f.name}`, modifiedAt: f.modificationTime ?? null }));
 }
 
 /** 備份匯出／匯入留在暫存資料夾的檔案（含選檔時系統複製來的 DocumentPicker/）；App 啟動時呼叫 */

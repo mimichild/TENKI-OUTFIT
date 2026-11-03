@@ -12,7 +12,7 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockParams,
   Stack: { Screen: () => null },
 }));
-jest.mock('@/lib/photoStorage', () => ({ clearCutoutCache: jest.fn(), clearBackupTemp: jest.fn(), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
+jest.mock('@/lib/photoStorage', () => ({ listPhotoFiles: () => [], clearCutoutCache: jest.fn(), clearBackupTemp: jest.fn(), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
 // 編輯器本身另有測試；這裡只看讀取狀態
 jest.mock('@/components/OutfitEditor', () => {
   const { Text } = jest.requireActual('react-native');

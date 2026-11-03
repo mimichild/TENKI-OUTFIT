@@ -33,9 +33,47 @@ jest.mock('@shopify/react-native-skia', () => {
 });
 
 
+// 檔案快取：測試裡用記憶體版本
+const mockCached = new Map<string, unknown>();
+jest.mock('@/lib/photoBoundsCache', () => ({
+  boundsCache: {
+    get: async (k: string) => (mockCached.has(k) ? mockCached.get(k) : undefined),
+    set: async (k: string, v: unknown) => { mockCached.set(k, v); },
+    remove: async () => {},
+  },
+}));
+jest.mock('@/lib/photoStorage', () => ({
+  resolvePhotoUri: (s: string | null) => (s && !s.includes(':') ? `file:///doc/${s}` : s),
+}));
+
 beforeEach(() => {
   mockDisposed.length = 0;
   mockFromURI.mockReset();
+  mockCached.clear();
+});
+
+describe('measurePhoto with the cache file', () => {
+  it('uses the cached shape without decoding the photo', async () => {
+    const cached = { aspect: 1, bounds: { x0: 0, y0: 0, x1: 1, y1: 1 } };
+    mockCached.set('photos/cached.png', cached);
+    expect(await measurePhoto('photos/cached.png')).toEqual(cached);
+    expect(mockFromURI).not.toHaveBeenCalled();
+  });
+
+  it('saves a new measurement under the relative path', async () => {
+    mockFromURI.mockResolvedValue({ dispose: () => {} });
+    const shape = await measurePhoto('photos/new.png');
+    expect(mockFromURI).toHaveBeenCalledWith('file:///doc/photos/new.png');
+    expect(mockCached.get('photos/new.png')).toEqual(shape);
+  });
+
+  it('does not save temp files or failed measurements', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mockFromURI.mockResolvedValueOnce({ dispose: () => {} }).mockRejectedValueOnce(new Error('not ready'));
+    await measurePhoto('file:///cache/tmp.png');
+    await measurePhoto('photos/broken.png');
+    expect([...mockCached.keys()]).toEqual([]);
+  });
 });
 
 describe('measurePhoto', () => {

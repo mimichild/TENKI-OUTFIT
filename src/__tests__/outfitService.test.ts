@@ -5,7 +5,7 @@ import { deletePhotos } from '@/lib/photoStorage';
 import { purgeItem } from '@/lib/itemService';
 import { deleteOutfit, saveOutfit } from '@/lib/outfitService';
 
-jest.mock('@/lib/photoStorage', () => ({ savePhoto: jest.fn(), deletePhotos: jest.fn() }));
+jest.mock('@/lib/photoStorage', () => ({ listPhotoFiles: () => [], savePhoto: jest.fn(), deletePhotos: jest.fn() }));
 
 let n = 0;
 const makeDb = () => createMemoryDatabase({ now: () => '2026-11-02T04:00:00.000Z', newId: () => `id${++n}` });

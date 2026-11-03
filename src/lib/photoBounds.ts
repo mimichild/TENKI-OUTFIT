@@ -1,11 +1,14 @@
 import { AlphaType, ColorType, Skia } from '@shopify/react-native-skia';
 import { alphaBounds, type PieceShape } from './outfitLayout';
+import { boundsCache } from './photoBoundsCache';
+import { isOwnedPhotoPath } from './photoPath';
 import { resolvePhotoUri } from './photoStorage';
 
 /** 量測時縮成的最長邊（像素）；只需要大概的範圍 */
 const SAMPLE = 160;
 
-// 照片存檔後不會原地改寫（重新去背會存成新檔），用路徑當 key 快取即可
+// 照片存檔後不會原地改寫（重新去背會存成新檔），用路徑當 key 快取即可。
+// 記憶體快取之外，App 的照片（photos/…）另存在檔案快取，重開 App 不必再解碼
 const cache = new Map<string, Promise<PieceShape | null>>();
 
 /** Skia 物件都是原生記憶體，Hermes 的 GC 不知道實際大小，用完一定要釋放 */
@@ -44,13 +47,22 @@ async function measure(uri: string): Promise<PieceShape | null> {
   }
 }
 
+async function measureOrCached(stored: string, uri: string): Promise<PieceShape | null> {
+  if (!isOwnedPhotoPath(stored)) return measure(uri);
+  const cached = await boundsCache.get(stored);
+  if (cached !== undefined) return cached;
+  const shape = await measure(uri);
+  await boundsCache.set(stored, shape);
+  return shape;
+}
+
 /** 單品照片裡真正有衣服的範圍；沒照片或讀不到回傳 null（排版退回整張照片） */
 export function measurePhoto(stored: string | null): Promise<PieceShape | null> {
   const uri = resolvePhotoUri(stored);
   if (!uri) return Promise.resolve(null);
   let p = cache.get(uri);
   if (!p) {
-    p = measure(uri).catch(e => {
+    p = measureOrCached(stored!, uri).catch(e => {
       // 失敗不快取（例如照片檔還沒寫完），下次再量
       cache.delete(uri);
       console.warn('量測照片範圍失敗', e);

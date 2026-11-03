@@ -148,6 +148,10 @@ export function createMemoryDatabase(
         .map(s => s.item.id);
       return expired.flatMap(id => purgeOne(id) ?? []);
     },
+    async photoPaths() {
+      const paths = [...items.values()].flatMap(s => [s.item.imageUri, s.item.originalUri]);
+      return [...new Set(paths.filter((p): p is string => !!p))];
+    },
   };
 
   const outfitRepo: OutfitRepository = {
