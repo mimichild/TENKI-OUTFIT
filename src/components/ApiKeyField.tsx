@@ -68,7 +68,7 @@ export function ApiKeyField({ theme }: { theme: Theme }) {
           onPress={save}
           style={[styles.save, { backgroundColor: dirty ? theme.primary : theme.border }]}
         >
-          <Text style={styles.saveText}>{t('settings.save')}</Text>
+          <Text style={[styles.saveText, dirty && { color: theme.onPrimary }]}>{t('settings.save')}</Text>
         </Pressable>
       </View>
     </View>

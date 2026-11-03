@@ -85,7 +85,7 @@ export default function ItemScreen() {
           title: t('item.detail'),
           headerRight: () => (
             <Pressable accessibilityRole="button" accessibilityLabel={t('item.edit')} onPress={() => setEditing(true)} hitSlop={10}>
-              <Text style={{ color: theme.primary, fontSize: 16 }}>{t('item.edit')}</Text>
+              <Text style={{ color: theme.primaryText, fontSize: 16 }}>{t('item.edit')}</Text>
             </Pressable>
           ),
         }}

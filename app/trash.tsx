@@ -76,7 +76,7 @@ export default function TrashScreen() {
                     onPress={() => run(() => restoreItem(repo, item.id))}
                     style={[styles.action, { borderColor: theme.primary }]}
                   >
-                    <Text style={{ color: theme.primary, fontSize: 14 }}>{t('trash.restore')}</Text>
+                    <Text style={{ color: theme.primaryText, fontSize: 14 }}>{t('trash.restore')}</Text>
                   </Pressable>
                   <Pressable
                     accessibilityRole="button"

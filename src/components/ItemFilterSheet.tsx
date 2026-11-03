@@ -33,7 +33,7 @@ export function ItemFilterSheet({ visible, query, onChange, onClose }: Props) {
           </Pressable>
           <Text style={[styles.title, { color: theme.text }]}>{t('closet.filter')}</Text>
           <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button">
-            <Text style={{ color: theme.primary, fontSize: 16 }}>{t('common.done')}</Text>
+            <Text style={{ color: theme.primaryText, fontSize: 16 }}>{t('common.done')}</Text>
           </Pressable>
         </View>
         <ScrollView contentContainerStyle={styles.body}>

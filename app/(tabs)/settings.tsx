@@ -46,7 +46,7 @@ export default function SettingsScreen() {
                 style={styles.swatchWrap}
               >
                 <View style={[styles.swatch, { backgroundColor: THEME_COLORS[key].primary, borderColor: selected ? theme.text : 'transparent' }]}>
-                  {selected && <Ionicons name="checkmark" size={18} color="#fff" />}
+                  {selected && <Ionicons name="checkmark" size={18} color={THEME_COLORS[key].onPrimary} />}
                 </View>
                 <Text style={[styles.swatchLabel, { color: theme.textMuted }]}>{t(`theme.${key}`)}</Text>
               </Pressable>

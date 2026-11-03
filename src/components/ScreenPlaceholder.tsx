@@ -12,7 +12,7 @@ export function ScreenPlaceholder({ icon, message }: Props) {
   const theme = useTheme();
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <Ionicons name={icon} size={48} color={theme.primary} />
+      <Ionicons name={icon} size={48} color={theme.primaryText} />
       <Text style={[styles.message, { color: theme.textMuted }]}>{message}</Text>
     </View>
   );

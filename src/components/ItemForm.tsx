@@ -287,5 +287,5 @@ const makeStyles = (theme: Theme) =>
     secondary: { borderWidth: 1, borderColor: theme.border },
     deleteAction: { borderWidth: 1, borderColor: '#D93025' },
     deleteText: { color: '#D93025', fontSize: 16 },
-    primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+    primaryText: { color: theme.onPrimary, fontSize: 16, fontWeight: '600' },
   });

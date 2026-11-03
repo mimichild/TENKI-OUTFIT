@@ -23,7 +23,7 @@ export function Chip({ label, selected, onPress, role = 'button' }: Props) {
         { borderColor: selected ? theme.primary : theme.border, backgroundColor: selected ? theme.primarySoft : theme.surface },
       ]}
     >
-      <Text style={[styles.text, { color: selected ? theme.primary : theme.text }]}>{label}</Text>
+      <Text style={[styles.text, { color: selected ? theme.primaryText : theme.text }]}>{label}</Text>
     </Pressable>
   );
 }

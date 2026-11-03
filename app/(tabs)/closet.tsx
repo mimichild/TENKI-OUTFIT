@@ -48,7 +48,7 @@ export default function ClosetScreen() {
 
       {items === undefined ? (error ? <LoadError fill onRetry={retry} /> : null) : visible.length === 0 ? (
         <View style={styles.empty}>
-          <Ionicons name="shirt-outline" size={44} color={theme.primary} />
+          <Ionicons name="shirt-outline" size={44} color={theme.primaryText} />
           <Text style={[styles.emptyText, { color: theme.textMuted }]}>
             {t(items.length === 0 ? 'closet.empty' : 'closet.emptyFiltered')}
           </Text>
@@ -73,7 +73,7 @@ export default function ClosetScreen() {
         }
         style={[styles.fab, { backgroundColor: theme.primary }]}
       >
-        <Ionicons name="add" size={30} color="#FFFFFF" />
+        <Ionicons name="add" size={30} color={theme.onPrimary} />
       </Pressable>
 
       <ItemFilterSheet visible={sheetOpen} query={query} onChange={setQuery} onClose={() => setSheetOpen(false)} />

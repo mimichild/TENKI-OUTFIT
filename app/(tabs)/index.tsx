@@ -123,7 +123,7 @@ export default function WeatherScreen() {
 
   const dayOutfits = (date: string) => {
     if (outfitsFailed) return <LoadError onRetry={retryOutfits} />;
-    if (outfits === undefined) return <ActivityIndicator color={theme.primary} />;
+    if (outfits === undefined) return <ActivityIndicator color={theme.primaryText} />;
     const list = outfitsOn(date);
     if (list.length === 0) {
       return (
@@ -147,7 +147,7 @@ export default function WeatherScreen() {
         <View style={styles.dateBlock} accessibilityLiveRegion="polite">
           <Text style={[styles.date, { color: theme.text }]}>{labelOf(selected)}</Text>
           <View style={styles.subRow}>
-            {relative && <Text style={[styles.relative, { color: theme.primary }]}>{t(relative)}</Text>}
+            {relative && <Text style={[styles.relative, { color: theme.primaryText }]}>{t(relative)}</Text>}
             <Text style={[styles.county, { color: theme.textMuted }]}>{weather.county}</Text>
           </View>
         </View>
@@ -156,17 +156,17 @@ export default function WeatherScreen() {
 
       {!weather.hasKey ? (
         <View style={styles.placeholder}>
-          <Ionicons name="key-outline" size={36} color={theme.primary} />
+          <Ionicons name="key-outline" size={36} color={theme.primaryText} />
           <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.noKey')}</Text>
           <Pressable accessibilityRole="button" onPress={() => router.push('/settings')} style={[styles.button, { backgroundColor: theme.primary }]}>
-            <Text style={styles.buttonText}>{t('weather.goSettings')}</Text>
+            <Text style={[styles.buttonText, { color: theme.onPrimary }]}>{t('weather.goSettings')}</Text>
           </Pressable>
         </View>
       ) : day ? (
         <DayDetails day={day} theme={theme} language={language} t={t} />
       ) : weather.loading || days === undefined ? (
         <View style={styles.placeholder}>
-          <ActivityIndicator color={theme.primary} />
+          <ActivityIndicator color={theme.primaryText} />
           <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.loading')}</Text>
         </View>
       ) : (
@@ -198,7 +198,7 @@ export default function WeatherScreen() {
               onPress={() => openDay(date)}
               style={styles.weekDay}
             >
-              <Text style={[styles.weekDate, { color: date === today ? theme.primary : theme.text }]}>{labelOf(date)}</Text>
+              <Text style={[styles.weekDate, { color: date === today ? theme.primaryText : theme.text }]}>{labelOf(date)}</Text>
               {w && (
                 <View style={styles.weekWx}>
                   <Ionicons name={WX_ICONS[wxCategory(w.wxCode)]} size={14} color={theme.textMuted} accessible={false} importantForAccessibility="no" />
@@ -243,7 +243,7 @@ export default function WeatherScreen() {
         style={{ backgroundColor: theme.background }}
         contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl refreshing={weather.refreshing} onRefresh={weather.refresh} tintColor={theme.primary} colors={[theme.primary]} />
+          <RefreshControl refreshing={weather.refreshing} onRefresh={weather.refresh} tintColor={theme.primaryText} colors={[theme.primaryText]} />
         }
       >
         <ViewModeSwitch mode={mode} onChange={changeMode} />
@@ -273,7 +273,7 @@ export default function WeatherScreen() {
         onPress={() => router.push({ pathname: '/outfit/edit', params: { date: selected } })}
         style={[styles.fab, { backgroundColor: theme.primary }]}
       >
-        <Ionicons name="add" size={30} color="#FFFFFF" />
+        <Ionicons name="add" size={30} color={theme.onPrimary} />
       </Pressable>
     </View>
   );
@@ -306,7 +306,7 @@ function DayDetails({ day, theme, language, t }: {
   return (
     <View style={styles.details}>
       <View style={styles.mainRow}>
-        <Ionicons name={WX_ICONS[category]} size={64} color={theme.primary} accessible={false} importantForAccessibility="no" />
+        <Ionicons name={WX_ICONS[category]} size={64} color={theme.primaryText} accessible={false} importantForAccessibility="no" />
         <View
           style={styles.temps}
           accessible

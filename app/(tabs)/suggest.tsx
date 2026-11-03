@@ -117,7 +117,7 @@ export default function SuggestScreen() {
               onPress={() => setDay(d)}
               style={[styles.segmentOption, selected && { backgroundColor: theme.primary }]}
             >
-              <Text style={{ color: selected ? '#FFFFFF' : theme.text, fontSize: 15, fontWeight: '500' }}>{t(`suggest.tab.${d}`)}</Text>
+              <Text style={{ color: selected ? theme.onPrimary : theme.text, fontSize: 15, fontWeight: '500' }}>{t(`suggest.tab.${d}`)}</Text>
             </Pressable>
           );
         })}
@@ -202,8 +202,8 @@ export default function SuggestScreen() {
               onPress={shuffle}
               style={[styles.button, { borderColor: theme.primary }]}
             >
-              <Ionicons name="shuffle-outline" size={18} color={theme.primary} accessible={false} importantForAccessibility="no" />
-              <Text style={{ color: theme.primary, fontWeight: '600' }}>{t('suggest.refresh')}</Text>
+              <Ionicons name="shuffle-outline" size={18} color={theme.primaryText} accessible={false} importantForAccessibility="no" />
+              <Text style={{ color: theme.primaryText, fontWeight: '600' }}>{t('suggest.refresh')}</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
@@ -211,8 +211,8 @@ export default function SuggestScreen() {
               onPress={saveAsOutfit}
               style={[styles.button, { backgroundColor: theme.primary, borderColor: theme.primary }]}
             >
-              <Ionicons name="calendar-outline" size={18} color="#FFFFFF" accessible={false} importantForAccessibility="no" />
-              <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>{t('suggest.save')}</Text>
+              <Ionicons name="calendar-outline" size={18} color={theme.onPrimary} accessible={false} importantForAccessibility="no" />
+              <Text style={{ color: theme.onPrimary, fontWeight: '600' }}>{t('suggest.save')}</Text>
             </Pressable>
           </View>
         </View>

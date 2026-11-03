@@ -28,7 +28,7 @@ export function OptionPicker<T extends string>({
         <View style={[styles.header, { borderColor: theme.border }]}>
           <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
           <Pressable onPress={onClose} hitSlop={12}>
-            <Text style={{ color: theme.primary, fontSize: 16 }}>{t('common.done')}</Text>
+            <Text style={{ color: theme.primaryText, fontSize: 16 }}>{t('common.done')}</Text>
           </Pressable>
         </View>
         <ScrollView>
@@ -41,7 +41,7 @@ export function OptionPicker<T extends string>({
               accessibilityState={{ selected: item === selected }}
             >
               <Text style={[styles.rowText, { color: theme.text }]}>{getLabel(item)}</Text>
-              {item === selected && <Ionicons name="checkmark" size={20} color={theme.primary} />}
+              {item === selected && <Ionicons name="checkmark" size={20} color={theme.primaryText} />}
             </Pressable>
           ))}
         </ScrollView>

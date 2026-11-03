@@ -179,7 +179,7 @@ export function PhotoEditor({ imageUri, originalUri, onDone, onCancel }: Props) 
               disabled={!ready || saving}
               hitSlop={10}
             >
-              {saving ? <ActivityIndicator color={theme.primary} /> : <Text style={[s.headerButton, s.done]}>{t('editor.done')}</Text>}
+              {saving ? <ActivityIndicator color={theme.primaryText} /> : <Text style={[s.headerButton, s.done]}>{t('editor.done')}</Text>}
             </Pressable>
           </View>
 
@@ -236,7 +236,7 @@ const makeStyles = (theme: Theme) =>
       paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
     },
     title: { color: theme.text, fontSize: 17, fontWeight: '600' },
-    headerButton: { color: theme.primary, fontSize: 16 },
+    headerButton: { color: theme.primaryText, fontSize: 16 },
     done: { fontWeight: '600' },
     // 灰底：擦掉的透明區域才看得出來（白衣服在白底上會分不清）
     canvasBox: { flex: 1, margin: 12, borderRadius: 12, overflow: 'hidden', backgroundColor: '#C9CCD1' },

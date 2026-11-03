@@ -36,7 +36,7 @@ export function ItemPickerSheet({ visible, items, selectedIds, onToggle, onClose
         <View style={[styles.header, { borderColor: theme.border }]}>
           <Text style={[styles.title, { color: theme.text }]}>{t('outfit.pickerTitle')}</Text>
           <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button">
-            <Text style={{ color: theme.primary, fontSize: 16 }}>{t('common.done')}</Text>
+            <Text style={{ color: theme.primaryText, fontSize: 16 }}>{t('common.done')}</Text>
           </Pressable>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} style={styles.tabsBar} accessibilityRole="tablist">
@@ -73,7 +73,7 @@ export function ItemPickerSheet({ visible, items, selectedIds, onToggle, onClose
                   )}
                   {selected && (
                     <View style={[styles.check, { backgroundColor: theme.primary }]}>
-                      <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                      <Ionicons name="checkmark" size={14} color={theme.onPrimary} />
                     </View>
                   )}
                 </View>

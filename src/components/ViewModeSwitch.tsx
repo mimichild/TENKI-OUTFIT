@@ -25,7 +25,7 @@ export function ViewModeSwitch({ mode, onChange }: { mode: ViewMode; onChange: (
               onPress={() => onChange(m)}
               style={[styles.option, selected && { backgroundColor: theme.primary }]}
             >
-              <Text style={{ color: selected ? '#FFFFFF' : theme.text, fontSize: 14 }}>{t(`view.${m}`)}</Text>
+              <Text style={{ color: selected ? theme.onPrimary : theme.text, fontSize: 14 }}>{t(`view.${m}`)}</Text>
             </Pressable>
           );
         })}

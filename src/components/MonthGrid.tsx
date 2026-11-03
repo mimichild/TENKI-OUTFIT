@@ -65,7 +65,7 @@ export function MonthGrid({ month, today, selected, marked, onSelect, onPrev, on
                     isSelected && { backgroundColor: theme.primary },
                   ]}
                 >
-                  <Text style={{ color: isSelected ? '#FFFFFF' : inMonth ? theme.text : theme.textMuted, fontSize: 15, opacity: inMonth ? 1 : 0.5 }}>
+                  <Text style={{ color: isSelected ? theme.onPrimary : inMonth ? theme.text : theme.textMuted, fontSize: 15, opacity: inMonth ? 1 : 0.5 }}>
                     {day}
                   </Text>
                 </View>

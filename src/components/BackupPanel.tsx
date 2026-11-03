@@ -215,7 +215,7 @@ export function BackupPanel({ ops, onBusyChange }: { ops: BackupOps; onBusyChang
                       : { borderColor: theme.primary, backgroundColor: theme.primary },
                 ]}
               >
-                <Text style={{ color: mode === null || locked ? theme.textMuted : '#FFFFFF', fontSize: 15, fontWeight: '600' }}>{importLabel}</Text>
+                <Text style={{ color: mode === null || locked ? theme.textMuted : armed ? '#FFFFFF' : theme.onPrimary, fontSize: 15, fontWeight: '600' }}>{importLabel}</Text>
               </Pressable>
               <Button theme={theme} label={t('backup.cancel')} onPress={cancel} disabled={locked} />
             </View>
@@ -249,7 +249,7 @@ interface ButtonProps {
 }
 
 function Button({ theme, label, onPress, icon, disabled }: ButtonProps) {
-  const color = disabled ? theme.textMuted : theme.primary;
+  const color = disabled ? theme.textMuted : theme.primaryText;
   return (
     <Pressable
       accessibilityRole="button"
@@ -293,7 +293,7 @@ function ModeOption({ theme, selected, title, hint, disabled, onPress }: ModeOpt
       onPress={onPress}
       style={[styles.mode, { borderColor: selected ? theme.primary : theme.border, backgroundColor: selected ? theme.primarySoft : 'transparent' }]}
     >
-      <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={20} color={selected ? theme.primary : theme.textMuted} />
+      <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={20} color={selected ? theme.primaryText : theme.textMuted} />
       <View style={styles.modeText}>
         <Text style={{ color: theme.text, fontSize: 15, fontWeight: '600' }}>{title}</Text>
         <Text style={{ color: theme.textMuted, fontSize: 13 }}>{hint}</Text>
@@ -305,7 +305,7 @@ function ModeOption({ theme, selected, title, hint, disabled, onPress }: ModeOpt
 function Status({ theme, text, busy, error }: { theme: Theme; text: string; busy?: boolean; error?: boolean }) {
   return (
     <View style={styles.status} accessibilityLiveRegion="polite">
-      {busy && <ActivityIndicator size="small" color={theme.primary} />}
+      {busy && <ActivityIndicator size="small" color={theme.primaryText} />}
       <Text style={{ color: error ? DANGER : theme.text, fontSize: 14, flexShrink: 1 }}>{text}</Text>
     </View>
   );

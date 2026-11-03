@@ -30,7 +30,7 @@ export function DatePickerSheet({ visible, value, today, onSelect, onClose }: Pr
         <View style={[styles.header, { borderColor: theme.border }]}>
           <Text style={[styles.title, { color: theme.text }]}>{t('outfit.pickDate')}</Text>
           <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button">
-            <Text style={{ color: theme.primary, fontSize: 16 }}>{t('common.cancel')}</Text>
+            <Text style={{ color: theme.primaryText, fontSize: 16 }}>{t('common.cancel')}</Text>
           </Pressable>
         </View>
         <View style={styles.body}>

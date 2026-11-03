@@ -18,8 +18,8 @@ export function LoadError({ onRetry, fill = false }: { onRetry: () => void; fill
         hitSlop={8}
         style={[styles.button, { borderColor: theme.primary }]}
       >
-        <Ionicons name="refresh" size={16} color={theme.primary} accessible={false} importantForAccessibility="no" />
-        <Text style={{ color: theme.primary, fontSize: 15, fontWeight: '600' }}>{t('common.retry')}</Text>
+        <Ionicons name="refresh" size={16} color={theme.primaryText} accessible={false} importantForAccessibility="no" />
+        <Text style={{ color: theme.primaryText, fontSize: 15, fontWeight: '600' }}>{t('common.retry')}</Text>
       </Pressable>
     </View>
   );

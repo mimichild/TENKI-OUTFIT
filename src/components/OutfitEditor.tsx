@@ -123,8 +123,8 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
         </Pressable>
         <Text style={[s.title, { color: theme.text }]} accessibilityRole="header">{title}</Text>
         <Pressable testID="save-outfit" onPress={save} hitSlop={12} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} disabled={!canSave}>
-          {busy ? <ActivityIndicator color={theme.primary} /> : (
-            <Text style={{ color: canSave ? theme.primary : theme.border, fontSize: 16, fontWeight: '600' }}>{t('item.save')}</Text>
+          {busy ? <ActivityIndicator color={theme.primaryText} /> : (
+            <Text style={{ color: canSave ? theme.primaryText : theme.border, fontSize: 16, fontWeight: '600' }}>{t('item.save')}</Text>
           )}
         </Pressable>
       </View>
@@ -138,10 +138,10 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
         >
           <Ionicons name="calendar-outline" size={18} color={theme.textMuted} />
           <Text style={[s.dateLabel, { color: theme.textMuted }]}>{t('outfit.date')}</Text>
-          <Text style={{ color: date ? theme.text : theme.primary, fontSize: 16, flex: 1 }}>{dateLabel}</Text>
+          <Text style={{ color: date ? theme.text : theme.primaryText, fontSize: 16, flex: 1 }}>{dateLabel}</Text>
           <Ionicons name="chevron-down" size={16} color={theme.textMuted} />
         </Pressable>
-        {date === null && <Text style={[s.hint, { color: theme.primary }]}>{t('outfit.dateRequired')}</Text>}
+        {date === null && <Text style={[s.hint, { color: theme.primaryText }]}>{t('outfit.dateRequired')}</Text>}
 
         <View
           testID="outfit-canvas"
@@ -162,7 +162,7 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
               width={canvasWidth}
               selected={p.itemId === selectedId}
               label={t('outfit.pieceLabel', { name: p.item.name || p.item.brand || t('item.untitled') })}
-              color={theme.primary}
+              color={theme.primaryText}
               onBegin={() => select(p.itemId)}
               onCommit={next => commit(p.itemId, next)}
             />
@@ -171,7 +171,7 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
 
         <View style={s.toolbar}>
           <Pressable testID="add-items" onPress={() => setPickerOpen(true)} accessibilityRole="button" style={[s.toolButton, { backgroundColor: theme.primary }]}>
-            <Ionicons name="add" size={18} color="#FFFFFF" />
+            <Ionicons name="add" size={18} color={theme.onPrimary} />
             <Text style={s.toolText}>{t('outfit.addItems')}</Text>
           </Pressable>
           {selectedId && (
@@ -355,7 +355,7 @@ const makeStyles = (theme: Theme) =>
     emptyHint: { color: '#8A8A8A', textAlign: 'center', paddingHorizontal: 24, fontSize: 14, lineHeight: 20 },
     toolbar: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
     toolButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18 },
-    toolText: { color: '#FFFFFF', fontSize: 14 },
+    toolText: { color: theme.onPrimary, fontSize: 14 },
     total: { marginLeft: 'auto', fontSize: 15, fontWeight: '600', color: theme.text },
     delete: { alignSelf: 'stretch', alignItems: 'center', paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
   });
