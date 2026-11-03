@@ -38,7 +38,7 @@ const ITEM_COLS = [
   'id', 'name', 'brand', 'category', 'price', 'occasions', 'seasons', 'image_uri', 'original_uri',
   'created_at', 'updated_at', 'last_used_at', 'deleted_at', 'archived_at',
 ] as const satisfies readonly (keyof BackupItemRow)[];
-const OUTFIT_COLS = ['id', 'name', 'date', 'created_at', 'updated_at'] as const satisfies readonly (keyof BackupOutfitRow)[];
+const OUTFIT_COLS = ['id', 'name', 'date', 'created_at', 'updated_at', 'canvas_ratio'] as const satisfies readonly (keyof BackupOutfitRow)[];
 const PLACEMENT_COLS = ['outfit_id', 'item_id', 'x', 'y', 'scale', 'rotation', 'z'] as const satisfies readonly (keyof BackupPlacementRow)[];
 const WEATHER_COLS = [
   'county', 'town', 'date', 'max_t', 'min_t', 'max_at', 'min_at', 'pop', 'wx_code', 'wx_text', 'fetched_at',

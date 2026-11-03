@@ -50,6 +50,8 @@ export interface Outfit {
   date: string | null;
   /** 依 z 由下而上 */
   pieces: OutfitPiece[];
+  /** 畫布高 / 寬：每套穿搭記住編輯時的畫布形狀（舊穿搭 4/3） */
+  canvasRatio: number;
   createdAt: string;
   updatedAt: string;
 }

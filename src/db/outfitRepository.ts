@@ -5,6 +5,17 @@ export interface OutfitInput {
   /** YYYY-MM-DD，必填 */
   date: string;
   items: OutfitItemPlacement[];
+  /** 畫布高 / 寬；新增時沒給用 3:4，更新時沒給維持原本的 */
+  canvasRatio?: number;
+}
+
+/** 舊穿搭與沒指定時的畫布比例（高 / 寬） */
+export const DEFAULT_CANVAS_RATIO = 4 / 3;
+
+/** 取出可用的畫布比例：沒給或不合理時用 fallback */
+export function canvasRatioOf(input: Pick<OutfitInput, 'canvasRatio'>, fallback: number): number {
+  const r = input.canvasRatio;
+  return typeof r === 'number' && Number.isFinite(r) && r > 0 ? r : fallback;
 }
 
 export type OutfitValidationReason = 'date' | 'empty' | 'duplicate';

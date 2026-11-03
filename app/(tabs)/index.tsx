@@ -3,7 +3,7 @@ import { useNavigation, useRouter } from 'expo-router';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, PanResponder, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { LoadError } from '@/components/LoadError';
-import { MonthGrid } from '@/components/MonthGrid';
+import { MonthOutfitGrid } from '@/components/MonthOutfitGrid';
 import { OutfitCard } from '@/components/OutfitCard';
 import { ViewModeSwitch, type ViewMode } from '@/components/ViewModeSwitch';
 import { useOutfitsInRangeQuery } from '@/db/useOutfits';
@@ -28,9 +28,11 @@ const WX_ICONS: Record<WxCategory, keyof typeof Ionicons.glyphMap> = {
 };
 
 const SWIPE_DISTANCE = 50;
-
-const minDate = (a: string, b: string) => (a < b ? a : b);
-const maxDate = (a: string, b: string) => (a > b ? a : b);
+/** 週檢視縮圖的高度；寬度依每套穿搭的畫布比例 */
+const WEEK_THUMB_HEIGHT = 80;
+/** 日、週檢視內容的上方內距與區塊間距（styles.content / contentFill） */
+const DAY_PADDING_TOP = 16;
+const DAY_GAP = 12;
 
 const num = (n: number | null) => (n === null ? '—' : String(Math.round(n)));
 const deg = (n: number | null) => `${num(n)}°`;
@@ -55,12 +57,8 @@ export default function WeatherScreen() {
   }, [weather.county, today]);
 
   const range = useMemo(() => browsableRange((days ?? []).map(d => d.date), today), [days, today]);
-  // 箭頭／滑動只在有天氣資料的範圍內移動；從週、月曆選到範圍外的日期時，可以往範圍的方向走回來
-  const canMove = (from: string, n: number) => {
-    const target = addDays(from, n);
-    if (target >= range.first && target <= range.last) return true;
-    return n < 0 ? from > range.last : from < range.first;
-  };
+  // 往前（過去）不設限，才看得到過去的穿搭；往後只到最後一天預報
+  const canMove = (from: string, n: number) => n < 0 || addDays(from, n) <= range.last;
   const canPrev = canMove(selected, -1);
   const canNext = canMove(selected, 1);
   const move = (n: number) => setSelected(s => (canMove(s, n) ? addDays(s, n) : s));
@@ -82,15 +80,13 @@ export default function WeatherScreen() {
 
   const week = weekOf(selected);
   const grid = monthGrid(month);
-  // 月檢視換到別的月份時，選取的日子可能不在格子裡；查詢範圍要涵蓋它，下方才列得出它的穿搭
   const [from, to] =
     mode === 'week' ? [week[0], week[6]]
-      : mode === 'month' ? [minDate(grid[0][0], selected), maxDate(grid[grid.length - 1][6], selected)]
+      : mode === 'month' ? [grid[0][0], grid[grid.length - 1][6]]
         : [selected, selected];
   const { value: outfits, error: outfitsError, retry: retryOutfits } = useOutfitsInRangeQuery(from, to);
   const outfitsFailed = outfits === undefined && !!outfitsError;
   const outfitsOn = (date: string) => (outfits ?? []).filter(o => o.date === date);
-  const marked = useMemo(() => new Set((outfits ?? []).map(o => o.date ?? '')), [outfits]);
 
   const labelOf = (date: string, withYear = false) => {
     const [y, m, d] = date.split('-').map(Number);
@@ -117,23 +113,34 @@ export default function WeatherScreen() {
     setMode('day');
   };
   const openOutfit = (id: string) => router.push({ pathname: '/outfit/edit', params: { id } });
-  const cardWidth = Math.min(window.width - 32, 360);
+  const newOutfit = (date: string) => router.push({ pathname: '/outfit/edit', params: { date } });
+  /**
+   * 日檢視穿搭區：左右貼齊手機邊緣、往下到分頁列。
+   * 用「捲動區域 − 天氣欄」計算，不量穿搭區自己（否則卡片高度會影響量到的高度，停不在分頁列）
+   */
+  const [scrollSize, setScrollSize] = useState<{ width: number; height: number } | null>(null);
+  const [weatherCardHeight, setWeatherCardHeight] = useState(0);
+  const areaWidth = scrollSize?.width || window.width;
+  const measuredHeight = scrollSize && weatherCardHeight ? scrollSize.height - DAY_PADDING_TOP - weatherCardHeight - DAY_GAP : 0;
+  const areaHeight = measuredHeight > 200 ? measuredHeight : areaWidth * (4 / 3);
 
-  /** fill：日檢視時，沒有穿搭的空白框撐滿剩下的高度（到分頁列） */
-  const dayOutfits = (date: string, fill = false) => {
-    if (outfitsFailed) return <LoadError onRetry={retryOutfits} />;
-    if (outfits === undefined) return <ActivityIndicator color={theme.primaryText} />;
+  /** 日檢視：穿搭畫布滿版（不管這套穿搭原本的比例）；沒有穿搭時空白框一樣滿版 */
+  const dayOutfits = (date: string) => {
     const list = outfitsOn(date);
-    if (list.length === 0) {
-      return (
-        <View style={[styles.canvas, fill && styles.canvasFill, { borderColor: theme.border }]}>
-          <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.noOutfit')}</Text>
-        </View>
-      );
-    }
+    const body = outfitsFailed ? (
+      <LoadError onRetry={retryOutfits} />
+    ) : outfits === undefined ? (
+      <ActivityIndicator color={theme.primaryText} />
+    ) : list.length === 0 ? (
+      <View style={[styles.canvas, { borderColor: theme.border }]}>
+        <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.noOutfit')}</Text>
+      </View>
+    ) : (
+      list.map(o => <OutfitCard key={o.id} outfit={o} width={areaWidth} height={areaHeight} onPress={() => openOutfit(o.id)} />)
+    );
     return (
-      <View style={styles.outfitList}>
-        {list.map(o => <OutfitCard key={o.id} outfit={o} width={cardWidth} onPress={() => openOutfit(o.id)} />)}
+      <View testID="day-outfits" style={[styles.dayOutfits, { minHeight: areaHeight }]}>
+        {body}
       </View>
     );
   };
@@ -177,7 +184,7 @@ export default function WeatherScreen() {
   );
 
   const weekView = (
-    <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border, gap: 4 }]}>
+    <View style={[styles.card, styles.fillCard, { backgroundColor: theme.surface, borderColor: theme.border, gap: 4 }]}>
       <View style={styles.cardHeader}>
         <NavButton icon="chevron-back" label={t('calendar.prevWeek')} disabled={false} onPress={() => setSelected(s => addDays(s, -7))} theme={theme} />
         <Text style={[styles.weekTitle, { color: theme.text }]} accessibilityLiveRegion="polite">
@@ -190,7 +197,7 @@ export default function WeatherScreen() {
         const w = days?.find(d => d.date === date);
         const list = outfitsOn(date);
         return (
-          <View key={date} style={[styles.weekRow, { borderColor: theme.border }]}>
+          <View key={date} style={[styles.weekRow, styles.weekRowFill, { borderColor: theme.border }]}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={t('calendar.showDay', { date: labelOf(date) })}
@@ -209,7 +216,7 @@ export default function WeatherScreen() {
               {list.length === 0 ? (
                 <Text style={[styles.weekEmpty, { color: theme.textMuted }]}>—</Text>
               ) : (
-                list.map(o => <OutfitCard key={o.id} outfit={o} width={66} compact onPress={() => openOutfit(o.id)} />)
+                list.map(o => <OutfitCard key={o.id} outfit={o} width={WEEK_THUMB_HEIGHT / o.canvasRatio} compact onPress={() => openOutfit(o.id)} />)
               )}
             </ScrollView>
           </View>
@@ -219,28 +226,34 @@ export default function WeatherScreen() {
   );
 
   const monthView = (
-    <>
-      <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border, paddingVertical: 8 }]}>
-        <MonthGrid
-          month={month}
-          today={today}
-          selected={selected}
-          marked={marked}
-          onSelect={setSelected}
-          onPrev={() => setMonth(m => addMonths(m, -1))}
-          onNext={() => setMonth(m => addMonths(m, 1))}
-        />
-      </View>
-      <Text style={[styles.sectionTitle, { color: theme.text }]}>{labelOf(selected)}</Text>
-      {dayOutfits(selected)}
-    </>
+    <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border, paddingHorizontal: 8, paddingVertical: 8, gap: 4 }]}>
+      {outfitsFailed && <LoadError onRetry={retryOutfits} />}
+      <MonthOutfitGrid
+        month={month}
+        today={today}
+        outfitsOn={outfitsOn}
+        labelOf={labelOf}
+        onOpenDay={openDay}
+        onAdd={newOutfit}
+        onPrev={() => setMonth(m => addMonths(m, -1))}
+        onNext={() => setMonth(m => addMonths(m, 1))}
+      />
+    </View>
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    // 外層 View 與捲動區域一樣大（＋是浮在上面的），量它來算日檢視穿搭區的高度
+    <View
+      testID="weather-scroll"
+      onLayout={e => {
+        const { width, height } = e.nativeEvent.layout;
+        setScrollSize(v => (v && v.width === width && v.height === height ? v : { width, height }));
+      }}
+      style={{ flex: 1, backgroundColor: theme.background }}
+    >
       <ScrollView
         style={{ backgroundColor: theme.background }}
-        contentContainerStyle={[styles.content, mode === 'day' && styles.contentDay]}
+        contentContainerStyle={[styles.content, mode !== 'month' && styles.contentFill]}
         refreshControl={
           <RefreshControl refreshing={weather.refreshing} onRefresh={weather.refresh} tintColor={theme.primaryText} colors={[theme.primaryText]} />
         }
@@ -254,8 +267,11 @@ export default function WeatherScreen() {
 
         {mode === 'day' && (
           <>
-            {weatherCard}
-            {dayOutfits(selected, true)}
+            {/* 量天氣欄高度用來算穿搭區；包一層，不跟滑動手勢掛在同一個元件上 */}
+            <View testID="weather-card" onLayout={e => setWeatherCardHeight(e.nativeEvent.layout.height)}>
+              {weatherCard}
+            </View>
+            {dayOutfits(selected)}
           </>
         )}
         {mode === 'week' && weekView}
@@ -265,7 +281,7 @@ export default function WeatherScreen() {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t('outfit.new')}
-        onPress={() => router.push({ pathname: '/outfit/edit', params: { date: selected } })}
+        onPress={() => newOutfit(selected)}
         style={[styles.fab, { backgroundColor: theme.primary }]}
       >
         <Ionicons name="add" size={30} color="#FFFFFF" />
@@ -333,9 +349,10 @@ function DayDetails({ day, theme, language, t }: {
 
 const styles = StyleSheet.create({
   // 底部留空間給右下 ＋
-  content: { padding: 16, paddingBottom: 96, gap: 16, flexGrow: 1 },
-  // 日檢視：穿搭框要延伸到分頁列，＋浮在框上
-  contentDay: { paddingBottom: 16, gap: 12 },
+  content: { padding: DAY_PADDING_TOP, paddingBottom: 96, gap: 16, flexGrow: 1 },
+  // 日、週檢視：內容延伸到分頁列，＋浮在上面
+  contentFill: { paddingBottom: 16, gap: DAY_GAP },
+  fillCard: { flex: 1 },
   fab: {
     position: 'absolute', right: 20, bottom: 20, width: 58, height: 58, borderRadius: 29,
     alignItems: 'center', justifyContent: 'center',
@@ -366,15 +383,16 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 18, rowGap: 6 },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   metaText: { fontSize: 14 },
+  // 日檢視穿搭區：抵銷內容左右內距貼齊手機邊緣，撐滿到分頁列
+  dayOutfits: { marginHorizontal: -16, marginBottom: -16, gap: 16 },
   canvas: {
-    minHeight: 200, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth,
+    flex: 1, minHeight: 200, borderTopWidth: StyleSheet.hairlineWidth,
     backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', padding: 24,
   },
-  canvasFill: { flex: 1 },
-  outfitList: { alignItems: 'center', gap: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: '600' },
   weekTitle: { flex: 1, textAlign: 'center', fontSize: 15, fontWeight: '600' },
   weekRow: { flexDirection: 'row', alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 6, gap: 8 },
+  // 七天平均分配卡片高度，第七天的下緣剛好到分頁列
+  weekRowFill: { flex: 1 },
   weekDay: { width: 96, gap: 2 },
   weekDate: { fontSize: 14, fontWeight: '600' },
   weekWx: { flexDirection: 'row', alignItems: 'center', gap: 4 },

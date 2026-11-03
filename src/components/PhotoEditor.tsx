@@ -20,15 +20,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useT } from '@/i18n';
 import {
   BRUSH_DEFAULT,
+  NO_ZOOM,
   addPoint,
   containRect,
   outputSize,
+  pinchView,
   startStroke,
   undoStroke,
+  zoomRect,
   type BrushMode,
   type Point,
   type Size,
   type Stroke,
+  type ZoomView,
 } from '@/lib/maskEditing';
 import { useTheme, type Theme } from '@/theme/useTheme';
 import { BrushSizeSlider } from './BrushSizeSlider';
@@ -116,9 +120,16 @@ export function PhotoEditor({ imageUri, originalUri, onDone, onCancel }: Props) 
   const currentRef = useRef<Stroke | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
+  /** 雙指縮放；手勢回呼以 ref 為準 */
+  const [view, setViewState] = useState<ZoomView>(NO_ZOOM);
+  const viewRef = useRef<ZoomView>(NO_ZOOM);
+  const pinchStart = useRef<{ view: ZoomView; focal: Point } | null>(null);
+  /** 這次觸碰出現過雙指：手指全部放開前都不畫線 */
+  const pinchingRef = useRef(false);
 
   const size = base ? { width: base.width(), height: base.height() } : null;
-  const fit = size && box ? containRect(size, box) : null;
+  const baseFit = size && box ? containRect(size, box) : null;
+  const fit = baseFit ? zoomRect(baseFit, view) : null;
   const currentPath = useMemo(() => (current ? toPath(current.points) : null), [current]);
   const ready = !!(base && original && fit);
 
@@ -134,17 +145,50 @@ export function PhotoEditor({ imageUri, originalUri, onDone, onCancel }: Props) 
     setStroke(null);
   };
 
-  const pan = Gesture.Pan()
+  const setView = (next: ZoomView) => {
+    viewRef.current = next;
+    setViewState(next);
+  };
+
+  // 一指：塗抹
+  const draw = Gesture.Pan()
     .runOnJS(true)
     .minDistance(0)
     .enabled(ready && !saving)
     .onBegin(e => {
+      pinchingRef.current = false;
       if (fit) setStroke(startStroke(mode, brush, e, fit));
     })
     .onUpdate(e => {
-      if (fit && currentRef.current) setStroke(addPoint(currentRef.current, e, fit));
+      if (!pinchingRef.current && fit && currentRef.current) setStroke(addPoint(currentRef.current, e, fit));
     })
-    .onFinalize(commit);
+    .onFinalize(() => {
+      if (pinchingRef.current) {
+        pinchingRef.current = false;
+        setStroke(null);
+        return;
+      }
+      commit();
+    });
+
+  // 兩指：放大縮小、拖曳畫面（放下第二指時取消剛開始的那一筆）
+  const pinch = Gesture.Pinch()
+    .runOnJS(true)
+    .enabled(ready && !saving)
+    .onStart(e => {
+      pinchingRef.current = true;
+      setStroke(null);
+      pinchStart.current = { view: viewRef.current, focal: { x: e.focalX, y: e.focalY } };
+    })
+    .onUpdate(e => {
+      const start = pinchStart.current;
+      if (start && box) setView(pinchView(start.view, start.focal, { x: e.focalX, y: e.focalY }, e.scale, box));
+    })
+    .onFinalize(() => {
+      pinchStart.current = null;
+    });
+
+  const gesture = Gesture.Simultaneous(draw, pinch);
 
   const save = async () => {
     if (!base || !original || saving) return;
@@ -183,7 +227,7 @@ export function PhotoEditor({ imageUri, originalUri, onDone, onCancel }: Props) 
             </Pressable>
           </View>
 
-          <GestureDetector gesture={pan}>
+          <GestureDetector gesture={gesture}>
             <View style={s.canvasBox} onLayout={e => setBox(e.nativeEvent.layout)}>
               {ready && base && original && size && fit ? (
                 <Canvas style={StyleSheet.absoluteFill}>

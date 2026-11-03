@@ -132,7 +132,7 @@ export const ja: Record<keyof typeof zhTW, string> = {
   'item.editPhoto': '切り抜きを編集',
   'editor.title': '切り抜きを編集',
   'editor.done': '完了',
-  'editor.hint': '指でなぞってください：「消去」で背景を透明に、「復元」で元の写真から戻します',
+  'editor.hint': '指でなぞってください：「消去」で背景を透明に、「復元」で元の写真から戻します。2本指で拡大・縮小・移動できます',
   'editor.erase': '消去',
   'editor.restore': '復元',
   'editor.undo': '元に戻す',
@@ -192,6 +192,7 @@ export const ja: Record<keyof typeof zhTW, string> = {
   'calendar.nextWeek': '次の週',
   'calendar.hasOutfit': 'コーデあり',
   'calendar.showDay': '{date}を表示',
+  'calendar.addOutfit': '{date}のコーデを追加',
   'trash.archiveNote': '完全に削除しても、過去のコーデにはこのアイテムの写真が残ります',
 
   'suggest.line1.separates': '{top}に{bottom}を合わせて{outer}、{merit}。',

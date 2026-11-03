@@ -1,4 +1,5 @@
 import { sanitizeSettings, type Settings } from '@/store/settingsStore';
+import { DEFAULT_CANVAS_RATIO } from '@/db/outfitRepository';
 import { isOwnedPhotoPath } from './photoPath';
 
 /**
@@ -36,6 +37,8 @@ export interface BackupOutfitRow {
   date: string | null;
   created_at: string;
   updated_at: string;
+  /** 畫布高 / 寬（schema v3 起）；舊備份沒有時當作 3:4 */
+  canvas_ratio: number;
 }
 
 export interface BackupPlacementRow {
@@ -190,7 +193,9 @@ function parseData(raw: unknown): BackupData {
   const outfits = rows(raw, 'outfits').map((o): BackupOutfitRow => {
     const date = strOrNull(o, 'date');
     if (date !== null && !DATE.test(date)) throw new Corrupt('date');
-    return { id: id(o, 'id'), name: str(o, 'name', ''), date, created_at: time(o, 'created_at'), updated_at: time(o, 'updated_at') };
+    const canvas_ratio = o.canvas_ratio === undefined ? DEFAULT_CANVAS_RATIO : num(o, 'canvas_ratio');
+    if (canvas_ratio <= 0) throw new Corrupt('canvas_ratio');
+    return { id: id(o, 'id'), name: str(o, 'name', ''), date, created_at: time(o, 'created_at'), updated_at: time(o, 'updated_at'), canvas_ratio };
   });
   const outfit_items = rows(raw, 'outfit_items').map((o): BackupPlacementRow => {
     const scale = num(o, 'scale');

@@ -68,6 +68,10 @@ export const MIGRATIONS: string[] = [
   `
   ALTER TABLE items ADD COLUMN archived_at TEXT;
   `,
+  // v3（2026-11-03）：每套穿搭記住畫布比例（高 / 寬），編輯器畫布延伸到底部；舊穿搭維持 3:4
+  `
+  ALTER TABLE outfits ADD COLUMN canvas_ratio REAL NOT NULL DEFAULT 1.3333333333333333;
+  `,
 ];
 
 export async function migrate(db: MigrationDb): Promise<void> {

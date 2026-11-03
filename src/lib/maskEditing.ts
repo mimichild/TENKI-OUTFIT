@@ -60,3 +60,45 @@ export function addPoint(stroke: Stroke, p: Point, rect: FitRect): Stroke {
 export function undoStroke<T>(strokes: T[]): T[] {
   return strokes.slice(0, -1);
 }
+
+/** 雙指縮放的畫面狀態：zoom 倍數，x/y 為放大後的平移（畫面像素） */
+export interface ZoomView {
+  zoom: number;
+  x: number;
+  y: number;
+}
+
+export const NO_ZOOM: ZoomView = { zoom: 1, x: 0, y: 0 };
+/** 最多放大 5 倍，方便細修衣服邊緣 */
+export const ZOOM_MAX = 5;
+
+/** 套用縮放後，圖片在畫面上的位置；筆刷座標換算一律用這個 */
+export function zoomRect(fit: FitRect, view: ZoomView): FitRect {
+  return {
+    x: view.x + view.zoom * fit.x,
+    y: view.y + view.zoom * fit.y,
+    width: fit.width * view.zoom,
+    height: fit.height * view.zoom,
+    scale: fit.scale * view.zoom,
+  };
+}
+
+const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+
+/**
+ * 雙指手勢：以手勢開始時的狀態 start、雙指中心 focal0 為基準，
+ * 依目前的雙指中心 focal 與縮放比例 scale 算出新的畫面狀態（中心點下的內容跟著手指走）。
+ * 倍數限制在 1 ~ ZOOM_MAX；平移不會讓圖露出畫面外；縮回 1 倍時回到原位。
+ */
+export function pinchView(start: ZoomView, focal0: Point, focal: Point, scale: number, box: Size): ZoomView {
+  const zoom = clamp(start.zoom * scale, 1, ZOOM_MAX);
+  if (zoom <= 1) return NO_ZOOM;
+  const k = zoom / start.zoom;
+  const x = focal.x - k * (focal0.x - start.x);
+  const y = focal.y - k * (focal0.y - start.y);
+  return {
+    zoom,
+    x: clamp(x, box.width * (1 - zoom), 0),
+    y: clamp(y, box.height * (1 - zoom), 0),
+  };
+}

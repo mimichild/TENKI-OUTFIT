@@ -66,6 +66,18 @@ describe.each([
     return [a.id, b.id];
   };
 
+  it('記住每套穿搭的畫布比例：沒給時預設 3:4，更新沒給比例時維持原本的', async () => {
+    const [a] = await twoItems();
+    const plain = await env.outfits.create(outfit('2026-11-05', a));
+    expect(plain.canvasRatio).toBeCloseTo(4 / 3);
+    const tall = await env.outfits.create({ ...outfit('2026-11-06', a), canvasRatio: 1.8 });
+    expect((await env.outfits.get(tall.id))!.canvasRatio).toBe(1.8);
+    await env.outfits.update(tall.id, outfit('2026-11-07', a));
+    expect((await env.outfits.get(tall.id))!.canvasRatio).toBe(1.8);
+    await env.outfits.update(tall.id, { ...outfit('2026-11-07', a), canvasRatio: 1.6 });
+    expect((await env.outfits.listInRange('2026-11-07', '2026-11-07'))[0].canvasRatio).toBe(1.6);
+  });
+
   it('creates an outfit and reads it back with item data ordered by z', async () => {
     const [a, b] = await twoItems();
     const created = await env.outfits.create({ name: '上班', date: '2026-11-05', items: [at(b, 2), at(a, 1)] });

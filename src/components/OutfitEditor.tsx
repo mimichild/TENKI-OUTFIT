@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { OutfitInput } from '@/db/outfitRepository';
 import { useT, type TranslationKey } from '@/i18n';
 import { formatPrice } from '@/lib/currency';
-import { addPiece, applyGesture, bringToFront, CANVAS_HEIGHT_RATIO, removePiece, type GestureDelta } from '@/lib/outfitCanvas';
+import { addPiece, applyGesture, bringToFront, CANVAS_HEIGHT_RATIO, editorCanvasRatio, removePiece, type GestureDelta } from '@/lib/outfitCanvas';
 import { outfitTotal } from '@/lib/outfitTotals';
 import { weekdayOf } from '@/lib/weatherDates';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -20,6 +20,8 @@ export interface OutfitDraft {
   name: string;
   date: string | null;
   pieces: OutfitPiece[];
+  /** 已有穿搭的畫布比例；新穿搭不用給 */
+  canvasRatio?: number;
 }
 
 interface Props {
@@ -50,8 +52,11 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
   const [error, setError] = useState<TranslationKey | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // 畫布 3:4，扣掉上下按鈕列後放得下
-  const canvasWidth = Math.max(160, Math.min(window.width - 32, ((window.height - 300) * 3) / 4));
+  // 畫布寬度填滿、高度延伸到底部按鈕列：量出日期列與按鈕列之間的空間，比例存進穿搭
+  const [area, setArea] = useState<{ width: number; height: number } | null>(null);
+  const initialRatio = initial.canvasRatio ?? CANVAS_HEIGHT_RATIO;
+  const canvasRatio = area ? editorCanvasRatio(area, initialRatio) : initialRatio;
+  const canvasWidth = area && area.width > 0 ? area.width : window.width;
   const selectedIds = useMemo(() => new Set(pieces.map(p => p.itemId)), [pieces]);
   const total = outfitTotal(pieces);
   const canSave = date !== null && pieces.length > 0 && !busy;
@@ -61,7 +66,7 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
     setError(null);
     setPieces(list => {
       if (list.some(p => p.itemId === item.id)) return removePiece(list, item.id);
-      const placed = addPiece(list.map(placementOf), item.id).at(-1)!;
+      const placed = addPiece(list.map(placementOf), item.id, canvasRatio).at(-1)!;
       return [...list, { ...placed, item }];
     });
   };
@@ -86,7 +91,7 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
     setBusy(true);
     setError(null);
     try {
-      await onSave({ name: initial.name, date, items: pieces.map(placementOf) });
+      await onSave({ name: initial.name, date, items: pieces.map(placementOf), canvasRatio });
     } catch (e) {
       console.warn('儲存穿搭失敗', e);
       setError('outfit.saveFailed');
@@ -144,29 +149,39 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
         {date === null && <Text style={[s.hint, { color: theme.primaryText }]}>{t('outfit.dateRequired')}</Text>}
 
         <View
-          testID="outfit-canvas"
-          accessibilityLabel={t('outfit.canvas')}
-          style={[s.canvas, { width: canvasWidth, height: canvasWidth * CANVAS_HEIGHT_RATIO, borderColor: theme.border }]}
+          testID="canvas-area"
+          style={s.canvasArea}
+          onLayout={e => {
+            const { width, height } = e.nativeEvent.layout;
+            setArea(a => (a && a.width === width && a.height === height ? a : { width, height }));
+          }}
         >
-          {/* 點空白處取消選取。用手勢而不是 Pressable：Pressable 會在點單品放開時也收到 onPress，把剛選的又取消 */}
-          <GestureDetector gesture={canvasTap}>
-            <View style={s.canvasBackground}>
-              {pieces.length === 0 && <Text style={s.emptyHint}>{t('outfit.emptyCanvas')}</Text>}
-            </View>
-          </GestureDetector>
-          {/* 疊放順序用 zIndex，不重新排列子元件，避免手勢進行中原生畫面被搬動 */}
-          {pieces.map(p => (
-            <CanvasPiece
-              key={p.itemId}
-              piece={p}
-              width={canvasWidth}
-              selected={p.itemId === selectedId}
-              label={t('outfit.pieceLabel', { name: p.item.name || p.item.brand || t('item.untitled') })}
-              color={theme.primaryText}
-              onBegin={() => select(p.itemId)}
-              onCommit={next => commit(p.itemId, next)}
-            />
-          ))}
+          <View
+            testID="outfit-canvas"
+            accessibilityLabel={t('outfit.canvas')}
+            style={[s.canvas, { width: canvasWidth, height: canvasWidth * canvasRatio, borderColor: theme.border }]}
+          >
+            {/* 點空白處取消選取。用手勢而不是 Pressable：Pressable 會在點單品放開時也收到 onPress，把剛選的又取消 */}
+            <GestureDetector gesture={canvasTap}>
+              <View style={s.canvasBackground}>
+                {pieces.length === 0 && <Text style={s.emptyHint}>{t('outfit.emptyCanvas')}</Text>}
+              </View>
+            </GestureDetector>
+            {/* 疊放順序用 zIndex，不重新排列子元件，避免手勢進行中原生畫面被搬動 */}
+            {pieces.map(p => (
+              <CanvasPiece
+                key={p.itemId}
+                piece={p}
+                width={canvasWidth}
+                ratio={canvasRatio}
+                selected={p.itemId === selectedId}
+                label={t('outfit.pieceLabel', { name: p.item.name || p.item.brand || t('item.untitled') })}
+                color={theme.primaryText}
+                onBegin={() => select(p.itemId)}
+                onCommit={next => commit(p.itemId, next)}
+              />
+            ))}
+          </View>
         </View>
 
         <View style={s.toolbar}>
@@ -224,6 +239,8 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
 interface PieceProps {
   piece: OutfitPiece;
   width: number;
+  /** 畫布高 / 寬 */
+  ratio: number;
   selected: boolean;
   label: string;
   color: string;
@@ -239,11 +256,11 @@ const NO_CHANGE: GestureDelta = { dx: 0, dy: 0, scale: 1, rotation: 0 };
  * 手勢進行中只更新這件單品自己的狀態，放開後才回寫到編輯器。
  * 手指放開又按下時各手勢會從頭計算，所以把已結束的部分累加到 done。
  */
-function CanvasPiece({ piece, width, selected, label, color, onBegin, onCommit }: PieceProps) {
+function CanvasPiece({ piece, width, ratio, selected, label, color, onBegin, onCommit }: PieceProps) {
   const [live, setLive] = useState<OutfitItemPlacement | null>(null);
   // 手勢的 callback 可能是較早 render 時建立的，一律從 ref 讀最新的值
-  const latest = useRef({ piece, width, onBegin, onCommit });
-  latest.current = { piece, width, onBegin, onCommit };
+  const latest = useRef({ piece, width, ratio, onBegin, onCommit });
+  latest.current = { piece, width, ratio, onBegin, onCommit };
   /** 已經 onBegin 的手勢；onFinalize 也可能發生在沒有 onBegin 的手勢上，要配對才算 */
   const active = useRef(new Set<GestureKind>());
   const start = useRef<OutfitItemPlacement>(piece);
@@ -258,7 +275,7 @@ function CanvasPiece({ piece, width, selected, label, color, onBegin, onCommit }
   });
   const update = (patch: Partial<GestureDelta>) => {
     current.current = { ...current.current, ...patch };
-    setLive(applyGesture(start.current, total(), latest.current.width));
+    setLive(applyGesture(start.current, total(), latest.current.width, latest.current.ratio));
   };
   /**
    * 某個手勢結束：它的變化併入 done（其他還在進行的手勢留在 current）。
@@ -267,7 +284,7 @@ function CanvasPiece({ piece, width, selected, label, color, onBegin, onCommit }
   const fold = (ended: Partial<Record<keyof GestureDelta, true>>) => {
     const width = latest.current.width;
     const c = current.current;
-    const clamped = applyGesture(start.current, total(), width);
+    const clamped = applyGesture(start.current, total(), width, latest.current.ratio);
     // 還在進行的手勢的部分不併入
     const keep = {
       dx: ended.dx ? 0 : c.dx,
@@ -294,7 +311,7 @@ function CanvasPiece({ piece, width, selected, label, color, onBegin, onCommit }
   };
   const finalize = (kind: GestureKind) => {
     if (!active.current.delete(kind) || active.current.size > 0) return;
-    const next = applyGesture(start.current, total(), latest.current.width);
+    const next = applyGesture(start.current, total(), latest.current.width, latest.current.ratio);
     setLive(null);
     latest.current.onCommit(next);
   };
@@ -350,7 +367,9 @@ const makeStyles = (theme: Theme) =>
     dateLabel: { fontSize: 14 },
     hint: { alignSelf: 'stretch', fontSize: 13 },
     // 去背單品放在白底最好看，深色模式也維持白底
-    canvas: { backgroundColor: '#FFFFFF', borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: 'hidden' },
+    // 畫布可用空間：撐滿日期列與按鈕列之間；抵銷 body 左右內距，畫布貼齊手機邊緣
+    canvasArea: { flex: 1, alignSelf: 'stretch', marginHorizontal: -16 },
+    canvas: { backgroundColor: '#FFFFFF', borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
     canvasBackground: { ...StyleSheet.absoluteFillObject, justifyContent: 'center' },
     emptyHint: { color: '#8A8A8A', textAlign: 'center', paddingHorizontal: 24, fontSize: 14, lineHeight: 20 },
     toolbar: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },

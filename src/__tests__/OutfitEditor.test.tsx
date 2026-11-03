@@ -1,8 +1,10 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import { State } from 'react-native-gesture-handler';
 import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { OutfitEditor, type OutfitDraft } from '@/components/OutfitEditor';
+import { CANVAS_HEIGHT_RATIO } from '@/lib/outfitCanvas';
 import { DEFAULT_SETTINGS, useSettingsStore } from '@/store/settingsStore';
 import type { Item } from '@/types/models';
 
@@ -46,8 +48,31 @@ describe('OutfitEditor', () => {
     await act(async () => fireEvent.press(saveButton()));
     expect(onSave).toHaveBeenCalledWith({
       name: '', date: '2026-11-05',
-      items: [{ itemId: 'a', x: 0.5, y: 2 / 3, scale: 1, rotation: 0, z: 0 }],
+      items: [{ itemId: 'a', x: 0.5, y: CANVAS_HEIGHT_RATIO / 2, scale: 1, rotation: 0, z: 0 }],
+      canvasRatio: CANVAS_HEIGHT_RATIO,
     });
+  });
+
+  it('舊穿搭的畫布也不管原本比例，一樣填滿到底', () => {
+    setup({ initial: { name: '', date: '2026-11-05', pieces: [], canvasRatio: 2.2 } });
+    fireEvent(screen.getByTestId('canvas-area'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 520 } } });
+    const canvas = StyleSheet.flatten(screen.getByTestId('outfit-canvas').props.style);
+    expect(canvas).toMatchObject({ width: 390 });
+    expect(canvas.height).toBeCloseTo(520);
+  });
+
+  it('畫布寬度填滿、高度延伸到底部，存檔時記下這個比例', async () => {
+    const { onSave } = setup({ initial: { name: '', date: '2026-11-05', pieces: [] } });
+    fireEvent(screen.getByTestId('canvas-area'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 358, height: 600 } } });
+    const canvas = StyleSheet.flatten(screen.getByTestId('outfit-canvas').props.style);
+    expect(canvas.width).toBe(358);
+    expect(canvas.height).toBeCloseTo(600);
+    fireEvent.press(screen.getByRole('button', { name: '加入單品' }));
+    pick('白襯衫');
+    await act(async () => fireEvent.press(saveButton()));
+    expect(onSave.mock.calls[0][0].canvasRatio).toBeCloseTo(600 / 358);
+    // 新單品放在這個畫布的中央
+    expect(onSave.mock.calls[0][0].items[0].y).toBeCloseTo(600 / 358 / 2);
   });
 
   it('cannot save an empty canvas even with a date', () => {

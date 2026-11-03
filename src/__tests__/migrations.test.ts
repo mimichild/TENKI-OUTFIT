@@ -43,7 +43,18 @@ describe('migrate on a real SQLite database', () => {
     db.raw.exec(MIGRATIONS[0]);
     db.raw.exec("PRAGMA user_version = 1; INSERT INTO items (id, category, created_at, updated_at) VALUES ('a', 'top', 't', 't');");
     await migrate(db as never);
-    expect(db.raw.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 });
+    expect(db.raw.prepare('PRAGMA user_version').get()).toEqual({ user_version: MIGRATIONS.length });
     expect(db.raw.prepare('SELECT id, archived_at FROM items').all()).toEqual([{ id: 'a', archived_at: null }]);
+  });
+
+  it('v2 → v3：穿搭新增 canvas_ratio，舊穿搭維持 3:4', async () => {
+    const db = openTestDb();
+    db.raw.exec(MIGRATIONS[0]);
+    db.raw.exec(MIGRATIONS[1]);
+    db.raw.exec("PRAGMA user_version = 2; INSERT INTO outfits (id, name, date, created_at, updated_at) VALUES ('o', '', '2026-11-01', 't', 't');");
+    await migrate(db as never);
+    expect(db.raw.prepare('PRAGMA user_version').get()).toEqual({ user_version: 3 });
+    const row = db.raw.prepare('SELECT canvas_ratio FROM outfits').get() as { canvas_ratio: number };
+    expect(row.canvas_ratio).toBeCloseTo(4 / 3);
   });
 });

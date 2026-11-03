@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { taipeiDate } from '@/lib/cwaWeather';
 import type { Outfit, OutfitPiece } from '@/types/models';
 import type { RepositoryDeps } from './itemRepository';
-import { OutfitValidationError, validateOutfitInput, type OutfitInput, type OutfitRepository } from './outfitRepository';
+import { DEFAULT_CANVAS_RATIO, OutfitValidationError, canvasRatioOf, validateOutfitInput, type OutfitInput, type OutfitRepository } from './outfitRepository';
 import { rowToItem, type ItemRow } from './sqliteItemRepository';
 import { refreshLastUsed, removeOrphanedArchived, type Tx } from './sqliteOutfitRules';
 
@@ -12,6 +12,7 @@ interface OutfitRow {
   id: string;
   name: string;
   date: string | null;
+  canvas_ratio: number;
   created_at: string;
   updated_at: string;
 }
@@ -46,6 +47,7 @@ export function createSqliteOutfitRepository(db: Db, deps: RepositoryDeps): Outf
     }
     return rows.map(r => ({
       id: r.id, name: r.name, date: r.date, createdAt: r.created_at, updatedAt: r.updated_at,
+      canvasRatio: r.canvas_ratio,
       pieces: byOutfit.get(r.id) ?? [],
     }));
   };
@@ -101,8 +103,8 @@ export function createSqliteOutfitRepository(db: Db, deps: RepositoryDeps): Outf
       await db.withExclusiveTransactionAsync(async tx => {
         const usable = await usableInput(tx, input);
         await tx.runAsync(
-          'INSERT INTO outfits (id, name, date, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-          id, usable.name, usable.date, now, now,
+          'INSERT INTO outfits (id, name, date, canvas_ratio, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+          id, usable.name, usable.date, canvasRatioOf(input, DEFAULT_CANVAS_RATIO), now, now,
         );
         await writePieces(tx, id, usable);
         await refreshLastUsed(tx, usable.items.map(p => p.itemId));
@@ -114,13 +116,13 @@ export function createSqliteOutfitRepository(db: Db, deps: RepositoryDeps): Outf
       let found = false;
       let purged: Awaited<ReturnType<typeof removeOrphanedArchived>> = [];
       await db.withExclusiveTransactionAsync(async tx => {
-        const exists = await tx.getFirstAsync<{ id: string }>('SELECT id FROM outfits WHERE id = ?', id);
+        const exists = await tx.getFirstAsync<{ id: string; canvas_ratio: number }>('SELECT id, canvas_ratio FROM outfits WHERE id = ?', id);
         if (!exists) return;
         found = true;
         const usable = await usableInput(tx, input);
         await tx.runAsync(
-          'UPDATE outfits SET name = ?, date = ?, updated_at = ? WHERE id = ?',
-          usable.name, usable.date, deps.now(), id,
+          'UPDATE outfits SET name = ?, date = ?, canvas_ratio = ?, updated_at = ? WHERE id = ?',
+          usable.name, usable.date, canvasRatioOf(input, exists.canvas_ratio), deps.now(), id,
         );
         const before = await itemIdsOf(tx, id);
         await tx.runAsync('DELETE FROM outfit_items WHERE outfit_id = ?', id);

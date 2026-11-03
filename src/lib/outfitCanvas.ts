@@ -1,7 +1,8 @@
 import type { OutfitItemPlacement } from '@/types/models';
 
 /**
- * 穿搭畫布：直式 3:4。位置與大小都以「畫布寬度」為單位，換手機相對位置不變。
+ * 穿搭畫布：寬度固定為 1，高度 = 每套穿搭自己的 canvasRatio（舊穿搭與穿搭建議 3:4）。
+ * 位置與大小都以「畫布寬度」為單位，換手機相對位置不變。
  * x, y = 單品中心點；scale = 相對基本大小；rotation = 弧度
  */
 export const CANVAS_HEIGHT_RATIO = 4 / 3;
@@ -37,22 +38,22 @@ export interface GestureDelta {
 }
 
 /** 以手勢開始時的位置為基準套用變化 */
-export function applyGesture(start: OutfitItemPlacement, g: GestureDelta, width: number): OutfitItemPlacement {
+export function applyGesture(start: OutfitItemPlacement, g: GestureDelta, width: number, ratio = CANVAS_HEIGHT_RATIO): OutfitItemPlacement {
   return {
     ...start,
     x: clamp(start.x + g.dx / width, 0, 1),
-    y: clamp(start.y + g.dy / width, 0, CANVAS_HEIGHT_RATIO),
+    y: clamp(start.y + g.dy / width, 0, ratio),
     scale: clamp(start.scale * g.scale, MIN_SCALE, MAX_SCALE),
     rotation: normalizeRotation(start.rotation + g.rotation),
   };
 }
 
 /** 新單品放在最上層、中間稍微錯開；已經在畫布上就不重複加 */
-export function addPiece(list: OutfitItemPlacement[], itemId: string): OutfitItemPlacement[] {
+export function addPiece(list: OutfitItemPlacement[], itemId: string, ratio = CANVAS_HEIGHT_RATIO): OutfitItemPlacement[] {
   if (list.some(p => p.itemId === itemId)) return list;
   const offset = (list.length % 6) * 0.05;
   const z = list.reduce((max, p) => Math.max(max, p.z + 1), 0);
-  return [...list, { itemId, x: 0.5 + offset, y: CANVAS_HEIGHT_RATIO / 2 + offset, scale: 1, rotation: 0, z }];
+  return [...list, { itemId, x: 0.5 + offset, y: ratio / 2 + offset, scale: 1, rotation: 0, z }];
 }
 
 /** 移到最上層，並把 z 重新編成 0..n-1（保持原本陣列順序） */
@@ -65,4 +66,12 @@ export function bringToFront<T extends OutfitItemPlacement>(list: T[], itemId: s
 
 export function removePiece<T extends OutfitItemPlacement>(list: T[], itemId: string): T[] {
   return list.filter(p => p.itemId !== itemId);
+}
+
+/**
+ * 編輯器畫布比例：不管原本比例，寬度貼齊手機左右邊緣、高度延伸到底部（使用者指定）。
+ * 還沒量到版面時沿用原本的比例。
+ */
+export function editorCanvasRatio(area: { width: number; height: number }, current: number): number {
+  return area.width > 0 && area.height > 0 ? area.height / area.width : current;
 }

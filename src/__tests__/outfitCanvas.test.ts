@@ -1,5 +1,5 @@
 import {
-  CANVAS_HEIGHT_RATIO, MAX_SCALE, MIN_SCALE, addPiece, applyGesture, bringToFront, normalizeRotation, pieceBox, removePiece,
+  CANVAS_HEIGHT_RATIO, MAX_SCALE, editorCanvasRatio, MIN_SCALE, addPiece, applyGesture, bringToFront, normalizeRotation, pieceBox, removePiece,
 } from '@/lib/outfitCanvas';
 
 const p = (itemId: string, z: number, extra = {}) => ({ itemId, x: 0.5, y: 0.5, scale: 1, rotation: 0, z, ...extra });
@@ -48,5 +48,24 @@ describe('outfit canvas', () => {
 
   it('removes a piece', () => {
     expect(removePiece([p('a', 0), p('b', 1)], 'a').map(x => x.itemId)).toEqual(['b']);
+  });
+});
+
+describe('畫布比例', () => {
+  it('預設（舊穿搭、穿搭建議）是直式 3:4', () => {
+    expect(CANVAS_HEIGHT_RATIO).toBe(4 / 3);
+  });
+
+  it('每套穿搭可以有自己的比例：拖拉限制在該比例的畫布內、新單品放在該畫布中央', () => {
+    const far = applyGesture(p('a', 0), { dx: 0, dy: 10_000, scale: 1, rotation: 0 }, 400, 1.8);
+    expect(far.y).toBe(1.8);
+    expect(addPiece([], 'a', 1.8)[0].y).toBe(0.9);
+  });
+
+  it('編輯器畫布比例：不管原本比例，完全依可用空間（寬度填滿、高度到底）', () => {
+    expect(editorCanvasRatio({ width: 300, height: 540 }, 4 / 3)).toBeCloseTo(1.8);
+    expect(editorCanvasRatio({ width: 300, height: 360 }, 2)).toBeCloseTo(1.2);
+    // 還沒量到版面時沿用原本的
+    expect(editorCanvasRatio({ width: 0, height: 0 }, 2)).toBe(2);
   });
 });

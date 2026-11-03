@@ -91,7 +91,7 @@ const item = (id: string, extra: Record<string, unknown> = {}) => ({
   last_used_at: null, deleted_at: null, archived_at: null, ...extra,
 });
 const outfit = (id: string, date: string) => ({
-  id, name: '', date, created_at: '2026-11-01T00:00:00.000Z', updated_at: '2026-11-01T00:00:00.000Z',
+  id, name: '', date, created_at: '2026-11-01T00:00:00.000Z', updated_at: '2026-11-01T00:00:00.000Z', canvas_ratio: 4 / 3,
 });
 const at = (outfit_id: string, item_id: string) => ({ outfit_id, item_id, x: 0.5, y: 0.5, scale: 1, rotation: 0, z: 0 });
 

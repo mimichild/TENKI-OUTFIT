@@ -132,7 +132,7 @@ export const en: Record<keyof typeof zhTW, string> = {
   'item.editPhoto': 'Edit cutout',
   'editor.title': 'Edit cutout',
   'editor.done': 'Done',
-  'editor.hint': 'Paint with your finger: Erase makes the background transparent, Restore brings back parts from the original',
+  'editor.hint': 'Paint with your finger: Erase makes the background transparent, Restore brings back parts from the original. Pinch with two fingers to zoom and move',
   'editor.erase': 'Erase',
   'editor.restore': 'Restore',
   'editor.undo': 'Undo',
@@ -192,6 +192,7 @@ export const en: Record<keyof typeof zhTW, string> = {
   'calendar.nextWeek': 'Next week',
   'calendar.hasOutfit': 'has outfits',
   'calendar.showDay': 'Show {date}',
+  'calendar.addOutfit': 'Add an outfit for {date}',
   'trash.archiveNote': 'After deleting forever, past outfits still keep this item’s photo.',
 
   'suggest.line1.separates': '{top} with {bottom}{outer} — {merit}.',

@@ -1,7 +1,7 @@
 import { taipeiDate } from '@/lib/cwaWeather';
 import type { Item, Outfit, OutfitItemPlacement } from '@/types/models';
 import { trashCutoff, type ItemRepository, type RepositoryDeps } from './itemRepository';
-import { OutfitValidationError, validateOutfitInput, type OutfitInput, type OutfitRepository } from './outfitRepository';
+import { DEFAULT_CANVAS_RATIO, OutfitValidationError, canvasRatioOf, validateOutfitInput, type OutfitInput, type OutfitRepository } from './outfitRepository';
 
 const clone = (item: Item): Item => ({ ...item, occasions: [...item.occasions], seasons: [...item.seasons] });
 
@@ -15,6 +15,7 @@ interface StoredOutfit {
   id: string;
   name: string;
   date: string | null;
+  canvasRatio: number;
   createdAt: string;
   updatedAt: string;
   items: OutfitItemPlacement[];
@@ -82,7 +83,7 @@ export function createMemoryDatabase(
   };
 
   const toOutfit = (o: StoredOutfit): Outfit => ({
-    id: o.id, name: o.name, date: o.date, createdAt: o.createdAt, updatedAt: o.updatedAt,
+    id: o.id, name: o.name, date: o.date, canvasRatio: o.canvasRatio, createdAt: o.createdAt, updatedAt: o.updatedAt,
     pieces: [...o.items]
       .sort((a, b) => a.z - b.z || a.itemId.localeCompare(b.itemId))
       .flatMap(p => {
@@ -169,7 +170,10 @@ export function createMemoryDatabase(
       validateOutfitInput(input);
       const placements = copyPlacements(input);
       const now = deps.now();
-      const o: StoredOutfit = { id: deps.newId(), name: input.name, date: input.date, createdAt: now, updatedAt: now, items: placements };
+      const o: StoredOutfit = {
+        id: deps.newId(), name: input.name, date: input.date, canvasRatio: canvasRatioOf(input, DEFAULT_CANVAS_RATIO),
+        createdAt: now, updatedAt: now, items: placements,
+      };
       outfits.set(o.id, o);
       refreshLastUsed(o.items.map(p => p.itemId));
       return toOutfit(o);
@@ -180,7 +184,7 @@ export function createMemoryDatabase(
       if (!o) return null;
       const before = o.items.map(p => p.itemId);
       const placements = copyPlacements(input);
-      Object.assign(o, { name: input.name, date: input.date, updatedAt: deps.now(), items: placements });
+      Object.assign(o, { name: input.name, date: input.date, canvasRatio: canvasRatioOf(input, o.canvasRatio), updatedAt: deps.now(), items: placements });
       refreshLastUsed([...before, ...o.items.map(p => p.itemId)]);
       const purged = removeOrphanedArchived(before);
       return { outfit: toOutfit(o), purged };

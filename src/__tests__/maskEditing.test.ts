@@ -1,4 +1,8 @@
 import {
+  NO_ZOOM,
+  ZOOM_MAX,
+  pinchView,
+  zoomRect,
   BRUSH_MAX,
   BRUSH_MIN,
   addPoint,
@@ -88,5 +92,47 @@ describe('brush size slider', () => {
     expect(sliderFromBrush(BRUSH_MIN, 200)).toBe(0);
     expect(sliderFromBrush(BRUSH_MAX, 200)).toBe(200);
     expect(brushFromSlider(sliderFromBrush(30, 200), 200)).toBe(30);
+  });
+});
+
+describe('雙指縮放', () => {
+  const fit = { x: 10, y: 20, width: 200, height: 300, scale: 0.5 };
+  const box = { width: 220, height: 340 };
+
+  it('沒有縮放時，畫面位置跟原本一樣', () => {
+    expect(zoomRect(fit, NO_ZOOM)).toEqual(fit);
+  });
+
+  it('放大後筆刷落點換算到圖片像素仍然正確', () => {
+    const rect = zoomRect(fit, { zoom: 2, x: -100, y: -50 });
+    expect(rect.scale).toBe(1);
+    // 原本畫面上 (110, 170) 對到圖片 (200, 300)；放大兩倍、平移後同一點在 (2*110-100, 2*170-50)
+    expect(toImagePoint({ x: 120, y: 290 }, rect)).toEqual({ x: 200, y: 300 });
+  });
+
+  it('以雙指中心為基準放大：手指下的那一點不動', () => {
+    const v = pinchView(NO_ZOOM, { x: 100, y: 150 }, { x: 100, y: 150 }, 2, box);
+    expect(v.zoom).toBe(2);
+    // 手指下的點 (100,150) 放大後仍在 (100,150)
+    expect(v.zoom * 100 + v.x).toBeCloseTo(100);
+    expect(v.zoom * 150 + v.y).toBeCloseTo(150);
+  });
+
+  it('雙指一起移動可以拖曳畫面', () => {
+    const start = { zoom: 2, x: -100, y: -100 };
+    const v = pinchView(start, { x: 100, y: 100 }, { x: 130, y: 90 }, 1, box);
+    expect(v).toEqual({ zoom: 2, x: -70, y: -110 });
+  });
+
+  it('縮放範圍限制在 1 到最大倍數之間；縮回 1 倍時回到原位', () => {
+    expect(pinchView(NO_ZOOM, { x: 50, y: 50 }, { x: 50, y: 50 }, 100, box).zoom).toBe(ZOOM_MAX);
+    expect(pinchView({ zoom: 2, x: -50, y: -50 }, { x: 50, y: 50 }, { x: 80, y: 80 }, 0.2, box)).toEqual(NO_ZOOM);
+  });
+
+  it('拖曳不會把圖拉出畫面外', () => {
+    const v = pinchView({ zoom: 2, x: 0, y: 0 }, { x: 0, y: 0 }, { x: 500, y: 500 }, 1, box);
+    expect(v).toEqual({ zoom: 2, x: 0, y: 0 });
+    const w = pinchView({ zoom: 2, x: 0, y: 0 }, { x: 0, y: 0 }, { x: -1000, y: -1000 }, 1, box);
+    expect(w).toEqual({ zoom: 2, x: -220, y: -340 });
   });
 });

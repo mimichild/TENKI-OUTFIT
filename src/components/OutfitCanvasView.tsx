@@ -23,10 +23,10 @@ export function PieceImage({ item }: { item: Item }) {
   );
 }
 
-/** 唯讀的穿搭畫布（天氣穿搭頁、清單縮圖） */
-export function OutfitCanvasView({ pieces, width }: { pieces: OutfitPiece[]; width: number }) {
+/** 唯讀的穿搭畫布（天氣穿搭頁、清單縮圖）；ratio = 這套穿搭的畫布高 / 寬 */
+export function OutfitCanvasView({ pieces, width, ratio = CANVAS_HEIGHT_RATIO }: { pieces: OutfitPiece[]; width: number; ratio?: number }) {
   return (
-    <View style={[styles.canvas, { width, height: width * CANVAS_HEIGHT_RATIO }]} pointerEvents="none">
+    <View testID="outfit-canvas-view" style={[styles.canvas, { width, height: width * ratio }]} pointerEvents="none">
       {pieces.map(p => (
         <View key={p.itemId} style={pieceStyle(p, width)}>
           <PieceImage item={p.item} />

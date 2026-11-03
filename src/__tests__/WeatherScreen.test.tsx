@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { useState, type ReactNode } from 'react';
-import { AppState, RefreshControl, type AppStateStatus } from 'react-native';
+import { AppState, RefreshControl, StyleSheet, type AppStateStatus } from 'react-native';
+import { OUTFIT_CARD_FOOTER_HEIGHT } from '@/components/OutfitCard';
 import WeatherScreen from '../../app/(tabs)/index';
 import { WeatherProvider } from '@/db/WeatherContext';
 import { createMemoryWeatherRepository } from '@/db/memoryWeatherRepository';
@@ -146,7 +147,7 @@ describe('WeatherScreen', () => {
     expect(screen.queryByText('資料來源：中央氣象署')).toBeNull();
   });
 
-  it('moves between cached dates and stops at both ends', async () => {
+  it('moves between cached dates; past days have no limit, future stops at the last forecast', async () => {
     await setup({ seed: [cached('2026-11-02', 28)], result: { status: 'ok', days: [forecast('2026-11-03', 25), forecast('2026-11-04', 22)] } });
     const prev = screen.getByLabelText('前一天');
     const next = screen.getByLabelText('後一天');
@@ -161,7 +162,11 @@ describe('WeatherScreen', () => {
     expect(screen.getByText('昨天')).toBeTruthy();
     expect(screen.getByText('28°')).toBeTruthy();
     expect(screen.getByText('晴天')).toBeTruthy();
-    expect(prev).toBeDisabled();
+    // 過去沒有天氣資料的日子也能往前看（為了看過去的穿搭）
+    expect(prev).not.toBeDisabled();
+    fireEvent.press(prev);
+    expect(screen.getByText('11/1（日）')).toBeTruthy();
+    expect(screen.getByText('這一天沒有天氣資料')).toBeTruthy();
   });
 
   it('opens a new outfit for the day being viewed from the + button', async () => {
@@ -279,6 +284,31 @@ describe('WeatherScreen outfits', () => {
     expect(cards()).toHaveLength(1);
   });
 
+  it('日檢視可以往前看到過去的穿搭', async () => {
+    await setup({ result: twoDays, outfits: [{ date: '2026-10-30', items: ['shirt'] }] });
+    for (let i = 0; i < 4; i++) await press(screen.getByRole('button', { name: '前一天' }));
+    expect(screen.getByText('10/30（五）')).toBeTruthy();
+    expect(cards()).toHaveLength(1);
+  });
+
+  it('週檢視可以往前看到過去的穿搭', async () => {
+    await setup({ result: twoDays, outfits: [{ date: '2026-10-28', items: ['shirt'] }] });
+    await press(screen.getByRole('tab', { name: '週' }));
+    await press(screen.getByRole('button', { name: '上一週' }));
+    expect(cards()).toHaveLength(1);
+  });
+
+  it('日檢視的穿搭畫布左右貼齊手機邊緣、往下延伸到分頁列（不管原本比例）', async () => {
+    await setup({ result: twoDays, outfits: [{ date: '2026-11-03', items: ['shirt'] }] });
+    // 可用高度 = 捲動區域 700 − 上方內距 16 − 天氣欄 150 − 間距 12 = 522（不受穿搭內容影響）
+    fireEvent(screen.getByTestId('weather-scroll'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 700 } } });
+    fireEvent(screen.getByTestId('weather-card'), 'layout', { nativeEvent: { layout: { x: 16, y: 16, width: 358, height: 150 } } });
+    const canvas = StyleSheet.flatten(screen.getByTestId('outfit-canvas-view').props.style);
+    expect(canvas.width).toBe(390);
+    // 扣掉下方總金額列
+    expect(canvas.height).toBe(522 - OUTFIT_CARD_FOOTER_HEIGHT);
+  });
+
   it('says when a day has no outfit yet', async () => {
     await setup({ result: twoDays });
     expect(screen.getByText('這天還沒有穿搭，按右下 ＋ 新增')).toBeTruthy();
@@ -317,26 +347,40 @@ describe('WeatherScreen outfits', () => {
     expect(screen.getByText('2026/12/27（日） – 2027/1/2（六）')).toBeTruthy();
   });
 
-  it('month view marks days with outfits and shows the chosen day', async () => {
+  it('月檢視：有穿搭的日子顯示縮小版穿搭，點了打開那天的日檢視', async () => {
     await setup({ result: twoDays, outfits: planned });
     await press(screen.getByRole('tab', { name: '月' }));
     expect(screen.getByText('2026 年 11 月')).toBeTruthy();
-    expect(screen.getByTestId('day-2026-11-03').props.accessibilityLabel).toMatch(/有穿搭/);
-    expect(screen.getByTestId('day-2026-11-05').props.accessibilityLabel).not.toMatch(/有穿搭/);
-    expect(cards()).toHaveLength(2);
-    await press(screen.getByTestId('day-2026-11-04'));
+    expect(screen.getByTestId('month-outfit-2026-11-03')).toBeTruthy();
+    expect(screen.getByTestId('month-outfit-2026-11-04')).toBeTruthy();
+    expect(screen.queryByTestId('month-outfit-2026-11-05')).toBeNull();
+    await press(screen.getByRole('button', { name: '查看 11/4（三）' }));
+    expect(screen.getByRole('tab', { name: '日' })).toBeSelected();
+    expect(screen.getByText('明天')).toBeTruthy();
     expect(cards()).toHaveLength(1);
-    await press(screen.getByRole('button', { name: '下個月' }));
-    expect(screen.getByText('2026 年 12 月')).toBeTruthy();
-    // 換月份後，下方仍是原本選的那天的穿搭
-    expect(cards()).toHaveLength(1);
+  });
+
+  it('月檢視：沒有穿搭的日子顯示 ＋，點了新增那天的穿搭', async () => {
+    await setup({ result: twoDays, outfits: planned });
+    await press(screen.getByRole('tab', { name: '月' }));
+    await press(screen.getByRole('button', { name: '新增 11/5（四）的穿搭' }));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/outfit/edit', params: { date: '2026-11-05' } });
+  });
+
+  it('月檢視可以往前看到過去的穿搭', async () => {
+    await setup({ result: twoDays, outfits: [{ date: '2026-10-15', items: ['shirt'] }] });
+    await press(screen.getByRole('tab', { name: '月' }));
+    await press(screen.getByRole('button', { name: '上個月' }));
+    expect(screen.getByText('2026 年 10 月')).toBeTruthy();
+    expect(screen.getByTestId('month-outfit-2026-10-15')).toBeTruthy();
   });
 
   it('after picking a day beyond the forecast, the arrows lead back toward it', async () => {
     await setup({ result: twoDays });
-    await press(screen.getByRole('tab', { name: '月' }));
-    await press(screen.getByTestId('day-2026-11-20'));
-    await press(screen.getByRole('tab', { name: '日' }));
+    await press(screen.getByRole('tab', { name: '週' }));
+    await press(screen.getByRole('button', { name: '下一週' }));
+    await press(screen.getByRole('button', { name: '下一週' }));
+    await press(screen.getByRole('button', { name: '查看 11/20（五）' }));
     expect(screen.getByText('11/20（五）')).toBeTruthy();
     expect(screen.getByText('這一天沒有天氣資料')).toBeTruthy();
     expect(screen.getByLabelText('後一天')).toBeDisabled();

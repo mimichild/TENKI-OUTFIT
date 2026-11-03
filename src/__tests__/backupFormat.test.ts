@@ -25,7 +25,7 @@ const data = (): BackupData => ({
     item('c', { archived_at: '2026-11-02T00:00:00.000Z', image_uri: null, original_uri: null }),
   ],
   outfits: [
-    { id: 'o1', name: '', date: '2026-10-30', created_at: '2026-10-30T00:00:00.000Z', updated_at: '2026-10-30T00:00:00.000Z' },
+    { id: 'o1', name: '', date: '2026-10-30', created_at: '2026-10-30T00:00:00.000Z', updated_at: '2026-10-30T00:00:00.000Z', canvas_ratio: 1.8 },
   ],
   outfit_items: [
     { outfit_id: 'o1', item_id: 'a', x: 0.5, y: 0.5, scale: 1, rotation: 0, z: 0 },
@@ -164,5 +164,27 @@ describe('filterNewRows', () => {
 describe('summarizeBackup', () => {
   it('單品（不含暫存區、封存）、暫存區、穿搭數', () => {
     expect(summarizeBackup(data())).toEqual({ items: 1, trash: 1, outfits: 1 });
+  });
+});
+
+describe('穿搭畫布比例', () => {
+  const withOutfit = (o: Record<string, unknown>) => {
+    const m = buildManifest(data(), settings, meta) as unknown as { data: { outfits: Record<string, unknown>[] } };
+    m.data.outfits = [{ ...m.data.outfits[0], ...o }];
+    return JSON.stringify(m);
+  };
+
+  it('匯出、匯入都保留比例', () => {
+    const r = parseManifest(text(), { schemaVersion: 3 });
+    expect(r.ok && r.manifest.data.outfits[0].canvas_ratio).toBe(1.8);
+  });
+
+  it('舊備份沒有比例時當作 3:4', () => {
+    const r = parseManifest(withOutfit({ canvas_ratio: undefined }), { schemaVersion: 3 });
+    expect(r.ok && r.manifest.data.outfits[0].canvas_ratio).toBeCloseTo(4 / 3);
+  });
+
+  it('比例不合理時視為損毀', () => {
+    expect(parseManifest(withOutfit({ canvas_ratio: 0 }), { schemaVersion: 3 })).toEqual({ ok: false, reason: 'corrupt' });
   });
 });

@@ -130,7 +130,7 @@ export const zhTW = {
   'item.editPhoto': '重新編輯照片',
   'editor.title': '編輯去背範圍',
   'editor.done': '完成',
-  'editor.hint': '用手指塗抹：「擦除」讓背景變透明，「補回」從原圖還原被切掉的部分',
+  'editor.hint': '用手指塗抹：「擦除」讓背景變透明，「補回」從原圖還原被切掉的部分；雙指可放大縮小、拖曳',
   'editor.erase': '擦除',
   'editor.restore': '補回',
   'editor.undo': '復原',
@@ -190,6 +190,7 @@ export const zhTW = {
   'calendar.nextWeek': '下一週',
   'calendar.hasOutfit': '有穿搭',
   'calendar.showDay': '查看 {date}',
+  'calendar.addOutfit': '新增 {date}的穿搭',
   'trash.archiveNote': '永久刪除後，過去穿搭仍會保留這件單品的照片',
 
   'suggest.line1.separates': '{top}搭配{bottom}{outer}，{merit}。',

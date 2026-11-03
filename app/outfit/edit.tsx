@@ -99,7 +99,7 @@ function EditExisting({ id }: { id: string }) {
       <Stack.Screen options={{ headerShown: false }} />
       <OutfitEditor
         title={t('outfit.edit')}
-        initial={{ name: outfit.name, date: outfit.date, pieces: outfit.pieces }}
+        initial={{ name: outfit.name, date: outfit.date, pieces: outfit.pieces, canvasRatio: outfit.canvasRatio }}
         items={items}
         today={today}
         onSave={async input => {
