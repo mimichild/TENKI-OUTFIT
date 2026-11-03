@@ -33,3 +33,17 @@ describe('migrate', () => {
     expect(db.executed.filter(s => !s.startsWith('PRAGMA journal_mode'))).toEqual([]);
   });
 });
+
+describe('migrate on a real SQLite database', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { openTestDb } = require('./helpers/nodeSqlite') as typeof import('./helpers/nodeSqlite');
+
+  it('upgrades v1 to v2 by adding items.archived_at and keeps existing rows', async () => {
+    const db = openTestDb();
+    db.raw.exec(MIGRATIONS[0]);
+    db.raw.exec("PRAGMA user_version = 1; INSERT INTO items (id, category, created_at, updated_at) VALUES ('a', 'top', 't', 't');");
+    await migrate(db as never);
+    expect(db.raw.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 });
+    expect(db.raw.prepare('SELECT id, archived_at FROM items').all()).toEqual([{ id: 'a', archived_at: null }]);
+  });
+});

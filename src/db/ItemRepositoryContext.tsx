@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { create } from 'zustand';
 import { TRASH_RETENTION_DAYS } from '@/constants/options';
-import { clearCutoutCache, deletePhotos } from '@/lib/photoStorage';
+import { clearBackupTemp, clearCutoutCache, deletePhotos } from '@/lib/photoStorage';
 import type { ItemRepository } from './itemRepository';
 
 const ItemRepositoryContext = createContext<ItemRepository | null>(null);
@@ -15,11 +15,12 @@ export const useItemsVersion = create<{ version: number; bump: () => void }>(set
 export function ItemRepositoryProvider({ repository, children }: { repository: ItemRepository; children: ReactNode }) {
   useEffect(() => {
     clearCutoutCache();
+    clearBackupTemp();
     repository
       .purgeExpired(TRASH_RETENTION_DAYS)
       .then(removed => {
-        if (removed.length === 0) return;
         deletePhotos(removed.flatMap(i => [i.imageUri, i.originalUri]));
+        // 只封存、沒有真正刪除時，穿搭與暫存區也可能變了；一律通知畫面重新讀取
         useItemsVersion.getState().bump();
       })
       .catch(e => console.warn('清除過期暫存區失敗', e));

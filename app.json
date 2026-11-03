@@ -2,7 +2,7 @@
   "expo": {
     "name": "TENKI OUTFIT",
     "slug": "tenki-outfit",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "tenkioutfit",
@@ -21,7 +21,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "versionCode": 2
     },
     "web": {
       "output": "static",
@@ -51,7 +52,17 @@
       ],
       "expo-localization",
       "expo-asset",
-      "expo-secure-store"
+      "expo-secure-store",
+      "react-native-zip-archive",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.5"
+          }
+        }
+      ],
+      "./plugins/withReleaseSigning"
     ],
     "experiments": {
       "typedRoutes": true,

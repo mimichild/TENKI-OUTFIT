@@ -8,7 +8,7 @@ import { DEFAULT_SETTINGS, useSettingsStore } from '@/store/settingsStore';
 import type { Item } from '@/types/models';
 
 jest.mock('expo-router', () => ({ Stack: { Screen: () => null } }));
-jest.mock('@/lib/photoStorage', () => ({ clearCutoutCache: jest.fn(), savePhoto: jest.fn(), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
+jest.mock('@/lib/photoStorage', () => ({ clearCutoutCache: jest.fn(), clearBackupTemp: jest.fn(), savePhoto: jest.fn(), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
 
 const base: Omit<Item, 'id' | 'name' | 'deletedAt'> = {
   brand: '', category: 'top', price: null, occasions: [], seasons: [], imageUri: null, originalUri: null,
@@ -45,6 +45,11 @@ describe('TrashScreen', () => {
     expect(screen.getAllByTestId('trash-name').map(n => n.props.children)).toEqual(['帽子', '舊外套']);
     expect(screen.getByText('剩 7 天後自動刪除')).toBeTruthy();
     expect(screen.queryByText('還在用')).toBeNull();
+  });
+
+  it('explains that past outfits keep the photo after deleting forever', async () => {
+    await setup();
+    expect(screen.getByText('永久刪除後，過去穿搭仍會保留這件單品的照片')).toBeTruthy();
   });
 
   it('restores an item', async () => {

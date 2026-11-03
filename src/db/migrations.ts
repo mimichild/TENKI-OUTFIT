@@ -64,10 +64,15 @@ export const MIGRATIONS: string[] = [
     PRIMARY KEY (county, town, date)
   );
   `,
+  // v2（第 5 階段）：永久刪除但過去穿搭仍參照的單品改為「已封存」，不出現在服裝牆與暫存區
+  `
+  ALTER TABLE items ADD COLUMN archived_at TEXT;
+  `,
 ];
 
 export async function migrate(db: MigrationDb): Promise<void> {
-  await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+  // busy_timeout：其他連線（備份匯入的交易）寫入時等一下，不要立刻 SQLITE_BUSY（連線設定，不是 DB 結構）
+  await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
   const current = row?.user_version ?? 0;
   if (current >= MIGRATIONS.length) return;

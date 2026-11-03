@@ -49,6 +49,8 @@ export default function RootLayout() {
             <Stack.Screen name="item/new" options={{ presentation: 'modal' }} />
             <Stack.Screen name="item/[id]" />
             <Stack.Screen name="trash" />
+            <Stack.Screen name="backup" />
+            <Stack.Screen name="outfit/edit" options={{ presentation: 'modal', headerShown: false }} />
           </Stack>
           <StatusBar style="auto" />
         </DatabaseProvider>

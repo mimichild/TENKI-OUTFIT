@@ -1,7 +1,9 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { CATEGORIES, OCCASIONS, SEASONS } from '@/constants/options';
 import type { Category, Item, Occasion, Season } from '@/types/models';
+import { taipeiDate } from '@/lib/cwaWeather';
 import { trashCutoff, type ItemRepository, type RepositoryDeps } from './itemRepository';
+import { purgeItemInTx } from './sqliteOutfitRules';
 
 type Db = Pick<SQLiteDatabase, 'runAsync' | 'getFirstAsync' | 'getAllAsync' | 'withExclusiveTransactionAsync'>;
 
@@ -19,6 +21,7 @@ export interface ItemRow {
   updated_at: string;
   last_used_at: string | null;
   deleted_at: string | null;
+  archived_at?: string | null;
 }
 
 function parseList<T extends string>(json: string, allowed: readonly T[]): T[] {
@@ -49,30 +52,35 @@ export function rowToItem(row: ItemRow): Item {
 }
 
 export function createSqliteItemRepository(db: Db, deps: RepositoryDeps): ItemRepository {
+  // 已封存的單品在介面上完全消失：list / listTrash / get 都排除
   const get = async (id: string) => {
-    const row = await db.getFirstAsync<ItemRow>('SELECT * FROM items WHERE id = ?', id);
+    const row = await db.getFirstAsync<ItemRow>('SELECT * FROM items WHERE id = ? AND archived_at IS NULL', id);
     return row ? rowToItem(row) : null;
   };
 
-  /** 永久刪除時一併從已排定的穿搭移除（outfit_items 的外鍵沒有 CASCADE）；全部包在同一個排他交易 */
-  const removeAll = async (ids: string[]) => {
-    if (ids.length === 0) return;
+  /** 全部包在同一個排他交易，一起成功或一起失敗 */
+  const purgeAll = async (ids: string[]) => {
+    const removed: Item[] = [];
+    if (ids.length === 0) return removed;
+    const now = deps.now();
+    const today = taipeiDate(now);
     await db.withExclusiveTransactionAsync(async tx => {
       for (const id of ids) {
-        await tx.runAsync('DELETE FROM outfit_items WHERE item_id = ?', id);
-        await tx.runAsync('DELETE FROM items WHERE id = ?', id);
+        const item = await purgeItemInTx(tx, id, today, now);
+        if (item) removed.push(item);
       }
     });
+    return removed;
   };
 
   return {
     async list() {
-      const rows = await db.getAllAsync<ItemRow>('SELECT * FROM items WHERE deleted_at IS NULL');
+      const rows = await db.getAllAsync<ItemRow>('SELECT * FROM items WHERE deleted_at IS NULL AND archived_at IS NULL');
       return rows.map(rowToItem);
     },
     async listTrash() {
       const rows = await db.getAllAsync<ItemRow>(
-        'SELECT * FROM items WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC',
+        'SELECT * FROM items WHERE deleted_at IS NOT NULL AND archived_at IS NULL ORDER BY deleted_at DESC',
       );
       return rows.map(rowToItem);
     },
@@ -92,7 +100,7 @@ export function createSqliteItemRepository(db: Db, deps: RepositoryDeps): ItemRe
     async update(id, input) {
       const result = await db.runAsync(
         `UPDATE items SET name = ?, brand = ?, category = ?, price = ?, occasions = ?, seasons = ?,
-         image_uri = ?, original_uri = ?, updated_at = ? WHERE id = ?`,
+         image_uri = ?, original_uri = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL`,
         input.name, input.brand, input.category, input.price,
         JSON.stringify(input.occasions), JSON.stringify(input.seasons),
         input.imageUri, input.originalUri, deps.now(), id,
@@ -101,23 +109,18 @@ export function createSqliteItemRepository(db: Db, deps: RepositoryDeps): ItemRe
     },
     async moveToTrash(id) {
       const now = deps.now();
-      await db.runAsync('UPDATE items SET deleted_at = ?, updated_at = ? WHERE id = ?', now, now, id);
+      await db.runAsync('UPDATE items SET deleted_at = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL', now, now, id);
     },
     async restore(id) {
-      await db.runAsync('UPDATE items SET deleted_at = NULL, updated_at = ? WHERE id = ?', deps.now(), id);
+      await db.runAsync('UPDATE items SET deleted_at = NULL, updated_at = ? WHERE id = ? AND archived_at IS NULL', deps.now(), id);
     },
-    async purge(id) {
-      const item = await get(id);
-      if (item) await removeAll([id]);
-      return item;
-    },
+    purge: id => purgeAll([id]),
     async purgeExpired(days) {
-      const rows = await db.getAllAsync<ItemRow>(
-        'SELECT * FROM items WHERE deleted_at IS NOT NULL AND deleted_at < ?',
+      const rows = await db.getAllAsync<{ id: string }>(
+        'SELECT id FROM items WHERE deleted_at IS NOT NULL AND archived_at IS NULL AND deleted_at < ?',
         trashCutoff(deps.now(), days),
       );
-      await removeAll(rows.map(r => r.id));
-      return rows.map(rowToItem);
+      return purgeAll(rows.map(r => r.id));
     },
   };
 }

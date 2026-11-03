@@ -7,7 +7,12 @@ import type { Item } from '@/types/models';
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
-jest.mock('@/lib/photoStorage', () => ({ clearCutoutCache: jest.fn(), savePhoto: jest.fn(), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
+let mockBuiltInKey = '';
+jest.mock('@/lib/cwaKey', () => ({
+  builtInCwaKey: () => mockBuiltInKey,
+  effectiveCwaKey: (k: string) => mockBuiltInKey || k.trim(),
+}));
+jest.mock('@/lib/photoStorage', () => ({ clearCutoutCache: jest.fn(), clearBackupTemp: jest.fn(), savePhoto: jest.fn(), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
 
 const trashed: Item = {
   id: 't', name: '舊T', brand: '', category: 'top', price: null, occasions: [], seasons: [],
@@ -27,6 +32,7 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 beforeEach(() => {
+  mockBuiltInKey = '';
   useSettingsStore.setState({ ...DEFAULT_SETTINGS });
   mockPush.mockClear();
 });
@@ -53,10 +59,45 @@ describe('SettingsScreen', () => {
     expect(useSettingsStore.getState()).toMatchObject({ county: '高雄市', town: '' });
   });
 
-  it('stores the trimmed CWA key', async () => {
+  it('saves the trimmed CWA key only when 儲存 is pressed', async () => {
     await render(<SettingsScreen />);
+    const save = screen.getByRole('button', { name: '儲存授權碼' });
+    expect(save).toBeDisabled();
     fireEvent.changeText(screen.getByLabelText('氣象署授權碼'), ' CWA-123 ');
+    expect(useSettingsStore.getState().cwaApiKey).toBe('');
+    expect(save).toBeEnabled();
+    fireEvent.press(save);
     expect(useSettingsStore.getState().cwaApiKey).toBe('CWA-123');
+    expect(screen.getByText('已儲存')).toBeTruthy();
+    expect(save).toBeDisabled();
+  });
+
+  it('shows whether a key is already set and can reveal it', async () => {
+    useSettingsStore.setState({ cwaApiKey: 'CWA-SAVED' });
+    await render(<SettingsScreen />);
+    expect(screen.getByText('已設定')).toBeTruthy();
+    const input = screen.getByLabelText('氣象署授權碼');
+    expect(input.props.secureTextEntry).toBe(true);
+    fireEvent.press(screen.getByRole('button', { name: '顯示授權碼' }));
+    expect(screen.getByLabelText('氣象署授權碼').props.secureTextEntry).toBe(false);
+    expect(screen.getByLabelText('氣象署授權碼').props.value).toBe('CWA-SAVED');
+  });
+
+  it('clears the "已儲存" note once the key is edited again', async () => {
+    await render(<SettingsScreen />);
+    fireEvent.changeText(screen.getByLabelText('氣象署授權碼'), 'CWA-1');
+    fireEvent.press(screen.getByRole('button', { name: '儲存授權碼' }));
+    fireEvent.changeText(screen.getByLabelText('氣象署授權碼'), 'CWA-12');
+    expect(screen.queryByText('已儲存')).toBeNull();
+    expect(screen.getByText('尚未儲存')).toBeTruthy();
+  });
+
+  it('hides the CWA key field when the app has a built-in key', async () => {
+    mockBuiltInKey = 'CWA-BUILTIN';
+    await render(<SettingsScreen />);
+    expect(screen.queryByLabelText('氣象署授權碼')).toBeNull();
+    expect(screen.queryByRole('button', { name: '儲存授權碼' })).toBeNull();
+    expect(screen.getByText('地區')).toBeTruthy();
   });
 
   it('shows the trash count and opens the trash page', async () => {
@@ -64,5 +105,12 @@ describe('SettingsScreen', () => {
     expect(await screen.findByText('1 件')).toBeTruthy();
     fireEvent.press(screen.getByRole('button', { name: '暫存區（刪除的單品）' }));
     expect(mockPush).toHaveBeenCalledWith('/trash');
+  });
+
+  it('opens the backup page', async () => {
+    await render(<SettingsScreen />);
+    expect(screen.getByText('匯出／匯入')).toBeTruthy();
+    fireEvent.press(screen.getByRole('button', { name: '備份與還原' }));
+    expect(mockPush).toHaveBeenCalledWith('/backup');
   });
 });

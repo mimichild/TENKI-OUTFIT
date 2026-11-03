@@ -11,3 +11,5 @@ export const useImage = () => null;
 export const drawAsImage = async () => {
   throw new Error('drawAsImage is not available in Jest');
 };
+export const AlphaType = { Unknown: 0, Opaque: 1, Premul: 2, Unpremul: 3 };
+export const ColorType = { RGBA_8888: 4 };

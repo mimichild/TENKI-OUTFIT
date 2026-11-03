@@ -73,7 +73,8 @@ export async function restoreItem(repo: ItemRepository, id: string): Promise<voi
 }
 
 export async function purgeItem(repo: ItemRepository, id: string): Promise<void> {
+  // 改為封存（過去穿搭還用到）時不刪照片
   const removed = await repo.purge(id);
-  if (removed) deletePhotos([removed.imageUri, removed.originalUri]);
+  deletePhotos(removed.flatMap(i => [i.imageUri, i.originalUri]));
   notifyChanged();
 }

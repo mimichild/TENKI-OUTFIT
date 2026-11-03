@@ -10,3 +10,9 @@ export function resolvePhotoUri(stored: string | null): string | null {
 export function deletePhotos(_stored: (string | null | undefined)[]): void {}
 
 export function clearCutoutCache(): void {}
+
+export async function adoptPhoto(sourceUri: string): Promise<string> {
+  return sourceUri;
+}
+
+export function clearBackupTemp(): void {}

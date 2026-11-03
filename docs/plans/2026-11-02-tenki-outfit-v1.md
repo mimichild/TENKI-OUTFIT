@@ -1,6 +1,6 @@
 # TENKI OUTFIT 天氣穿搭 — v1 開發計畫
 
-> 建立：2026-11-02　狀態：**第 3 階段完成，待第 4 階段**
+> 建立：2026-11-02　狀態：**Complete（v1 全部 7 個階段完成，2026-11-03 實機驗收通過）**
 > 基礎設施沿用 `/Users/mimi/Documents/REUSABLE_INFRA.md`
 
 ## 技術選型（沿用基礎文件）
@@ -29,7 +29,7 @@
 - 上排：天氣卡，可左右切換前後日期；顯示最高／最低溫、晴雨、降雨機率、體感溫度
 - 右上月曆圖示：切換日／週／月檢視，都顯示已排定的穿搭
 - 中層：當日或當週的穿搭；底部白色畫布
-- 右下 ＋：在白色畫布上拖拉、縮放單品組成穿搭；可存成當日、指定其他日期，或不指定日期
+- 右下 ＋：在白色畫布上拖拉、縮放、雙指旋轉單品組成穿搭；可存成當日或指定其他日期（**必須有日期**，使用者決定 2026-11-02）
 - 每套穿搭自動加總單品價格，以設定的幣別顯示
 
 ### 4. 穿搭建議
@@ -206,3 +206,364 @@
 - iOS 只驗證到編譯與安裝，沒有操作驗證（使用者決定不測 iPhone）
 - `cache/bg-removal/` 只在啟動時清除
 - 上述兩個 Low 效能項目
+
+### 第 4 階段 — 完成（2026-11-02，分支 `feat/phase-4-weather`，每批 commit）
+
+使用者決定（2026-11-02）：
+- **只做到縣市，不做鄉鎮**：改用 `F-D0047-091`（全臺未來 1 週，22 縣市），不需要鄉鎮清單；`weather_days.town` 一律存空字串，設定的 `town` 預設改為空字串
+- 使用者有授權碼；真實回傳格式用本機 `~/.config/tenki/cwa_key` 抓一份比對（授權碼不進對話、不進 git）
+- 先出 APK 給使用者實測，再做視覺測試與 code review
+
+規格核對（2026-11-02，`opendata.cwa.gov.tw/apidoc/v1`）：欄位已改中文名稱——最高溫度、最低溫度、最高體感溫度、最低體感溫度、12小時降雨機率、天氣現象（計畫原寫的 MaxT/PoP12h 為舊格式）
+
+做法：
+- ~~一天 = 白天＋晚上兩個 12 小時時段~~ → 改為做法 B（見批次 C 的使用者決定）；日期用台灣時間
+- 快取優先；超過 3 小時或下拉時重抓；只寫入今天（含）以後的日期，過去日期不再更新；今天的新資料若已沒有白天時段，保留舊的今天資料
+- en / ja 用天氣代碼分類顯示（晴、多雲、陰、雨、雷雨、霧、雪），zh-TW 顯示氣象署原文
+
+分批：
+- **A｜資料層**：API 連線與解析、天氣資料存取（SQLite／記憶體）、快取規則
+- **B｜畫面**：每日氣象頁天氣卡＋前後日期、下拉更新、各種狀態；設定頁移除鄉鎮；三語 → 打包 APK 給使用者實測
+- **C｜收尾**：Web 視覺測試、code review、依實測回饋修正
+
+#### 批次 A｜資料層 — 完成（2026-11-02）
+- `src/lib/cwaWeather.ts`：組網址（`F-D0047-091`、縣市、6 個中文欄位名）、解析（12 小時時段 → 每天一筆；`-` 視為未知；接受 `Locations`／`locations` 大小寫；ElementValue 鍵名不同時退回取第一個數值）、`fetchForecast` 回傳 `ok / noKey / unauthorized / network / timeout(15 秒) / badResponse`、`taipeiDate`、天氣代碼分類 `wxCategory`
+- `src/db/weatherRepository.ts`（介面）、`sqliteWeatherRepository.ts`（upsert 在單一 transaction）、`memoryWeatherRepository.ts`
+- `src/lib/weatherService.ts`：`refreshWeather`（3 小時快取、只寫今天以後、今天沒有白天時段就不覆蓋舊資料）
+- 不需要改 DB
+- 解析用的範例資料 `src/__tests__/fixtures/cwa-f-d0047-091.json` 是**照規格做的**，還沒和真實回傳比對
+
+#### 批次 B｜畫面 — 完成（2026-11-02）
+- `app/(tabs)/index.tsx`：天氣卡（日期＋今天/明天/昨天、縣市、天氣圖示、最高/最低溫、天氣描述、體感溫度、降雨機率、更新時間）；左右箭頭或左右滑動切換日期（範圍：最早快取 ~ 最晚預報）；下拉更新；沒有授權碼 → 「前往設定」；錯誤橫幅（保留快取資料）；沒有資料／讀取中；下方白色畫布先放第 5 階段提示；資料來源標示
+- `src/db/WeatherContext.tsx`（注入 repository、fetcher、now）、`src/db/useWeather.ts`（換縣市或授權碼時丟棄舊請求的結果）、`src/lib/weatherDates.ts`
+- 手機版與網頁版 `DatabaseProvider` 都掛上 `WeatherProvider`
+- 設定：`town` 預設改空字串，讀回舊存檔時一律清成空字串
+- 三語字串：新增 `weather.*`（31 組）、`wx.*`（8 組），移除 `placeholder.weather`
+- 驗證：Jest 170 項通過（新增 52 項）、tsc、lint；Web 視覺測試 38 項通過（還沒加天氣頁的檢查，批次 C 補上）
+- 和計畫不同的地方：滑動用 React Native 內建的 `PanResponder`，不用 gesture-handler（比較簡單、測試不用另外 mock）
+- APK 建置成功（2026-11-02）：`SPARK-Builds/TENKI-OUTFIT/tenki-outfit-v0.1.0-20261102-1939.apk`，已確認 bundle 內含新天氣程式碼；**待使用者實機檢測**（含真實 API 回傳格式）
+
+- 實測回饋 1（2026-11-02）：
+  - 「每日氣象仍顯示第 4–5 階段才完成」→ 那是舊版畫面，新版已移除這段文字；推測手機裝到舊 APK 或沒有覆蓋成功
+  - 「授權碼沒有地方按儲存」→ 原本每打一個字就自動存、沒有任何提示，天氣頁也會跟著每個字重抓。新增 `src/components/ApiKeyField.tsx`：先打在草稿，按「儲存」（或鍵盤完成鍵）才生效；顯示「尚未儲存／已儲存／已設定」；可切換顯示或隱藏授權碼。三語字串新增 7 組。Jest 172 項、視覺 38 項通過
+  - 新 APK：`tenki-outfit-v0.1.0-20261102-1951.apk`
+- 實測回饋 2（2026-11-02）：
+  - 「1951 在 Google Drive 看不到」→ Google Drive 上傳卡住；使用者重開 Google Drive 後已上傳
+  - **使用者決定：授權碼由開發者輸入一次、編進 App，使用者不用自己申請；設定頁隱藏授權碼欄位**（推翻原本「授權碼不寫進程式碼、在設定頁輸入」的決定）
+    - 授權碼放在 `.env.local` 的 `EXPO_PUBLIC_CWA_API_KEY`（已在 `.gitignore`，不進 git），打包時由 Metro 編進 bundle
+    - `src/lib/cwaKey.ts`：`builtInCwaKey()`、`effectiveCwaKey()`（內建優先，沒有才用設定頁的）
+    - 有內建授權碼時設定頁不顯示授權碼欄位；沒有時（例如沒放 `.env.local` 的建置）維持原本的欄位
+    - 已告知使用者：編進 App 的授權碼可從 APK 拆出、所有使用者共用額度；被濫用時換授權碼重新打包
+    - Jest 176 項通過
+- 真實回傳比對（2026-11-02 20:00，臺北市）：結構與規格一致，解析正確；存成 `src/__tests__/fixtures/cwa-f-d0047-091-real-taipei.json`（內容不含授權碼）並新增 `cwaWeatherReal.test.ts`。Jest 178 項通過
+- 授權碼內建 APK：`tenki-outfit-v0.1.0-20261102-2008.apk`，已確認 bundle 內含授權碼、已上傳 Google Drive（Google Drive App 當時沒在執行，重新開啟後上傳）
+- 降雨機率只到約 3.5 天：查證（2026-11-02）F-D0047-091、F-D0047-063（中正區）、「天氣預報綜合描述」與氣象署官網鄉鎮一週預報頁，第 4 天起都是 `-`；縣市一週預報頁完全沒有降雨機率。這是氣象署資料本身的限制，App 顯示「降雨機率 —」。待使用者說明在哪裡看到 7 天的降雨機率
+
+#### 批次 C｜收尾 — 完成（2026-11-02）
+- 視覺測試新增 6 項：每日氣象沒有授權碼時的提示與「前往設定」、沒有舊佔位文字、「前往設定」切到設定頁、設定頁授權碼欄位與「儲存」；網頁版打包時用 `EXPO_PUBLIC_CWA_API_KEY=` 不編入授權碼（已確認 `dist/` 不含授權碼）
+- Code review（code-reviewer：無 Critical，2 Medium，6 Low；確認授權碼不在任何 git 紀錄）修正：
+  - Medium：App 回到前景時更新「今天」並檢查快取（過期才重抓）；App 開著跨過台灣時間午夜也會更新
+  - Low：回傳內容不是 JSON → `badResponse`（原本誤報「無法連線」）；換縣市／換授權碼／畫面關掉時取消進行中的請求（`AbortSignal`，新狀態 `aborted`）；下拉更新進行中不重複送出；快取時間在未來（裝置時間曾經比較快）時視為過期；本機快取讀寫失敗顯示「無法讀取本機天氣資料」（新錯誤 `storage`），不再誤報氣象署問題；天氣寫入改用 `withTransactionAsync`（不另開連線，避免 SQLITE_BUSY；沒有改 DB 設定）
+  - 無障礙：日期區塊 `accessibilityLiveRegion`、裝飾圖示不朗讀、溫度念成一句「最高 25°，最低 19°」、Android 下拉更新顏色
+  - 三語字串新增 2 組
+- 未處理：卡片左右滑動沒有自動化測試（Low）
+- **使用者決定（2026-11-02）：做法 B「以出門時段為主」**——以 D 日為例：
+  - 最高溫、最高體感、降雨機率、天氣：D 日 06:00–18:00（白天）
+  - 最低溫、最低體感：D-1 日 18:00–D 日 06:00（前一晚到清晨）；預報裡沒有前一晚時用白天的最低溫
+  - 晚上才抓的「今天」只剩當晚時段：全部用當晚時段（`hasDaytime = false`）；其他沒有白天時段的日期不產生
+  - 已告知使用者：數字會和氣象署網站「白天／晚上」欄位對不太上
+  - 手機上已快取的過去日期維持舊算法（今天以後的日期下次抓資料時會被覆蓋）
+  - `parseForecast` 改寫；測試改為 B 的預期，新增「晚上下雨不影響白天」「沒有前一晚時用白天最低溫」；Jest 189 項、視覺 44 項通過
+- 驗證：Jest 187 項、tsc、lint；`bash scripts/regression.sh` 4/4 全過（視覺 44 項）
+- **實機複測通過（使用者回報 2026-11-02）**：`tenki-outfit-v0.1.0-20261102-2054.apk`（做法 B）——安裝覆蓋、內建授權碼、天氣卡數值、切換日期／滑動／下拉更新／回到前景、離線錯誤處理全部正常；降雨機率第 4 天起顯示「—」維持現狀
+
+### 第 5 階段 — 完成（2026-11-02，分支 `feat/phase-5-outfits`，從 `feat/phase-4-weather` 分出，每批 commit）
+
+使用者決定（2026-11-02）：
+- **穿搭一定要有日期**：沒選日期不能存；不做「未排日期」清單。DB 的 `outfits.date` 維持可為 NULL（不另改 DB），由 App 存檔時檢查；讀到舊的 NULL 資料視為未來（沿用暫存區規則）
+- 同一天可排多套穿搭，每日檢視依序列出
+- 點穿搭打開畫布編輯；畫布上可刪除穿搭（點兩次確認，不用系統對話框）
+- ~~畫布只做拖拉、縮放（`rotation` 固定 0）~~ → **使用者決定（2026-11-02，批次 A 後）：拖拉、縮放、雙指旋轉都要**（存 `outfit_items.rotation`，不需要改 DB）；點單品移到最上層；可從畫布移除單品
+- 位置以畫布寬度的比例存（換手機相對位置不變）
+- 總金額：有填價格的單品才加總（含已封存單品），全部沒填顯示「—」
+- 「最近使用」（`last_used_at`）= 該單品所在穿搭的最晚日期（含未來日期）
+- 月曆自己做（日／週／月格子），不新增套件
+
+分批：
+- **A｜資料層**：DB v2（items 加封存欄位）、穿搭 repository（SQLite／記憶體）、改寫永久刪除規則與測試、總金額與最近使用
+- **B｜穿搭畫布**：選單品、拖拉／縮放／雙指旋轉、選日期（必填）存檔、編輯、刪除
+- **C｜每日氣象頁**：日／週／月切換、月曆標示有穿搭的日子、當日／當週穿搭與總金額；暫存區頁說明文字
+- **D｜收尾**：Web 視覺測試、code review、APK 實機測試
+
+#### 批次 A｜資料層 — 完成（2026-11-02）
+- DB v2（`src/db/migrations.ts`）：`ALTER TABLE items ADD COLUMN archived_at TEXT`，舊資料保留；沒有加其他欄位或索引
+- `src/db/outfitRepository.ts`：介面、`OutfitInput`（日期必填）、`validateOutfitInput`（日期格式 `date`、沒有單品 `empty`、同一件重複 `duplicate` → `OutfitValidationError`）
+- `src/db/sqliteOutfitRepository.ts`：`listInRange`（含兩端，依日期→建立時間）、`get`、`create`、`update`、`delete`，寫入都在排他交易內；讀出的穿搭帶完整單品資料（含已封存、在暫存區的）
+- `src/db/sqliteOutfitRules.ts`：永久刪除規則（今天以後／沒有日期的穿搭移除該單品、變空就刪穿搭；過去穿搭還用到 → `archived_at`；否則真正刪除）、「最近使用」重算（最晚穿搭日期，含未來）、沒人參照的封存單品真正刪除
+- `src/db/sqliteItemRepository.ts`：`list`／`listTrash`／`get` 排除已封存；`purge`／`purgeExpired` 套用上述規則，回傳「真正刪除」的單品
+- `src/db/memoryItemRepository.ts`：新增 `createMemoryDatabase`（單品與穿搭共用一份記憶體資料，規則同 SQLite）；`createMemoryItemRepository` 保留為包裝
+- `src/lib/outfitTotals.ts`（總金額，全部沒填 → null）、`src/lib/outfitService.ts`（`saveOutfit`／`deleteOutfit`：刪除真正刪掉的封存單品照片、通知畫面）；`purgeItem` 封存時不刪照片
+- `src/db/OutfitRepositoryContext.tsx`；手機版與網頁版 `DatabaseProvider` 掛上穿搭資料層
+- 測試：新增 `outfitData.test.ts`（同一組規則測試跑記憶體版與 **真的 SQLite**——`src/__tests__/helpers/nodeSqlite.ts` 用 Node 內建 `node:sqlite` 包成 expo-sqlite 介面，需 Node 22.5+）、`outfitService.test.ts`、`outfitTotals.test.ts`、migration v1→v2 實際升級測試；舊的永久刪除 SQL 逐字比對測試改由真 SQLite 測試取代
+- 驗證：Jest 218 項通過（原 189 → 新增 29、移除 2 項舊比對）、tsc、lint 0 警告；`bash scripts/regression.sh` 4/4 全過（視覺 44 項）
+- 和計畫不同的地方：
+  - `Outfit` 型別的 `items` 改為 `pieces`（每件帶完整 `Item`），畫面不用再另外查單品；`Item` 型別沒有加封存欄位（封存單品只會透過穿搭讀到）
+  - `ItemRepository.purge` 回傳改為 `Item[]`（真正刪除的單品），封存時回傳空陣列
+  - 穿搭變動沿用 `useItemsVersion` 通知（會改到單品的最近使用），不另開版本號
+  - 順手修掉第 4 階段留下的 lint 警告（`cwaKey.test.ts` 的 `require`）
+
+#### 批次 B｜穿搭畫布 — 完成（2026-11-02，手勢待批次 D 實機驗證）
+- `src/lib/outfitCanvas.ts`：畫布 3:4；位置以畫布寬度為單位（x, y = 中心點）；基本大小 = 畫布寬 0.45；縮放 0.2–4 倍；中心點限制在畫布內；旋轉正規化到 (-π, π]；新增單品放最上層並錯開；移到最上層時 z 重新編號
+- `src/lib/calendar.ts`：月份加減、星期日開頭的週、月曆格子（批次 C 共用）
+- `src/components/OutfitEditor.tsx`：上方「取消／標題／儲存」；日期列（沒選日期時顯示「要先選日期才能儲存」，儲存停用）；白色畫布；「加入單品」、選取時「從畫布移除」、總金額；編輯時「刪除穿搭」（點兩次確認）；儲存／刪除失敗提示
+  - 每件單品：單指拖拉、雙指縮放、雙指旋轉同時辨識（gesture-handler `Gesture.Simultaneous`，`runOnJS(true)`）；手勢中只更新該單品自己的狀態，放開才回寫；手指放開再按下時把已結束的部分累加，不會跳回原位；碰到就選取並移到最上層
+- `src/components/OutfitCanvasView.tsx`：唯讀畫布與共用的單品方框樣式（批次 C 用）；沒照片的單品顯示衣服圖示＋名稱
+- `src/components/ItemPickerSheet.tsx`（分類分頁＋三欄方格，點一下加入、再點拿掉）、`MonthGrid.tsx`、`DatePickerSheet.tsx`
+- `app/outfit/edit.tsx`（modal）：`?date=` 新增並帶入日期、`?id=` 編輯；`src/db/useOutfits.ts`（`useOutfit`、`useOutfitsInRange`）
+- 每日氣象頁右下 ＋：帶目前看的日期開新增穿搭；沒有授權碼時也顯示（穿搭不需要天氣資料）
+- 三語字串新增 22 組（`outfit.*`、`calendar.*`）
+- 驗證：Jest 236 項通過（新增 18 項：畫布計算 7、月曆 4、編輯器 6〔含 gesture-handler 模擬拖拉／縮放／旋轉〕、每日氣象 ＋ 1）、tsc、lint；`bash scripts/regression.sh` 4/4 全過（視覺 51 項，新增 7 項：從每日氣象按 ＋ → 帶入日期 → 加入單品 → 總金額 → 存檔關閉）
+- 和計畫不同的地方：
+  - 手勢沒有用 reanimated（和去背編輯器一樣用 `runOnJS(true)` + React 狀態），測試不用另外 mock；如果實機拖拉不夠順再改用 reanimated
+  - 疊放順序用 `zIndex`，不重新排列子元件（避免手勢進行中原生畫面被搬動）
+  - 穿搭名稱欄位沒有做（計畫沒有要求；DB 有 `name`，一律存空字串）
+- APK（批次 A＋B）：`SPARK-Builds/TENKI-OUTFIT/tenki-outfit-v0.1.0-20261102-2155.apk`，已確認 bundle 內含穿搭畫布程式碼與內建授權碼
+  - Google Drive 上傳意外：重開 Google Drive App 時取消了進行中的上傳並刪掉雲端項目；重新複製同一個檔案後上傳成功（用 `com.google.drivefs.item-id` 屬性確認）
+  - **實機檢測通過（使用者回報 2026-11-02）**：拖拉、雙指縮放、雙指旋轉都正常
+
+#### 批次 C｜每日氣象頁 — 完成（2026-11-02）
+- `app/(tabs)/index.tsx` 改寫：
+  - 右上 `ViewModeSwitch`（月曆圖示＋日／週／月）
+  - **日**：天氣卡＋當天的穿搭（每套一張唯讀畫布卡片＋總金額，點了打開編輯）；沒有穿搭時顯示「這天還沒有穿搭，按右下 ＋ 新增」
+  - **週**：星期日～六七列，每列日期、有快取時顯示天氣圖示與高低溫、該日穿搭縮圖（點縮圖編輯、點日期切到日檢視）；上一週／下一週
+  - **月**：`MonthGrid`，有穿搭的日子顯示小圓點（螢幕閱讀器念「有穿搭」）；點日期在下方列出當天穿搭；上個月／下個月
+  - 沒有授權碼時：「請先到設定」改放在天氣卡裡，穿搭、檢視切換、＋ 照常使用（原本整頁只顯示提示）
+  - 日檢視的前後箭頭／滑動仍限制在有天氣資料的範圍；從週、月曆選到範圍外的日期時，可以往範圍的方向一天一天走回來
+  - ＋ 一律帶目前選的日期
+- `src/components/OutfitCard.tsx`、`ViewModeSwitch.tsx`；`MonthGrid` 標示有穿搭的日子
+- 暫存區頁加上「永久刪除後，過去穿搭仍會保留這件單品的照片」
+- 三語字串新增 11 組（`view.*`、`calendar.*`、`weather.noOutfit`、`outfit.openLabel`、`trash.archiveNote`），移除 `weather.outfitsComing`
+- 驗證：Jest 243 項通過（新增 7 項：每日氣象頁穿搭 6、暫存區說明 1）、tsc、lint；`bash scripts/regression.sh` 4/4 全過（視覺 56 項，新增 5 項：存檔後日檢視出現穿搭與總金額、週檢視、月曆標示今天有穿搭、暫存區說明）
+- 和計畫不同的地方：日／週／月切換放在頁面內容右上（不是導覽列的 headerRight），比較好測試，看起來一樣在右上
+- APK（批次 A～C）：`SPARK-Builds/TENKI-OUTFIT/tenki-outfit-v0.1.0-20261102-2219.apk`，已確認含批次 C 程式碼與內建授權碼；Google Drive 上傳中途網路逾時後停在「等待重試」，重新複製檔案後 22:34 上傳完成；**待使用者實機檢測**
+
+#### 批次 D｜收尾 — 完成（2026-11-02）
+- 使用者決定（2026-11-02）：批次 C 的 APK 不等實機回報，有問題之後再改；直接做收尾
+- Code review（code-reviewer：無 Critical，1 High，5 Medium，8 Low；確認授權碼沒有進任何追蹤檔案）修正：
+  - **High**：在畫布上點一下單品會「選取後馬上又取消」（背景 `Pressable` 在手指放開時也收到 onPress），只有拖拉過才看得到「從畫布移除」。背景改用 gesture-handler 的 `Tap`，放在單品後面的兄弟元件，點單品不會觸發
+  - Medium：
+    - 開 App 時的自動清除只有封存、沒有真正刪除時也通知畫面重新讀取（避免舊畫面把封存單品存回未來穿搭）
+    - 月檢視換月份後，下方選取日期的穿搭不見 → 查詢範圍涵蓋選取的日期
+    - 拖拉中的單品還在舊的疊放層 → 手勢中也用新的 z
+    - SQLite 的 `update`／`moveToTrash`／`restore` 沒有排除封存單品（記憶體版有）→ 補上，兩邊用同一組測試
+    - 螢幕閱讀器可以選取畫布上的單品（`accessibilityRole="button"` + `onAccessibilityTap`）；移動、縮放、旋轉仍只能用手勢
+  - Low：
+    - 手勢計數改成記錄「哪些手勢已開始」，沒有 onBegin 的 onFinalize 不算
+    - 手勢結束併入時先套用上下限（縮放超過 4 倍後不會有「要先縮回去才有反應」）
+    - 存成今天以後的穿搭時，自動拿掉已封存的單品（和永久刪除規則一致；拿完沒有單品 → 不能存）
+    - 記憶體版遇到不存在的單品也報錯（和 SQLite 外鍵一致）
+    - 英文「1 items」改為「item(s)」；移除沒用到的 `outfit.needItems`
+  - 未處理（Low）：讀取穿搭失敗時畫面一直轉圈（沒有錯誤狀態）；從很遠的日期按箭頭只能一天一天走回來；週標題跨年時沒有年份；螢幕閱讀器無法移動／縮放單品
+- 驗證：Jest 253 項通過（新增 10 項）、tsc、lint；`bash scripts/regression.sh` 4/4 全過（視覺 56 項）
+
+### 第 6 階段 — 完成（2026-11-03，已實機驗收，分支 `feat/phase-6-suggestions`，從 `feat/phase-5-outfits` 分出，每批 commit）
+
+使用者決定（2026-11-03）：
+- **溫度用體感溫度**（最高／最低體感的平均分段）；缺體感時改用氣溫
+- **用季節代表厚薄**（單品沒有厚薄欄位，不改 DB）：
+  - ≥28：夏季、不加外套
+  - 20–27：春／夏／秋，外套可有可無（隨機）
+  - 13–19：春／秋／冬，一定加外套
+  - <13：冬季，一定加外套
+  - 最低體感 <20 時一定加外套（例：最高 29、最低 19 → 平均 24 挑春夏秋單品，且一定加外套）
+  - 單品沒填季節 = 四季；沒填場合 = 全場合
+- **組合**：上衣＋下著 或 連身（兩種都湊得出來時隨機選一種）＋外套（依上面規則）＋鞋子；包包、配件有就各配一件；「其他」不推薦。缺鞋子／必要的外套時照樣給建議並提示缺少什麼；連上衣＋下著／連身都沒有 → 「沒有符合的單品」
+- **隨機推薦＋「更新」按鈕**：更新後隨機再一套，盡量不和上一套相同；只有一種組合時提示「沒有其他組合了」。換分頁再回來維持同一套；換日期、換場合、按更新才重抽
+- **建議下方兩句說明**（三語固定句型，不用 AI）：第一句介紹單品組合與適合場合；第二句說明體感溫度範圍、溫差／外套、降雨機率 ≥60% 帶傘提示
+- **「存成穿搭」打開畫布**：日期帶入今天／明天，單品依分類自動排好位置，使用者調整後自己按儲存
+- 沒有天氣資料時忽略溫度條件，並說明
+- 和原計畫不同：「一鍵存成該日穿搭」改為打開畫布、自動排版後由使用者按儲存；新增兩句說明
+
+分批：
+- **A｜引擎**：`src/lib/suggestion.ts`（溫度分段、候選篩選、隨機組合、避免重複）、自動排版、兩句說明；三語字串
+- **B｜畫面**：第四頁（今日／明日、天氣摘要、場合篩選、唯讀畫布＋單品清單、兩句說明、更新、存成穿搭）、編輯器接收預先選好的單品 → 打包 APK
+- **C｜收尾**：Web 視覺測試、code review
+
+#### 批次 A｜引擎 — 完成（2026-11-03）
+- `src/lib/suggestion.ts`：
+  - `weatherBasis`：完整體感優先 → 完整氣溫 → 只有一個值時用那個值
+  - `tempBand`、`outerwearRule`（≥28 不加；20–27 可有可無；<20 或最低 <20 一定加；沒天氣 = 可有可無）
+  - `candidatesFor`：季節／場合篩選
+  - `suggestOutfit`：隨機組合；有 `previous` 時重抽最多 20 次，還是一樣就逐格換掉找第一個不同組合，都沒有 → `noAlternative`；回傳 `missing`（必要外套、鞋子）、`rainy`（≥60%）
+  - `suggestionLayout`：依分類自動排版（批次 B 後依使用者指定改版，見下方）
+- `src/lib/suggestionText.ts`：`describeSuggestion` 兩句說明；沒填名稱用分類名稱（英文用單數「a top」）
+- 三語字串新增 24 組（`suggest.*`）
+- 驗證：Jest 285 項通過（新增 32 項）、tsc、lint；`bash scripts/regression.sh` 視覺 56 項通過
+- 和計畫不同的地方：沒有天氣資料時季節也不篩（溫度決定季節），第二句改為「這套只依場合挑選」
+
+#### 批次 B｜畫面 — 完成（2026-11-03）
+- `app/(tabs)/suggest.tsx` 改寫（取代佔位畫面）：
+  - 上方今日／明日切換；天氣摘要（體感範圍、降雨機率；沒資料時「沒有這天的天氣資料」）
+  - 場合篩選（全部場合＋6 種，單選）
+  - 建議卡片：唯讀畫布（自動排版）、單品名稱、總金額（有填價格時）、兩句說明、缺少的分類、「沒有其他組合了」
+  - 「更新」重抽（避開上一套）；「存成穿搭」→ `/outfit/edit?date=…&items=id1,id2`
+  - 衣櫃空的 → 「衣櫃裡還沒有單品，先到「服裝」新增」；沒有符合 → 「沒有符合的單品」＋提示
+  - 維持同一套的規則：只有日期、場合、天氣條件（溫度分段、外套規則）變了才重抽；重抓到相同條件的天氣不重抽；建議裡的單品被刪掉、或原本沒有建議而衣櫃變了也重抽。畫面上的單品名稱與照片、帶傘提示用最新資料
+- `app/outfit/edit.tsx`：新增 `items` 參數，`presetPieces` 依分類排好位置後放上畫布（找不到、重複的 id 略過）
+- 三語字串新增 15 組，移除 `placeholder.suggest`
+- 驗證：Jest 297 項通過（新增 12 項：建議頁 10、`presetPieces` 2）、tsc、lint；`bash scripts/regression.sh` 4/4 全過（視覺 56 項，建議頁的視覺測試在批次 C 補）
+- 和計畫不同的地方：
+  - 英文「更新」用 Shuffle（比 Refresh 清楚是重抽）
+  - 帶傘提示沒有另外做圖示，寫在第二句說明裡
+- APK：`SPARK-Builds/TENKI-OUTFIT/tenki-outfit-v0.1.0-20261103-0941.apk`，已上傳 Google Drive；已確認 bundle 內含建議頁程式碼與內建授權碼；**待使用者實機檢測**
+- 實測回饋 1（2026-11-03）：**使用者指定排版**——上衣左上、外套右上、下著左下、包包右邊中間、鞋子右下；使用者沒指定的：連身放左半邊（上衣＋下著的位置）、配件放中間空隙。上衣、外套縮成 scale 1，左右不重疊。新增 1 項排版位置測試，Jest 298 項通過；APK `tenki-outfit-v0.1.0-20261103-0950.apk` 已上傳 Google Drive，待實機檢測
+- 實測回饋 2（2026-11-03）：使用者提供兩張參考圖，要「穿在身上」的疊法；**使用者決定**：包包右中、配件左中（都大一點）；外套在上衣左後方露出一半（像參考圖 2）
+  - `src/lib/outfitLayout.ts`：`layoutOutfit`——上衣置中在上、下著上緣壓住上衣下襬 10%、鞋子壓在下著下緣（鞋高 45%）；有外套時上衣往右、外套往左各移開衣服寬度的 28%；包包／配件在腰線稍低處左右兩側；整套依高度與寬度等比縮小放進畫布；疊放：外套 < 下著／連身 < 上衣 < 鞋子 < 包包 < 配件
+  - 以「照片裡真正有衣服的範圍」排版：`alphaBounds`（透明度 ≥24 的範圍）、`visibleRect`（contain 進方框後的實際範圍）；`src/lib/photoBounds.ts` 用 Skia 把照片縮到最長邊 160px 讀像素量測，結果在 App 執行期間快取；Web 版（`photoBounds.web.ts`）不量測，退回整張照片
+  - `src/lib/usePieceShapes.ts`：建議頁與「存成穿搭」都等量測完才排版（避免畫面跳動）
+  - `suggestionLayout`、`presetPieces` 改用新排版（接受 shapes）；取代實測回饋 1 的四格排版
+  - 測試：新增 `outfitLayout.test.ts` 11 項，移除四格排版測試 1 項；Jest 308 項、tsc、lint；`bash scripts/regression.sh` 4/4 全過（視覺 56 項）
+  - APK `tenki-outfit-v0.1.0-20261103-1007.apk` 已上傳 Google Drive，待實機檢測
+  - 已知限制：衣服實際長短不知道，各分類的寬度是估的（上衣 0.52、下著 0.44、鞋子 0.24、包包 0.36、配件 0.28 畫布寬）；手機上的量測只能實機驗證
+- 實測回饋 3（2026-11-03）：**使用者決定改回四格排版**（取代實測回饋 2 的疊法）——上衣左上、下著左下（比上衣長、格子比較大）、外套右上、包包右中、配件在包包左邊、鞋子右下；連身佔整個左半邊（使用者沒指定）
+  - `layoutOutfit` 改為每個分類一個固定格子（`SPOTS`），衣服依量到的實際範圍等比放大塞滿格子、置中；格子之間不重疊。照片範圍量測（`photoBounds`、`usePieceShapes`）保留
+  - 測試：`outfitLayout.test.ts` 疊法測試換成格子測試（6 項）；Jest 307 項、tsc、lint；`bash scripts/regression.sh` 4/4 全過（視覺 56 項）
+  - APK `tenki-outfit-v0.1.0-20261103-1016.apk` 已上傳 Google Drive，待實機檢測
+
+#### 批次 C｜收尾 — 完成（2026-11-03）
+- Web 視覺測試新增 17 項（`e2e/visual.sh`）：在同一個工作階段新增下著 → 穿搭建議頁顯示今日／明日、場合、沒有天氣資料、兩件單品組合句、第二句、缺少鞋子、總金額、更新、存成穿搭；按更新顯示「沒有其他組合了」；切明日按「存成穿搭」打開畫布並帶入單品與日期；另開頁面檢查空衣櫃提示。分頁改點 `a[href]`（`find text` 在月曆畫面可能比對到多個元素，點擊失敗會讓 `set -e` 中斷腳本）
+- Code review（code-reviewer：無 Critical／High，3 Medium，10 Low；確認授權碼不在追蹤檔案）修正：
+  - Medium：
+    - 建議中的單品被修改（改分類、改到不符合季節／場合）也重抽；原本只有被刪除才重抽，會出現兩雙鞋、句子名稱空白
+    - 第二句的溫度改用最新天氣（原本只有帶傘提示用最新，溫度段不變時溫度數字會和天氣卡不一致）
+    - `photoBounds` 釋放所有 Skia 原生物件（data、image、surface、paint、snapshot）
+  - Low：
+    - 量測失敗不快取，下次再量
+    - 編輯器第一次排好就鎖住 `initial`，單品資料變了也不會把編輯中的畫布卸掉；沒有 `items` 參數的一般新增不再等量測
+    - 換一套時量測中先顯示上一次的畫布，避免閃一下
+    - 天氣卡和第二句用同一組溫度（體感不完整時整組改用氣溫，標成「氣溫」；新增 `suggest.airTemp` 三語）
+    - iOS 用 `announceForAccessibility` 念「沒有其他組合了」
+    - 句子 key 改用 index
+    - `probe`、單品對照表、畫布排版改用 `useMemo`
+    - 網址參數重複時取第一個
+  - 未處理（Low）：
+    - 換日期／場合時卡片會閃一下（effect 執行前 `current` 是 null）
+    - 長名稱沒有限制行數
+    - 照片在 JS 執行緒解碼（每張未快取的照片約 50–200 ms）；之後可改成存照片時順便量好範圍
+- 補測試：單品被改分類後重抽、天氣重讀時第二句溫度更新、`photoBounds` 4 項（釋放原生物件、同一張只量一次、失敗不快取、沒照片）、溫度資料不完整 2 項、「換一套」換連身／拿掉外套 2 項、極窄配件不超出格子 1 項
+- 驗證：Jest 318 項、tsc、lint 0 警告；`bash scripts/regression.sh` 4/4 全過（視覺 73 項）
+- APK `tenki-outfit-v0.1.0-20261103-1034.apk`（含 code review 修正），已確認 bundle 內含修正與內建授權碼、已上傳 Google Drive
+- **實機驗收通過（使用者回報 2026-11-03）**
+
+### 第 7 階段 — 完成（2026-11-03，已實機驗收，分支 `feat/phase-7-backup`，從 `feat/phase-6-suggestions` 分出，每批 commit）
+
+使用者決定（2026-11-03）：
+- **匯入時由使用者選「覆蓋」或「保留原本資料」**：
+  | 資料 | 覆蓋 | 保留原本資料（合併） |
+  |---|---|---|
+  | 單品、穿搭、照片 | 先清空再換成備份 | 手機上沒有的才加入；同 id 兩邊都有時用手機上的，備份的略過 |
+  | 穿搭的單品位置 | 跟著備份 | 跟著穿搭（只有新加入的穿搭才寫入） |
+  | 天氣快取 | 換成備份 | 手機上沒有的日期才補 |
+  | 設定（語言、縣市、幣別、主題色） | 換成備份 | 維持手機上的 |
+  - 兩種都先顯示備份摘要（單品、穿搭數），點兩次確認；任何一步失敗整批放棄，手機上的資料與照片不動
+  - 備份的 DB 版本比 App 新 → 拒絕匯入
+  - 暫存區單品沿用原本刪除日期算 30 天，過期的下次開 App 自動清除
+- **匯出兩種方式都要**：系統分享選單（可存 Google Drive）＋選資料夾存檔
+- **備份內容**：單品（含暫存區、已封存）、穿搭、照片、天氣快取、設定；氣象署授權碼一律不包含
+- **版本號改 1.0.0**
+- 簽章：使用者打算放官網給人下載（不上架商店）→ 建議批次 C 改用專屬 keystore（現在的 debug 鑰匙是公開的；一公開就不能再換）。手機需移除重裝一次，資料用匯出匯入搬。**批次 C 開工前再確認**
+- 不需要改 DB 結構（匯入只寫資料）
+
+分批：
+- **A｜資料層**：備份格式（`manifest.json` + `photos/`）、檢查、照片路徑換新檔名、SQLite 匯出／覆蓋／合併
+- **B｜zip 與畫面**：`react-native-zip-archive`（原生解壓縮，照片多也不吃記憶體）、`expo-sharing`、`expo-document-picker`；設定頁匯出（分享／存到資料夾）、匯入（選檔 → 摘要 → 覆蓋／保留 → 點兩次確認）、進度與結果；三語 → APK 實測
+- **C｜收尾與驗收**：Web 視覺測試（Web 顯示「僅手機版支援」）、code review、版本 1.0.0、簽章、最終 APK、實機驗收清單（含各階段未驗項目）
+
+#### 批次 A｜資料層 — 完成（2026-11-03）
+- `src/lib/backupFormat.ts`：
+  - 備份格式 `manifest.json`：`format: tenki-outfit-backup`、`formatVersion` 1、`schemaVersion`（DB 版本）、`appVersion`、`exportedAt`、`settings`（語言、縣市、幣別、主題色）、`data`（items／outfits／outfit_items／weather_days，直接存 DB 欄位）
+  - `buildManifest`；`parseManifest` → `notBackup`（不是 JSON、不是本 App 的備份）／`newerVersion`（格式或 DB 版本比 App 新）／`corrupt`（欄位型別錯、id 重複、日期格式錯、位置參照不存在的單品或穿搭）；舊版 DB 缺的欄位補 null；設定不合法退回預設
+  - 照片路徑不是 `photos/<檔名>` 的一律清成 null（擋 `../`、完整 URI，避免讀寫 App 資料夾外的檔案）
+  - `photoPathsOf`、`remapPhotoPaths`（匯入時照片換新檔名；備份裡沒有的照片 → null）、`filterNewRows`（「保留原本資料」只留手機上沒有的）、`summarizeBackup`（單品／暫存區／穿搭數）
+- `src/db/sqliteBackupStore.ts`：`dump`（含暫存區、封存、天氣）、`existingKeys`、`replaceAll`（覆蓋）、`merge`（保留原本，交易內重讀手機資料為準，重算「最近使用」）；都在排他交易內，失敗整批放棄
+- `src/lib/photoPath.ts`：`isOwnedPhotoPath`，`photoStorage.deletePhotos` 改用它（同一個規則）
+- 測試：`backupFormat.test.ts` 22 項、`backupStore.test.ts` 8 項（真 SQLite：dump→replaceAll 內容一樣、覆蓋、合併、合併後最近使用、失敗整批放棄）
+- 驗證：Jest 348 項通過（新增 30 項）、tsc、lint；`bash scripts/regression.sh` 4/4 全過（視覺 73 項）
+- 和計畫不同的地方：
+  - 只做 SQLite 版，沒做記憶體版（Web 預覽不支援備份，批次 C 顯示「僅手機版支援」）
+  - 合併時照片、設定、檔案處理放到批次 B 的 service（這批只有資料）
+
+#### 批次 B｜zip 與畫面 — 完成（2026-11-03，待實機檢測）
+- 新增套件（`npx expo install`）：`react-native-zip-archive` 9.5.3（原生 zip，只解出指定檔案；內建擋 `../` 路徑）、`expo-sharing`、`expo-document-picker`、`expo-build-properties`（zip 套件要求 iOS 15.5 → `ios.deploymentTarget` 15.5）
+- 新增本機模組 `modules/tenki-file-export`（只有 Android）：`copyToContentUriAsync` 把 zip 串流複製到「選資料夾」取得的 content:// 檔案（expo-file-system 的 copy 不支援 SAF，`File.write` 要把整個檔案讀進 JS）
+- `src/lib/backupService.ts`（依賴注入，可測）：
+  - `exportBackup`：dump → `manifest.json` ＋ 用到的照片複製到工作資料夾 → zip 到 `cache/backup-export/tenki-outfit-backup-YYYYMMDD-HHmm.zip`（台灣時間）→ 刪工作資料夾；手機上找不到的照片檔略過
+  - `prepareImport`：列出 zip 內容、只解出 `manifest.json`、檢查 → 摘要
+  - `applyImport`：（合併時先 `filterNewRows`）→ 只解出要用的照片 → 複製成新檔名 → 一個交易寫入 → 刪除沒有單品用到的照片 → 覆蓋時套用設定 → 通知畫面重新讀取（單品、天氣）。任何一步失敗刪掉這次複製的照片，DB 與原本照片不動
+- `src/lib/backupPlatform.ts`（+ `.web.ts` 一律不支援）：檔案／zip 實作、分享（`application/zip`）、存到資料夾（Android，`Directory.pickDirectoryAsync` + 原生串流複製；取消回傳 false）、選檔（`*/*`，由檢查擋下非備份檔）
+- `src/lib/backupDeps.ts`、`src/db/BackupStoreContext.tsx`（手機版 `DatabaseProvider` 掛上；Web 為 null）
+- `useWeatherVersion`：匯入後天氣畫面重新讀取本機快取
+- `photoStorage`：`listPhotoPaths`、`clearBackupTemp`（App 啟動時清 `cache/backup-work`、`cache/backup-export`）
+- 畫面：設定頁「資料」區的「匯出資料／匯入資料（即將推出）」改為一列「備份與還原 → 匯出／匯入」，打開 `app/backup.tsx`（`BackupPanel`）
+  - 匯出：說明、「分享備份檔」「存到資料夾」（只有 Android）、進度、「已存成 檔名」、失敗提示
+  - 匯入：「選擇備份檔」→ 讀取中 → 摘要（備份時間、單品／暫存區／穿搭數）→ 選「覆蓋」或「保留原本資料」（radio，各有說明）→「匯入」→「再按一次確認覆蓋／匯入」（換方式要重新確認）→ 進度 → 結果；不是備份檔／版本太新／損壞／讀不到各有提示；「取消」
+  - 進行中按鈕停用並防連點
+- 三語字串新增 31 組（`settings.backup*`、`backup.*`），移除 `settings.export`／`settings.import`／`settings.comingSoon`
+- 版本號 1.0.0（`app.json` `version`、`android.versionCode` 2）；`expo prebuild --platform android`（不 clean）更新 `versionName`／`versionCode`，簽章維持 debug
+- 測試：`backupService.test.ts` 11 項（假檔案系統＋真 SQLite：匯出內容、缺照片、摘要、非備份、版本太新、覆蓋、合併、DB 失敗回復、照片複製失敗回復、備份缺照片）、`BackupPanel.test.tsx` 14 項、設定頁打開備份頁 1 項；其他測試的 `photoStorage` mock 補上 `clearBackupTemp`；視覺測試的設定項目改為「備份與還原」
+- 驗證：Jest 374 項通過（新增 26 項）、tsc、lint；`bash scripts/regression.sh` 4/4 全過（視覺 72 項，設定頁兩個項目合成一個）
+- APK：`SPARK-Builds/TENKI-OUTFIT/tenki-outfit-v1.0.0-20261103-1127.apk`（約 126 MB），已上傳 Google Drive；已確認 dex 含 `TenkiFileExport`、`RNZipArchive`、zip4j、`ExpoSharing`、`ExpoDocumentPicker`，bundle 含備份程式碼與內建授權碼
+- **實機檢測通過（使用者回報 2026-11-03）**
+- 和計畫不同的地方：
+  - 設定頁合成一列「備份與還原」，匯出與匯入在同一頁
+  - 「存到資料夾」只有 Android（iOS 的分享選單本來就有「儲存到檔案」）
+  - 進度只顯示轉圈與文字，沒有百分比
+
+#### 批次 C｜收尾與驗收 — 完成（2026-11-03，已實機驗收）
+使用者決定（2026-11-03）：
+- **現在換成專屬的正式簽章**（官網公開下載前就換）。鑰匙放 `~/.config/tenki/`（keystore 檔＋密碼設定檔，密碼隨機產生），不進 git；使用者要自己另外備份這兩個檔案
+- 換簽章後手機要：用舊版匯出備份 → 移除 App → 安裝新簽章版本 → 匯入備份（同時當作匯出匯入的實機驗收）
+
+工作項目：Web 視覺測試（備份頁「僅手機版支援」）、code review、正式簽章（config plugin，`expo prebuild` 重建 android/ 也保留）、最終 APK、實機驗收清單
+
+- Web 視覺測試新增 4 項：設定頁「備份與還原」打開備份頁、備份頁標題、「備份與還原只支援手機版」、Web 不顯示匯出匯入按鈕（視覺 76 項）
+- **正式簽章**：
+  - 鑰匙 `~/.config/tenki/tenki-outfit-release.keystore`（PKCS12、RSA 4096、效期 100 年、alias `tenki-outfit`），密碼隨機產生存在 `~/.config/tenki/keystore.properties`；兩個檔案權限 600，不進 git
+  - 憑證 SHA-256：`D5:2C:3A:F0:FC:17:71:B9:D2:D0:26:6D:0A:34:19:08:A4:C1:52:94:D3:14:FC:DA:0C:77:9F:B8:DB:5B:32:6F`
+  - `plugins/withReleaseSigning.js`（config plugin，寫進 `app.json`）：release 改用 `signingConfigs.release`，從 `~/.config/tenki/keystore.properties`（或 `TENKI_KEYSTORE_PROPERTIES`）讀取；找不到設定檔時 release 建置直接失敗（不會默默用 debug 鑰匙）；build.gradle 格式不符時 prebuild 失敗。測試 3 項
+- Code review（code-reviewer：無 Critical，1 High，6 Medium，8 Low）修正：
+  - **High**：匯入後清照片原本是「照片資料夾裡 DB 沒用到的全刪」，和另一個匯入（離開畫面再回來可以再開一個）、同時新增單品、匯出撞在一起時會刪掉使用中的照片 → 改成只刪「匯入前有單品用、匯入後沒有」的照片；`backupService` 加模組層級的鎖（匯出／讀取／匯入互斥，`BackupBusyError` → 「另一個備份作業還在進行」）；進行中擋住返回（`usePreventRemove`、關閉返回手勢與導覽列返回鍵）
+  - Medium：
+    - 實機交易另開連線、外鍵檢查是關的（測試 helper 是開的）→ 寫入後在交易內跑 `PRAGMA foreign_key_check`，有斷掉的參照就整批放棄；新增「外鍵關閉時也擋得住」測試；失敗測試改用注入錯誤，不依賴外鍵
+    - 存到資料夾：`"wt"` 不支援時退回 `"w"`；複製失敗時刪掉建好的檔案（`DocumentsContract.deleteDocument`），資料夾不會留下壞掉的備份
+    - 空間：照片從解壓資料夾「搬」進照片資料夾（`moveAsync`，不再多複製一份）；讀取時檢查剩餘空間（照片大小＋50 MB），不夠顯示「手機空間不足，匯入需要約 N MB」；匯入結束、取消、選錯檔時刪掉選檔複製來的 zip；啟動時一併清 `cache/DocumentPicker`
+    - 匯入完成的件數改用和摘要相同的算法（單品／暫存區／穿搭，不含已封存）
+    - 交易開始時 `busy_timeout = 5000` 並先用一個不改資料的寫入拿寫入鎖（避免 SQLITE_BUSY／BUSY_SNAPSHOT）；主連線也設 `busy_timeout`（連線設定，不是 DB 結構）
+    - 交易已 COMMIT 之後才出錯時，不刪新照片、當作匯入成功；套用設定、通知畫面失敗只記錄，不影響結果
+  - Low：匯出四個資料表在同一個讀取快照；匯出只打包 `photos/` 底下的照片；時間欄位必須是日期時間、縮放 > 0、版本必須是正整數；取消選檔保留原本選好的備份與方式、重新選檔刪掉上一個暫存檔、匯出中鎖住匯入區所有按鈕、存到資料夾顯示系統改過的實際檔名、備份時間無法辨識時摘要不顯示日期；匯入方式的螢幕閱讀器標籤改成三語字串；`toPath` 遇到沒編碼的 `%` 不會丟例外
+  - 未處理（Low）：寫入每列各一次 `runAsync`（上千筆時較慢，可改 `prepareAsync`）；匯入中途被系統殺掉時留下的孤兒照片沒有回收機制（只佔空間）
+- 三語字串新增 4 組（`backup.noSpace`、`backup.busy`、`backup.summaryNoDate`、`backup.modeLabel`），`backup.imported` 加上暫存區件數
+- 驗證：Jest 404 項通過（批次 B 後新增 30 項）、tsc、lint；`bash scripts/regression.sh` 4/4 全過（視覺 76 項）
+- **最終 APK**：`SPARK-Builds/TENKI-OUTFIT/tenki-outfit-v1.0.0-20261103-1149.apk`，已上傳 Google Drive；`apksigner` 確認簽章為正式鑰匙（`CN=TENKI OUTFIT, O=kyoangel, C=TW`，SHA-256 同上）；dex 含原生修正（`deleteDocument`），bundle 含 review 修正與內建授權碼。**待使用者依下方清單實機驗收**
+
+#### 實機驗收清單（最終 APK）
+換簽章（只需要做一次）：
+1. 用手機上**目前的版本**：設定 → 備份與還原 → 分享備份檔（存到 Google Drive）或存到資料夾
+2. 移除 TENKI OUTFIT（直接安裝新版會被系統拒絕，因為簽章不同）
+3. 安裝 `tenki-outfit-v1.0.0-20261103-1149.apk`
+4. 設定 → 備份與還原 → 選擇備份檔 → 覆蓋 → 匯入 → 再按一次確認
+5. 確認：單品與照片、暫存區（剩餘天數）、過去與未來的穿搭、過去日期的天氣、語言／幣別／主題色都回來了
+
+整體功能：
+6. 服裝：新增單品（自動去背、手動擦除／補回）、編輯、刪除 → 暫存區 → 還原／永久刪除
+7. 每日氣象：天氣卡、左右切換日期、下拉更新；日／週／月檢視；新增穿搭（拖拉、縮放、旋轉、**點一下單品會選取並出現「從畫布移除」**——第 5 階段修正後尚未實機確認）、總金額
+8. 穿搭建議：今日／明日、場合、更新、存成穿搭
+9. 備份：存到資料夾（顯示的檔名和資料夾裡一致）、匯入時選「保留原本資料」、匯入時按返回鍵不會離開
+10. 切換英文／日文看一下備份頁文字
+11. 關掉網路開 App：天氣照常顯示本機快取（3 小時內不重抓）；下拉更新時出現錯誤橫幅、快取資料保留；其他功能正常
+
+#### 最終實機驗收 — 通過（使用者回報 2026-11-03）
+- `tenki-outfit-v1.0.0-20261103-1149.apk`（正式簽章）：移除舊版後安裝成功（第一次「未安裝應用程式」是舊簽章版本還在）；備份匯入還原、服裝、每日氣象、穿搭建議、備份功能正常
+- 離線：天氣照常顯示本機快取（符合設計，驗收清單第 11 項說明已更正）
+- 穿搭建議一度顯示「沒有符合的單品」（當時衣櫃只有上衣），新增下著、鞋子後正常
+- 留待之後處理：湊不成一套時，提示寫「確認季節、場合設定」會誤導，應改成直接說缺哪一類（例如「還差一件下著或連身」）
