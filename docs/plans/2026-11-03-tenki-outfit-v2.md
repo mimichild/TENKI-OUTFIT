@@ -7,7 +7,7 @@
 **Architecture:** 不改資料庫結構（沒有遷移）、不改備份格式。錯誤狀態集中在共用的查詢 hook；照片範圍改存在 App 資料夾的 JSON 快取檔；清理工作都在 App 啟動（以及回到前景）時跑。
 **Tech Stack:** Expo SDK 54、RN 0.81、Expo Router、TypeScript strict、Zustand、expo-sqlite、expo-file-system、Jest + RNTL、agent-browser 視覺測試
 **Complexity Path:** `E2E path`（多數項目是畫面行為，沿用 `bash scripts/regression.sh` 的 Web 視覺測試＋最後實機驗收）
-**Status:** In Progress（批次 A、B 完成 2026-11-03；下一步批次 C）
+**Status:** In Progress（批次 A、B、C 實作完成 2026-11-03；等待 v1.1.0 實機驗收後開 PR）
 
 ---
 
@@ -187,6 +187,27 @@ journey
 - 實機驗收清單：直接覆蓋安裝（不用移除）、資料都在；飛航模式下拉更新看錯誤；建議頁缺類提示；英文件數；重開 App 穿搭畫面排版速度；設定頁填自己的授權碼後天氣正常
 - 計畫狀態改 Complete；開 PR 合併進 `main`
 
+#### 批次 C 執行紀錄（2026-11-03）
+- **C1 ✅** `effectiveCwaKey`：使用者填的優先、留空用內建；設定頁授權碼欄位一律顯示，有內建授權碼時多一行「留空則使用內建授權碼」（i18n 三語 `settings.cwaApiKeyBuiltIn`）；欄位不顯示內建授權碼。測試：`cwaKey`、`SettingsScreen`（有內建也顯示欄位、可清空回到內建）、`WeatherScreen`（自己的優先）
+- **C2**
+  - ✅ 版本 `1.1.0`、`versionCode 3`：`app.json`，以及 `android/app/build.gradle`（`android/` 不進 git、`build-apk` 不重新 prebuild，兩邊都要改）
+  - ✅ code-reviewer 審查全部 v2 變更：無 Critical，1 Medium，8 Low。修正（皆先寫失敗測試）：
+    - M1：Android 重建 Activity 時 Provider 重新掛載、匯入可能還在跑 → 新增 `backupService.isBackupRunning()`；備份進行中不清備份暫存檔、不清孤兒照片（iOS 解壓沿用 zip 內的修改時間，1 小時保護擋不住）
+    - L1：沒有任何單品使用照片（資料庫可能遺失）時不清孤兒照片
+    - L2：解碼失敗等暫時性錯誤改丟例外、不寫快取；只有整張透明才快取 null
+    - L3：孤兒照片清除時，照片範圍快取只留使用中的路徑（`retainOnly`）
+    - L4：前景過期清除成功後才記錄日期，失敗或正在備份時下次回到前景再試
+    - L5：建議裡缺的分類（外套、鞋子）有可用單品時重抽（v1 就有）
+    - L6：建議頁天氣快取讀取失敗顯示「讀取失敗＋重試」
+    - L7：`finalizeAsync` 失敗只記錄，不蓋掉原本的寫入錯誤
+    - L8（升級時若留著早期輸入、已失效的授權碼會改用它）：不改程式，列入實機驗收
+  - ✅ `bash scripts/regression.sh` 全過（tsc、ESLint、Jest 483 測試、視覺 80 項）
+  - ✅ /build-apk：`SPARK-Builds/TENKI-OUTFIT/tenki-outfit-v1.1.0-20261103-1631.apk`；`apksigner` 憑證 SHA-256 `d52c3af0…326f` 與 v1 相同；`aapt2` 確認 versionCode 3、versionName 1.1.0
+  - ⏳ 實機驗收（清單如上，另加：覆蓋安裝後若天氣失敗，確認設定頁是否留著舊授權碼）
+  - ⏳ 計畫狀態改 Complete、開 PR
+- **偏離計畫：** M1 只加「備份進行中略過」，沒加審查建議的「每個 JS 執行環境只跑一次」旗標（不在備份中時重跑清除無害，且旗標會讓同一測試檔後面的畫面測試不跑啟動清除）
+- **已知、未處理（v1 就有）：** 選好備份檔、還沒按匯入時畫面重新掛載，啟動清除會刪掉選檔時複製來的 zip（`DocumentPicker/`），按匯入會失敗、需重新選檔
+
 ## Testing Strategy
 - Unit：`suggestion`（缺類原因）、`translate`（單複數）、`calendar`（週標題）、`photoGc`、`photoBoundsCache`、`cwaKey`
 - Integration：`backupStore`（node:sqlite，預備語句與交易回復）、`useQuery`、`ItemRepositoryContext`（啟動與前景清理）
@@ -205,9 +226,9 @@ journey
 - [x] 英文單複數、跨年週標題正確；建議卡片不閃
 - [x] 匯入用預備語句；啟動清除孤兒照片；回到前景清除過期暫存區
 - [x] 照片範圍重開 App 不重量（待實機確認）
-- [ ] 設定頁可填自己的授權碼
+- [x] 設定頁可填自己的授權碼
 - [ ] `bash scripts/regression.sh` 全過，v1.1.0 APK 實機驗收通過
-- [ ] 沒有 DB schema 變更
+- [x] 沒有 DB schema 變更
 
 ## 執行第一步
 1. `git checkout -b feat/v2`（從 `main`）
