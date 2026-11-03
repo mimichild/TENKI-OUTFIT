@@ -9,6 +9,7 @@ import { taipeiDate } from '@/lib/cwaWeather';
 import { nowIso } from '@/lib/ids';
 import { deleteOutfit, saveOutfit } from '@/lib/outfitService';
 import { presetPieces } from '@/lib/suggestion';
+import { usePieceShapes } from '@/lib/usePieceShapes';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -32,8 +33,11 @@ function useCommon() {
 
 function CreateNew({ date, preset }: { date: string | null; preset?: string }) {
   const { t, router, repo, items, today } = useCommon();
-  if (items === undefined) return <Stack.Screen options={{ headerShown: false }} />;
-  const initial: OutfitDraft = { name: '', date, pieces: presetPieces(preset, items) };
+  // 從穿搭建議來的單品：量好照片範圍再排版（編輯器只在第一次顯示時讀 initial）
+  const presetItems = items && preset ? presetPieces(preset, items).map(p => p.item) : [];
+  const shapes = usePieceShapes(items ? presetItems : undefined);
+  if (items === undefined || shapes === undefined) return <Stack.Screen options={{ headerShown: false }} />;
+  const initial: OutfitDraft = { name: '', date, pieces: presetPieces(preset, items, shapes) };
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />

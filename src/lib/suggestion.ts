@@ -1,4 +1,5 @@
 import type { Category, Item, Occasion, OutfitItemPlacement, OutfitPiece, Season } from '@/types/models';
+import { layoutOutfit, type PieceShape } from './outfitLayout';
 
 /**
  * 穿搭建議引擎（純邏輯）。
@@ -210,29 +211,19 @@ export function suggestOutfit(input: SuggestionInput, options: SuggestionOptions
   return result(picks, true);
 }
 
-/**
- * 依分類自動排版（位置以畫布寬度為單位，畫布 3:4；使用者指定 2026-11-03）：
- * 上衣左上、外套右上、下著左下、包包右邊中間、鞋子右下；連身放左半邊、配件放中間空隙
- */
-const LAYOUT: Record<Category, Omit<OutfitItemPlacement, 'itemId' | 'z' | 'rotation'>> = {
-  top: { x: 0.27, y: 0.3, scale: 1 },
-  outerwear: { x: 0.73, y: 0.3, scale: 1 },
-  onepiece: { x: 0.3, y: 0.62, scale: 1.25 },
-  bottom: { x: 0.28, y: 0.96, scale: 1.1 },
-  bag: { x: 0.76, y: 0.72, scale: 0.75 },
-  shoes: { x: 0.76, y: 1.1, scale: 0.7 },
-  accessory: { x: 0.52, y: 0.62, scale: 0.4 },
-  other: { x: 0.5, y: 0.67, scale: 1 },
-};
-
-export function suggestionLayout(items: Item[]): OutfitItemPlacement[] {
-  return items.map((item, z) => ({ itemId: item.id, ...LAYOUT[item.category], rotation: 0, z }));
+/** 自動排版（「穿在身上」的疊法，見 outfitLayout.ts）；shapes 是量到的照片範圍，沒量到就用整張照片 */
+export function suggestionLayout(items: Item[], shapes: ReadonlyMap<string, PieceShape | null> = new Map()): OutfitItemPlacement[] {
+  return layoutOutfit(items, shapes);
 }
 
 /** 「存成穿搭」：網址帶來的單品 id（逗號分隔）→ 已排好位置的畫布單品；找不到或重複的 id 略過 */
-export function presetPieces(idsParam: string | undefined, items: Item[]): OutfitPiece[] {
+export function presetPieces(
+  idsParam: string | undefined,
+  items: Item[],
+  shapes: ReadonlyMap<string, PieceShape | null> = new Map(),
+): OutfitPiece[] {
   if (!idsParam) return [];
   const byId = new Map(items.map(i => [i.id, i]));
   const picked = [...new Set(idsParam.split(','))].flatMap(id => (byId.has(id) ? [byId.get(id)!] : []));
-  return suggestionLayout(picked).map((p, i) => ({ ...p, item: picked[i] }));
+  return suggestionLayout(picked, shapes).map((p, i) => ({ ...p, item: picked[i] }));
 }

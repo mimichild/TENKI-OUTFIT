@@ -12,6 +12,7 @@ import { formatPrice } from '@/lib/currency';
 import { outfitTotal } from '@/lib/outfitTotals';
 import { suggestOutfit, suggestionLayout, type Suggestion } from '@/lib/suggestion';
 import { describeSuggestion } from '@/lib/suggestionText';
+import { usePieceShapes } from '@/lib/usePieceShapes';
 import { addDays } from '@/lib/weatherDates';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme } from '@/theme/useTheme';
@@ -69,6 +70,8 @@ export default function SuggestScreen() {
   const current = picked && picked.key === key ? picked.suggestion : null;
   const byId = new Map((items ?? []).map(i => [i.id, i]));
   const pieces: Item[] = current ? current.pieces.map(p => byId.get(p.id) ?? p) : [];
+  // 量到照片裡衣服的範圍後才排版，避免畫面跳動
+  const shapes = usePieceShapes(current ? pieces : undefined);
   const shown: Suggestion | null = current && probe ? { ...current, pieces, rainy: probe.rainy, pop: probe.pop } : null;
   const lines = shown ? describeSuggestion(shown, { language, day, occasion }) : [];
   const canvasWidth = Math.min(window.width - 64, 360);
@@ -144,7 +147,7 @@ export default function SuggestScreen() {
           >
             <OutfitCanvasView
               width={canvasWidth}
-              pieces={suggestionLayout(pieces).map((p, i) => ({ ...p, item: pieces[i] }))}
+              pieces={shapes ? suggestionLayout(pieces, shapes).map((p, i) => ({ ...p, item: pieces[i] })) : []}
             />
           </View>
           <Text style={[styles.pieceNames, { color: theme.textMuted }]}>{pieceNames}</Text>
