@@ -15,8 +15,15 @@ const WORK_DIR = 'backup-work';
 const EXPORT_DIR = 'backup-export';
 
 /** react-native-zip-archive 要的是檔案路徑，不是 file:// URI */
-function toPath(uri: string): string {
-  return uri.startsWith('file://') ? decodeURIComponent(uri.slice('file://'.length)) : uri;
+export function toPath(uri: string): string {
+  if (!uri.startsWith('file://')) return uri;
+  const raw = uri.slice('file://'.length);
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    // 沒有編碼的 %（不是 %XX）會讓 decodeURIComponent 丟例外；原樣使用
+    return raw;
+  }
 }
 
 const trimSlash = (uri: string) => uri.replace(/\/+$/, '');
@@ -58,7 +65,7 @@ export const backupFiles: BackupFiles = {
   },
   async listZip(source) {
     const entries = await listContents(toPath(source));
-    return entries.filter(e => !e.isDirectory).map(e => e.path);
+    return entries.filter(e => !e.isDirectory).map(e => ({ path: e.path, size: e.size }));
   },
   async unzip(source, dir, entries) {
     await unzip(toPath(source), toPath(dir), { entries });
@@ -68,6 +75,7 @@ export const backupFiles: BackupFiles = {
     if (!dir.exists) dir.create({ idempotent: true, intermediates: true });
     return new File(dir, fileName).uri;
   },
+  freeSpace: () => Paths.availableDiskSpace,
 };
 
 export async function shareBackup(uri: string, dialogTitle: string): Promise<void> {
@@ -80,19 +88,30 @@ export const canSaveToFolder = Platform.OS === 'android' && TenkiFileExport !== 
 const isCancel = (e: unknown) =>
   e instanceof Error && ((e as { code?: string }).code === 'ERR_PICKER_CANCELLED' || /cancel/i.test(e.message));
 
-/** 選資料夾後串流複製過去；使用者取消回傳 false */
-export async function saveBackupToFolder(uri: string, fileName: string): Promise<boolean> {
+/** 選資料夾後串流複製過去，回傳實際檔名（同名時系統會改名）；使用者取消回傳 null */
+export async function saveBackupToFolder(uri: string, fileName: string): Promise<string | null> {
   if (!TenkiFileExport) throw new Error('save to folder is not supported');
   let dir: Awaited<ReturnType<typeof Directory.pickDirectoryAsync>>;
   try {
     dir = await Directory.pickDirectoryAsync();
   } catch (e) {
-    if (isCancel(e)) return false;
+    if (isCancel(e)) return null;
     throw e;
   }
   const dest = dir.createFile(fileName, 'application/zip');
+  // 原生端失敗時會刪掉建好的檔案，資料夾裡不會留下壞掉的備份
   await TenkiFileExport.copyToContentUriAsync(uri, dest.uri);
-  return true;
+  return displayName(dest.uri) ?? fileName;
+}
+
+/** content://…/document/primary%3ADownload%2Fx%20(1).zip → x (1).zip；看不出來時回傳 null */
+export function displayName(contentUri: string): string | null {
+  try {
+    const name = decodeURIComponent(contentUri).split(/[/:]/).pop() ?? '';
+    return name.endsWith('.zip') ? name : null;
+  } catch {
+    return null;
+  }
 }
 
 /** 選備份檔（系統會複製到 App 的暫存資料夾）；取消回傳 null */

@@ -257,7 +257,11 @@ export const ja: Record<keyof typeof zhTW, string> = {
   'backup.confirmReplace': "もう一度押すと上書きします",
   'backup.confirmMerge': "もう一度押すとインポートします",
   'backup.importing': "インポートしています…",
-  'backup.imported': "インポート完了：アイテム {items} 点、コーデ {outfits} 件",
+  'backup.imported': "インポート完了：アイテム {items} 点、ゴミ箱 {trash} 点、コーデ {outfits} 件",
   'backup.importFailed': "インポートに失敗しました。スマホのデータは変更されていません",
   'backup.cancel': "キャンセル",
+  'backup.noSpace': "空き容量が足りません。インポートには約 {mb} MB 必要です",
+  'backup.busy': "別のバックアップ処理が実行中です。しばらくしてからお試しください",
+  'backup.summaryNoDate': "バックアップの内容：アイテム {items} 点、ゴミ箱 {trash} 点、コーデ {outfits} 件",
+  'backup.modeLabel': "{title}。{hint}",
 };

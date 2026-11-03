@@ -255,7 +255,11 @@ export const zhTW = {
   'backup.confirmReplace': "再按一次確認覆蓋",
   'backup.confirmMerge': "再按一次確認匯入",
   'backup.importing': "正在匯入…",
-  'backup.imported': "匯入完成：單品 {items} 件、穿搭 {outfits} 套",
+  'backup.imported': "匯入完成：單品 {items} 件、暫存區 {trash} 件、穿搭 {outfits} 套",
   'backup.importFailed': "匯入失敗，手機上的資料沒有變動",
   'backup.cancel': "取消",
+  'backup.noSpace': "手機空間不足，匯入需要約 {mb} MB",
+  'backup.busy': "另一個備份作業還在進行，請稍候再試",
+  'backup.summaryNoDate': "備份內容：單品 {items} 件、暫存區 {trash} 件、穿搭 {outfits} 套",
+  'backup.modeLabel': "{title}，{hint}",
 };

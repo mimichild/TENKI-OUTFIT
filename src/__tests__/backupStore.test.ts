@@ -76,12 +76,43 @@ describe('sqlite backup store', () => {
     expect(d.weather_days.find(w => w.date === '2026-11-01')!.max_t).toBe(99);
   });
 
+  /** 第 n 次 runAsync 丟例外（模擬寫到一半失敗，不依賴外鍵） */
+  function failOnRun(db: ReturnType<typeof openTestDb>, n: number) {
+    const real = db.runAsync.bind(db);
+    let calls = 0;
+    db.runAsync = async (sql: string, ...params: (string | number | null)[]) => {
+      if (++calls === n) throw new Error('disk I/O error');
+      return real(sql, ...params);
+    };
+  }
+
   it('replaceAll 中途失敗時整批放棄，原本資料不動', async () => {
-    const { store } = await setup(local());
+    const { db, store } = await setup(local());
+    const before = await store.dump();
+    failOnRun(db, 8);
+    await expect(store.replaceAll(backup())).rejects.toThrow('disk I/O error');
+    expect(await store.dump()).toEqual(before);
+  });
+
+  it('外鍵檢查關閉的連線（實機交易另開的連線）也擋得住參照不存在的單品', async () => {
+    const { db, store } = await setup(local());
+    db.raw.exec('PRAGMA foreign_keys = OFF');
+    const before = await store.dump();
     const bad = backup();
     bad.outfit_items.push(at('o2', 'missing'));
-    await expect(store.replaceAll(bad)).rejects.toThrow();
-    expect(await store.dump()).toEqual(await (await setup(local())).store.dump());
+    await expect(store.replaceAll(bad)).rejects.toThrow('broken reference');
+    await expect(store.merge(bad)).rejects.toThrow('broken reference');
+    expect(await store.dump()).toEqual(before);
+  });
+
+  it('replaceAll 回傳單品（不含暫存區、封存）、暫存區、穿搭數', async () => {
+    const { store } = await setup();
+    expect(await store.replaceAll(local())).toEqual({ items: 1, trash: 1, outfits: 1 });
+  });
+
+  it('photoPaths 回傳單品用到的照片', async () => {
+    const { store } = await setup(backup());
+    expect((await store.photoPaths()).sort()).toEqual(['photos/a.png', 'photos/x.png', 'photos/y.png']);
   });
 
   it('existingKeys 回傳手機上的單品、穿搭、天氣 key', async () => {
@@ -95,7 +126,8 @@ describe('sqlite backup store', () => {
   it('merge（保留原本）：同 id 用手機上的，沒有的加入；新穿搭可參照手機上的單品', async () => {
     const { store } = await setup(local());
     const r = await store.merge(backup());
-    expect(r).toEqual({ items: 2, outfits: 2, weatherDays: 1 });
+    // 加入 x（已封存，不算件數）、y；穿搭 o2、o3
+    expect(r).toEqual({ items: 1, trash: 0, outfits: 2 });
     const d = await store.dump();
     expect(d.items.find(i => i.id === 'a')!.name).toBe('手機上的 a');
     expect(d.items.map(i => i.id).sort()).toEqual(['a', 'b', 'x', 'y']);
@@ -116,11 +148,10 @@ describe('sqlite backup store', () => {
   });
 
   it('merge 中途失敗時整批放棄', async () => {
-    const { store } = await setup(local());
+    const { db, store } = await setup(local());
     const before = await store.dump();
-    const bad = backup();
-    bad.outfit_items.push(at('o2', 'missing'));
-    await expect(store.merge(bad)).rejects.toThrow();
+    failOnRun(db, 4);
+    await expect(store.merge(backup())).rejects.toThrow('disk I/O error');
     expect(await store.dump()).toEqual(before);
   });
 });

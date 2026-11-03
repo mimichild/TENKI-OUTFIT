@@ -1,6 +1,6 @@
 # TENKI OUTFIT 天氣穿搭 — v1 開發計畫
 
-> 建立：2026-11-02　狀態：**第 7 階段進行中（批次 B 待實機檢測）**
+> 建立：2026-11-02　狀態：**第 7 階段批次 C 完成，待最終實機驗收**
 > 基礎設施沿用 `/Users/mimi/Documents/REUSABLE_INFRA.md`
 
 ## 技術選型（沿用基礎文件）
@@ -512,8 +512,52 @@
 - 版本號 1.0.0（`app.json` `version`、`android.versionCode` 2）；`expo prebuild --platform android`（不 clean）更新 `versionName`／`versionCode`，簽章維持 debug
 - 測試：`backupService.test.ts` 11 項（假檔案系統＋真 SQLite：匯出內容、缺照片、摘要、非備份、版本太新、覆蓋、合併、DB 失敗回復、照片複製失敗回復、備份缺照片）、`BackupPanel.test.tsx` 14 項、設定頁打開備份頁 1 項；其他測試的 `photoStorage` mock 補上 `clearBackupTemp`；視覺測試的設定項目改為「備份與還原」
 - 驗證：Jest 374 項通過（新增 26 項）、tsc、lint；`bash scripts/regression.sh` 4/4 全過（視覺 72 項，設定頁兩個項目合成一個）
-- APK：`SPARK-Builds/TENKI-OUTFIT/tenki-outfit-v1.0.0-20261103-1127.apk`（約 126 MB），已上傳 Google Drive；已確認 dex 含 `TenkiFileExport`、`RNZipArchive`、zip4j、`ExpoSharing`、`ExpoDocumentPicker`，bundle 含備份程式碼與內建授權碼；**待使用者實機檢測**
+- APK：`SPARK-Builds/TENKI-OUTFIT/tenki-outfit-v1.0.0-20261103-1127.apk`（約 126 MB），已上傳 Google Drive；已確認 dex 含 `TenkiFileExport`、`RNZipArchive`、zip4j、`ExpoSharing`、`ExpoDocumentPicker`，bundle 含備份程式碼與內建授權碼
+- **實機檢測通過（使用者回報 2026-11-03）**
 - 和計畫不同的地方：
   - 設定頁合成一列「備份與還原」，匯出與匯入在同一頁
   - 「存到資料夾」只有 Android（iOS 的分享選單本來就有「儲存到檔案」）
   - 進度只顯示轉圈與文字，沒有百分比
+
+#### 批次 C｜收尾與驗收 — 完成（2026-11-03，待最終實機驗收）
+使用者決定（2026-11-03）：
+- **現在換成專屬的正式簽章**（官網公開下載前就換）。鑰匙放 `~/.config/tenki/`（keystore 檔＋密碼設定檔，密碼隨機產生），不進 git；使用者要自己另外備份這兩個檔案
+- 換簽章後手機要：用舊版匯出備份 → 移除 App → 安裝新簽章版本 → 匯入備份（同時當作匯出匯入的實機驗收）
+
+工作項目：Web 視覺測試（備份頁「僅手機版支援」）、code review、正式簽章（config plugin，`expo prebuild` 重建 android/ 也保留）、最終 APK、實機驗收清單
+
+- Web 視覺測試新增 4 項：設定頁「備份與還原」打開備份頁、備份頁標題、「備份與還原只支援手機版」、Web 不顯示匯出匯入按鈕（視覺 76 項）
+- **正式簽章**：
+  - 鑰匙 `~/.config/tenki/tenki-outfit-release.keystore`（PKCS12、RSA 4096、效期 100 年、alias `tenki-outfit`），密碼隨機產生存在 `~/.config/tenki/keystore.properties`；兩個檔案權限 600，不進 git
+  - 憑證 SHA-256：`D5:2C:3A:F0:FC:17:71:B9:D2:D0:26:6D:0A:34:19:08:A4:C1:52:94:D3:14:FC:DA:0C:77:9F:B8:DB:5B:32:6F`
+  - `plugins/withReleaseSigning.js`（config plugin，寫進 `app.json`）：release 改用 `signingConfigs.release`，從 `~/.config/tenki/keystore.properties`（或 `TENKI_KEYSTORE_PROPERTIES`）讀取；找不到設定檔時 release 建置直接失敗（不會默默用 debug 鑰匙）；build.gradle 格式不符時 prebuild 失敗。測試 3 項
+- Code review（code-reviewer：無 Critical，1 High，6 Medium，8 Low）修正：
+  - **High**：匯入後清照片原本是「照片資料夾裡 DB 沒用到的全刪」，和另一個匯入（離開畫面再回來可以再開一個）、同時新增單品、匯出撞在一起時會刪掉使用中的照片 → 改成只刪「匯入前有單品用、匯入後沒有」的照片；`backupService` 加模組層級的鎖（匯出／讀取／匯入互斥，`BackupBusyError` → 「另一個備份作業還在進行」）；進行中擋住返回（`usePreventRemove`、關閉返回手勢與導覽列返回鍵）
+  - Medium：
+    - 實機交易另開連線、外鍵檢查是關的（測試 helper 是開的）→ 寫入後在交易內跑 `PRAGMA foreign_key_check`，有斷掉的參照就整批放棄；新增「外鍵關閉時也擋得住」測試；失敗測試改用注入錯誤，不依賴外鍵
+    - 存到資料夾：`"wt"` 不支援時退回 `"w"`；複製失敗時刪掉建好的檔案（`DocumentsContract.deleteDocument`），資料夾不會留下壞掉的備份
+    - 空間：照片從解壓資料夾「搬」進照片資料夾（`moveAsync`，不再多複製一份）；讀取時檢查剩餘空間（照片大小＋50 MB），不夠顯示「手機空間不足，匯入需要約 N MB」；匯入結束、取消、選錯檔時刪掉選檔複製來的 zip；啟動時一併清 `cache/DocumentPicker`
+    - 匯入完成的件數改用和摘要相同的算法（單品／暫存區／穿搭，不含已封存）
+    - 交易開始時 `busy_timeout = 5000` 並先用一個不改資料的寫入拿寫入鎖（避免 SQLITE_BUSY／BUSY_SNAPSHOT）；主連線也設 `busy_timeout`（連線設定，不是 DB 結構）
+    - 交易已 COMMIT 之後才出錯時，不刪新照片、當作匯入成功；套用設定、通知畫面失敗只記錄，不影響結果
+  - Low：匯出四個資料表在同一個讀取快照；匯出只打包 `photos/` 底下的照片；時間欄位必須是日期時間、縮放 > 0、版本必須是正整數；取消選檔保留原本選好的備份與方式、重新選檔刪掉上一個暫存檔、匯出中鎖住匯入區所有按鈕、存到資料夾顯示系統改過的實際檔名、備份時間無法辨識時摘要不顯示日期；匯入方式的螢幕閱讀器標籤改成三語字串；`toPath` 遇到沒編碼的 `%` 不會丟例外
+  - 未處理（Low）：寫入每列各一次 `runAsync`（上千筆時較慢，可改 `prepareAsync`）；匯入中途被系統殺掉時留下的孤兒照片沒有回收機制（只佔空間）
+- 三語字串新增 4 組（`backup.noSpace`、`backup.busy`、`backup.summaryNoDate`、`backup.modeLabel`），`backup.imported` 加上暫存區件數
+- 驗證：Jest 404 項通過（批次 B 後新增 30 項）、tsc、lint；`bash scripts/regression.sh` 4/4 全過（視覺 76 項）
+- **最終 APK**：`SPARK-Builds/TENKI-OUTFIT/tenki-outfit-v1.0.0-20261103-1149.apk`，已上傳 Google Drive；`apksigner` 確認簽章為正式鑰匙（`CN=TENKI OUTFIT, O=kyoangel, C=TW`，SHA-256 同上）；dex 含原生修正（`deleteDocument`），bundle 含 review 修正與內建授權碼。**待使用者依下方清單實機驗收**
+
+#### 實機驗收清單（最終 APK）
+換簽章（只需要做一次）：
+1. 用手機上**目前的版本**：設定 → 備份與還原 → 分享備份檔（存到 Google Drive）或存到資料夾
+2. 移除 TENKI OUTFIT（直接安裝新版會被系統拒絕，因為簽章不同）
+3. 安裝 `tenki-outfit-v1.0.0-20261103-1149.apk`
+4. 設定 → 備份與還原 → 選擇備份檔 → 覆蓋 → 匯入 → 再按一次確認
+5. 確認：單品與照片、暫存區（剩餘天數）、過去與未來的穿搭、過去日期的天氣、語言／幣別／主題色都回來了
+
+整體功能：
+6. 服裝：新增單品（自動去背、手動擦除／補回）、編輯、刪除 → 暫存區 → 還原／永久刪除
+7. 每日氣象：天氣卡、左右切換日期、下拉更新；日／週／月檢視；新增穿搭（拖拉、縮放、旋轉、**點一下單品會選取並出現「從畫布移除」**——第 5 階段修正後尚未實機確認）、總金額
+8. 穿搭建議：今日／明日、場合、更新、存成穿搭
+9. 備份：存到資料夾（顯示的檔名和資料夾裡一致）、匯入時選「保留原本資料」、匯入時按返回鍵不會離開
+10. 切換英文／日文看一下備份頁文字
+11. 關掉網路開 App：天氣顯示錯誤提示，其他功能正常

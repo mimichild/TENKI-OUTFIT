@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useT, type TranslationKey } from '@/i18n';
-import type { ImportMode, PrepareResult, PreparedImport } from '@/lib/backupService';
+import type { ImportCounts } from '@/db/sqliteBackupStore';
+import { BackupBusyError, type ImportMode, type PrepareResult, type PreparedImport } from '@/lib/backupService';
 import { useTheme, type Theme } from '@/theme/useTheme';
 
 /** 備份頁用到的操作；app/backup.tsx 接上實際的檔案、zip 與資料庫，測試用假的 */
@@ -11,41 +12,51 @@ export interface BackupOps {
   canSaveToFolder: boolean;
   createExport(): Promise<{ uri: string; fileName: string }>;
   share(uri: string): Promise<void>;
-  /** 使用者取消選資料夾時回傳 false */
-  saveToFolder(uri: string, fileName: string): Promise<boolean>;
+  /** 回傳實際存成的檔名；使用者取消選資料夾時回傳 null */
+  saveToFolder(uri: string, fileName: string): Promise<string | null>;
   /** 取消時回傳 null */
   pick(): Promise<string | null>;
   prepare(uri: string): Promise<PrepareResult>;
-  apply(prepared: PreparedImport, mode: ImportMode): Promise<{ items: number; outfits: number }>;
+  apply(prepared: PreparedImport, mode: ImportMode): Promise<ImportCounts>;
+  /** 不匯入了：刪掉選檔時複製來的暫存檔 */
+  discard(prepared: PreparedImport): void;
 }
 
 type ExportState = { kind: 'idle' } | { kind: 'busy' } | { kind: 'saved'; name: string } | { kind: 'failed' };
 type ImportState =
   | { kind: 'idle' }
   | { kind: 'reading' }
-  | { kind: 'rejected'; message: TranslationKey }
+  | { kind: 'rejected'; message: TranslationKey; params?: Record<string, number> }
   | { kind: 'ready'; prepared: PreparedImport }
   | { kind: 'importing' }
-  | { kind: 'done'; items: number; outfits: number }
-  | { kind: 'failed' };
+  | ({ kind: 'done' } & ImportCounts)
+  | { kind: 'failed'; message: TranslationKey };
 
-const REJECTED: Record<Exclude<PrepareResult, { ok: true }>['reason'], TranslationKey> = {
-  notBackup: 'backup.notBackup',
-  newerVersion: 'backup.newerVersion',
-  corrupt: 'backup.corrupt',
-};
+function rejection(r: Exclude<PrepareResult, { ok: true }>): Extract<ImportState, { kind: 'rejected' }> {
+  switch (r.reason) {
+    case 'notBackup':
+      return { kind: 'rejected', message: 'backup.notBackup' };
+    case 'newerVersion':
+      return { kind: 'rejected', message: 'backup.newerVersion' };
+    case 'corrupt':
+      return { kind: 'rejected', message: 'backup.corrupt' };
+    case 'noSpace':
+      return { kind: 'rejected', message: 'backup.noSpace', params: { mb: r.neededMb } };
+  }
+}
 
 const DANGER = '#D93025';
 
 /** 台灣時間 YYYY/MM/DD HH:mm */
-function formatExportedAt(iso: string): string {
+function formatExportedAt(iso: string): string | null {
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
+  if (Number.isNaN(d.getTime())) return null;
   const s = new Date(d.getTime() + 8 * 3_600_000).toISOString();
   return `${s.slice(0, 10).replaceAll('-', '/')} ${s.slice(11, 16)}`;
 }
 
-export function BackupPanel({ ops }: { ops: BackupOps }) {
+/** onBusyChange：匯出／匯入進行中為 true，讓頁面擋住返回（離開畫面不會中斷背景的作業） */
+export function BackupPanel({ ops, onBusyChange }: { ops: BackupOps; onBusyChange?: (busy: boolean) => void }) {
   const t = useT();
   const theme = useTheme();
   const [exp, setExp] = useState<ExportState>({ kind: 'idle' });
@@ -54,6 +65,11 @@ export function BackupPanel({ ops }: { ops: BackupOps }) {
   const [armed, setArmed] = useState(false);
   // 匯出／匯入進行中不接受第二次操作（state 更新前的連點）
   const busy = useRef(false);
+
+  const exporting = exp.kind === 'busy';
+  const importing = imp.kind === 'reading' || imp.kind === 'importing';
+  const locked = exporting || importing;
+  useEffect(() => onBusyChange?.(locked), [locked, onBusyChange]);
 
   if (!ops.supported) {
     return (
@@ -84,7 +100,7 @@ export function BackupPanel({ ops }: { ops: BackupOps }) {
           setExp({ kind: 'idle' });
         } else {
           const saved = await ops.saveToFolder(uri, fileName);
-          setExp(saved ? { kind: 'saved', name: fileName } : { kind: 'idle' });
+          setExp(saved ? { kind: 'saved', name: saved } : { kind: 'idle' });
         }
       } catch (e) {
         console.warn('匯出備份失敗', e);
@@ -94,17 +110,19 @@ export function BackupPanel({ ops }: { ops: BackupOps }) {
 
   const pick = () =>
     guarded(async () => {
-      setMode(null);
-      setArmed(false);
       try {
         const uri = await ops.pick();
+        // 取消選檔：維持原本畫面（含已選的匯入方式）
         if (!uri) return;
+        if (imp.kind === 'ready') ops.discard(imp.prepared);
+        setMode(null);
+        setArmed(false);
         setImp({ kind: 'reading' });
         const r = await ops.prepare(uri);
-        setImp(r.ok ? { kind: 'ready', prepared: r } : { kind: 'rejected', message: REJECTED[r.reason] });
+        setImp(r.ok ? { kind: 'ready', prepared: r } : rejection(r));
       } catch (e) {
         console.warn('讀取備份失敗', e);
-        setImp({ kind: 'rejected', message: 'backup.readFailed' });
+        setImp({ kind: 'rejected', message: e instanceof BackupBusyError ? 'backup.busy' : 'backup.readFailed' });
       }
     });
 
@@ -123,7 +141,7 @@ export function BackupPanel({ ops }: { ops: BackupOps }) {
         setImp({ kind: 'done', ...r });
       } catch (e) {
         console.warn('匯入備份失敗', e);
-        setImp({ kind: 'failed' });
+        setImp({ kind: 'failed', message: e instanceof BackupBusyError ? 'backup.busy' : 'backup.importFailed' });
       } finally {
         setMode(null);
         setArmed(false);
@@ -132,14 +150,12 @@ export function BackupPanel({ ops }: { ops: BackupOps }) {
   };
 
   const cancel = () => {
+    if (imp.kind === 'ready') ops.discard(imp.prepared);
     setImp({ kind: 'idle' });
     setMode(null);
     setArmed(false);
   };
 
-  const exporting = exp.kind === 'busy';
-  const importing = imp.kind === 'reading' || imp.kind === 'importing';
-  const locked = exporting || importing;
   const importLabel = armed ? t(mode === 'replace' ? 'backup.confirmReplace' : 'backup.confirmMerge') : t('backup.import');
 
   return (
@@ -163,14 +179,11 @@ export function BackupPanel({ ops }: { ops: BackupOps }) {
           <Button theme={theme} icon="document-outline" label={t('backup.pick')} onPress={pick} disabled={locked} />
         </View>
         {imp.kind === 'reading' && <Status theme={theme} busy text={t('backup.reading')} />}
-        {imp.kind === 'rejected' && <Status theme={theme} error text={t(imp.message)} />}
+        {imp.kind === 'rejected' && <Status theme={theme} error text={t(imp.message, imp.params)} />}
         {imp.kind === 'ready' && (
           <View style={styles.ready}>
             <Text style={[styles.summary, { color: theme.text }]}>
-              {t('backup.summary', {
-                date: formatExportedAt(imp.prepared.manifest.exportedAt),
-                ...imp.prepared.summary,
-              })}
+              {summaryText(t, formatExportedAt(imp.prepared.manifest.exportedAt), imp.prepared.summary)}
             </Text>
             <Text style={[styles.hint, { color: theme.textMuted }]}>{t('backup.chooseMode')}</Text>
             <View accessibilityRole="radiogroup" style={styles.modes}>
@@ -181,6 +194,7 @@ export function BackupPanel({ ops }: { ops: BackupOps }) {
                   selected={mode === m}
                   title={t(m === 'replace' ? 'backup.modeReplace' : 'backup.modeMerge')}
                   hint={t(m === 'replace' ? 'backup.modeReplaceHint' : 'backup.modeMergeHint')}
+                  disabled={locked}
                   onPress={() => choose(m)}
                 />
               ))}
@@ -189,27 +203,29 @@ export function BackupPanel({ ops }: { ops: BackupOps }) {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={importLabel}
-                accessibilityState={{ disabled: mode === null }}
-                disabled={mode === null}
+                accessibilityState={{ disabled: mode === null || locked }}
+                disabled={mode === null || locked}
                 onPress={() => runImport(imp.prepared)}
                 style={[
                   styles.button,
-                  mode === null
+                  mode === null || locked
                     ? { borderColor: theme.border }
                     : armed
                       ? { borderColor: DANGER, backgroundColor: DANGER }
                       : { borderColor: theme.primary, backgroundColor: theme.primary },
                 ]}
               >
-                <Text style={{ color: mode === null ? theme.textMuted : '#FFFFFF', fontSize: 15, fontWeight: '600' }}>{importLabel}</Text>
+                <Text style={{ color: mode === null || locked ? theme.textMuted : '#FFFFFF', fontSize: 15, fontWeight: '600' }}>{importLabel}</Text>
               </Pressable>
-              <Button theme={theme} label={t('backup.cancel')} onPress={cancel} />
+              <Button theme={theme} label={t('backup.cancel')} onPress={cancel} disabled={locked} />
             </View>
           </View>
         )}
         {imp.kind === 'importing' && <Status theme={theme} busy text={t('backup.importing')} />}
-        {imp.kind === 'done' && <Status theme={theme} text={t('backup.imported', { items: imp.items, outfits: imp.outfits })} />}
-        {imp.kind === 'failed' && <Status theme={theme} error text={t('backup.importFailed')} />}
+        {imp.kind === 'done' && (
+          <Status theme={theme} text={t('backup.imported', { items: imp.items, trash: imp.trash, outfits: imp.outfits })} />
+        )}
+        {imp.kind === 'failed' && <Status theme={theme} error text={t(imp.message)} />}
       </Card>
     </ScrollView>
   );
@@ -249,13 +265,31 @@ function Button({ theme, label, onPress, icon, disabled }: ButtonProps) {
   );
 }
 
-function ModeOption(props: { theme: Theme; selected: boolean; title: string; hint: string; onPress: () => void }) {
-  const { theme, selected, title, hint, onPress } = props;
+function summaryText(
+  t: ReturnType<typeof useT>,
+  date: string | null,
+  counts: { items: number; trash: number; outfits: number },
+): string {
+  return date ? t('backup.summary', { date, ...counts }) : t('backup.summaryNoDate', counts);
+}
+
+interface ModeOptionProps {
+  theme: Theme;
+  selected: boolean;
+  title: string;
+  hint: string;
+  disabled: boolean;
+  onPress: () => void;
+}
+
+function ModeOption({ theme, selected, title, hint, disabled, onPress }: ModeOptionProps) {
+  const t = useT();
   return (
     <Pressable
       accessibilityRole="radio"
-      accessibilityLabel={`${title}，${hint}`}
-      accessibilityState={{ checked: selected }}
+      accessibilityLabel={t('backup.modeLabel', { title, hint })}
+      accessibilityState={{ checked: selected, disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={[styles.mode, { borderColor: selected ? theme.primary : theme.border, backgroundColor: selected ? theme.primarySoft : 'transparent' }]}
     >

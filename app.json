@@ -61,7 +61,8 @@
             "deploymentTarget": "15.5"
           }
         }
-      ]
+      ],
+      "./plugins/withReleaseSigning"
     ],
     "experiments": {
       "typedRoutes": true,

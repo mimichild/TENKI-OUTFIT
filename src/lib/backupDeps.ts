@@ -7,7 +7,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { backupFiles } from './backupPlatform';
 import type { BackupDeps } from './backupService';
 import { nowIso } from './ids';
-import { deletePhotos, listPhotoPaths, resolvePhotoUri, savePhoto } from './photoStorage';
+import { adoptPhoto, deletePhotos, resolvePhotoUri } from './photoStorage';
 
 /** 手機版實際使用的匯出／匯入依賴 */
 export function createBackupDeps(store: BackupStore): BackupDeps {
@@ -16,9 +16,8 @@ export function createBackupDeps(store: BackupStore): BackupDeps {
     files: backupFiles,
     photos: {
       uri: rel => resolvePhotoUri(rel) ?? rel,
-      save: savePhoto,
+      adopt: adoptPhoto,
       remove: deletePhotos,
-      list: listPhotoPaths,
     },
     settings: {
       get: () => {

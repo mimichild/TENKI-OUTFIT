@@ -257,7 +257,11 @@ export const en: Record<keyof typeof zhTW, string> = {
   'backup.confirmReplace': "Tap again to replace",
   'backup.confirmMerge': "Tap again to import",
   'backup.importing': "Importing…",
-  'backup.imported': "Import complete: {items} item(s), {outfits} outfit(s)",
+  'backup.imported': "Import complete: {items} item(s), {trash} in trash, {outfits} outfit(s)",
   'backup.importFailed': "Import failed. Nothing on this phone was changed.",
   'backup.cancel': "Cancel",
+  'backup.noSpace': "Not enough storage. Importing needs about {mb} MB.",
+  'backup.busy': "Another backup task is still running. Please try again shortly.",
+  'backup.summaryNoDate': "Backup contents: {items} item(s), {trash} in trash, {outfits} outfit(s)",
+  'backup.modeLabel': "{title}. {hint}",
 };

@@ -201,6 +201,19 @@ for label in 暫存區 暫存區是空的 過去穿搭仍會保留這件單品�
   expect_text "暫存區頁「${label}」存在" "$label" "$TRASH_TEXT"
 done
 
+# ── 第 7 階段：備份與還原（Web 預覽不支援，只顯示說明）──
+visit /settings > /dev/null
+npx agent-browser click '[aria-label="備份與還原"]' > /dev/null 2>&1
+npx agent-browser wait 1500 > /dev/null 2>&1
+if npx agent-browser get url 2>/dev/null | grep -q "/backup"; then log_pass "設定頁「備份與還原」打開備份頁"; else log_fail "設定頁「備份與還原」沒有打開備份頁"; fi
+BACKUP_TEXT=$(npx agent-browser get text body 2>/dev/null)
+echo "$BACKUP_TEXT" > "$OUT_DIR/backup.txt"
+for label in 備份與還原 備份與還原只支援手機版; do
+  expect_text "備份頁「${label}」存在" "$label" "$BACKUP_TEXT"
+done
+if echo "$BACKUP_TEXT" | grep -q "分享備份檔"; then log_fail "Web 預覽不該顯示「分享備份檔」"; else log_pass "Web 預覽不顯示匯出匯入按鈕"; fi
+npx agent-browser screenshot "$OUT_DIR/backup-web.png" > /dev/null 2>&1
+
 echo "截圖：$OUT_DIR"
 echo "✅ 通過: $PASS  ❌ 失敗: $FAIL"
 [ $FAIL -eq 0 ]

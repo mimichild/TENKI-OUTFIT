@@ -71,7 +71,8 @@ export const MIGRATIONS: string[] = [
 ];
 
 export async function migrate(db: MigrationDb): Promise<void> {
-  await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+  // busy_timeout：其他連線（備份匯入的交易）寫入時等一下，不要立刻 SQLITE_BUSY（連線設定，不是 DB 結構）
+  await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
   const current = row?.user_version ?? 0;
   if (current >= MIGRATIONS.length) return;

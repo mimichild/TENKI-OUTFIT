@@ -1,6 +1,6 @@
 import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
-import { copyAsync } from 'expo-file-system/legacy';
+import { copyAsync, moveAsync } from 'expo-file-system/legacy';
 import { isOwnedPhotoPath } from './photoPath';
 
 /**
@@ -37,6 +37,13 @@ export async function savePhoto(sourceUri: string): Promise<string> {
   return `${PHOTO_DIR}/${name}`;
 }
 
+/** 匯入備份用：把解壓出來的照片「搬」進照片資料夾（同一個磁碟只是改名，不多佔空間），回傳相對路徑 */
+export async function adoptPhoto(sourceUri: string): Promise<string> {
+  const name = `${randomUUID()}.${extensionOf(sourceUri)}`;
+  await moveAsync({ from: sourceUri, to: new File(photoDir(), name).uri });
+  return `${PHOTO_DIR}/${name}`;
+}
+
 /** 刪除 App 自己存的照片；不是 photos/ 底下的相對路徑一律不碰 */
 export function deletePhotos(stored: (string | null | undefined)[]): void {
   for (const path of new Set(stored)) {
@@ -50,18 +57,9 @@ export function deletePhotos(stored: (string | null | undefined)[]): void {
   }
 }
 
-/** 照片資料夾裡的全部檔案（相對路徑 `photos/<檔名>`），匯入後清除沒用到的照片用 */
-export function listPhotoPaths(): string[] {
-  return photoDir()
-    .list()
-    .filter((f): f is File => f instanceof File)
-    .map(f => `${PHOTO_DIR}/${f.name}`)
-    .filter(isOwnedPhotoPath);
-}
-
-/** 備份匯出／匯入留在暫存資料夾的檔案；App 啟動時呼叫 */
+/** 備份匯出／匯入留在暫存資料夾的檔案（含選檔時系統複製來的 DocumentPicker/）；App 啟動時呼叫 */
 export function clearBackupTemp(): void {
-  for (const name of ['backup-work', 'backup-export']) {
+  for (const name of ['backup-work', 'backup-export', 'DocumentPicker']) {
     try {
       const dir = new Directory(Paths.cache, name);
       if (dir.exists) dir.delete();

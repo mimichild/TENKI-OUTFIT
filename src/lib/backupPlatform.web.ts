@@ -19,8 +19,9 @@ export const backupFiles: BackupFiles = {
   listZip: unsupported,
   unzip: unsupported,
   exportTarget: unsupported,
+  freeSpace: unsupported,
 };
 
 export const shareBackup = async (_uri: string, _title: string): Promise<void> => unsupported();
-export const saveBackupToFolder = async (_uri: string, _name: string): Promise<boolean> => unsupported();
+export const saveBackupToFolder = async (_uri: string, _name: string): Promise<string | null> => unsupported();
 export const pickBackupFile = async (): Promise<string | null> => unsupported();

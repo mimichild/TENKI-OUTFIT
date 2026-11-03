@@ -123,6 +123,19 @@ function strOrNull(o: Obj, key: string): string | null {
   if (typeof v === 'string') return v;
   throw new Corrupt(key);
 }
+const isTime = (v: string) => !Number.isNaN(Date.parse(v));
+/** 必填的時間欄位（ISO 字串） */
+function time(o: Obj, key: string): string {
+  const v = id(o, key);
+  if (!isTime(v)) throw new Corrupt(key);
+  return v;
+}
+/** 可為 null 的時間欄位；格式錯（例如手動改成 "0"）會讓暫存區期限算錯，視為損壞 */
+function timeOrNull(o: Obj, key: string): string | null {
+  const v = strOrNull(o, key);
+  if (v !== null && !isTime(v)) throw new Corrupt(key);
+  return v;
+}
 function num(o: Obj, key: string): number {
   const v = o[key];
   if (typeof v === 'number' && Number.isFinite(v)) return v;
@@ -166,29 +179,32 @@ function parseData(raw: unknown): BackupData {
       seasons: str(o, 'seasons', '[]'),
       image_uri: photo(o, 'image_uri'),
       original_uri: photo(o, 'original_uri'),
-      created_at: id(o, 'created_at'),
-      updated_at: id(o, 'updated_at'),
+      created_at: time(o, 'created_at'),
+      updated_at: time(o, 'updated_at'),
+      // 最近使用存的是穿搭日期（YYYY-MM-DD）
       last_used_at: strOrNull(o, 'last_used_at'),
-      deleted_at: strOrNull(o, 'deleted_at'),
-      archived_at: strOrNull(o, 'archived_at'),
+      deleted_at: timeOrNull(o, 'deleted_at'),
+      archived_at: timeOrNull(o, 'archived_at'),
     }),
   );
   const outfits = rows(raw, 'outfits').map((o): BackupOutfitRow => {
     const date = strOrNull(o, 'date');
     if (date !== null && !DATE.test(date)) throw new Corrupt('date');
-    return { id: id(o, 'id'), name: str(o, 'name', ''), date, created_at: id(o, 'created_at'), updated_at: id(o, 'updated_at') };
+    return { id: id(o, 'id'), name: str(o, 'name', ''), date, created_at: time(o, 'created_at'), updated_at: time(o, 'updated_at') };
   });
-  const outfit_items = rows(raw, 'outfit_items').map(
-    (o): BackupPlacementRow => ({
+  const outfit_items = rows(raw, 'outfit_items').map((o): BackupPlacementRow => {
+    const scale = num(o, 'scale');
+    if (scale <= 0) throw new Corrupt('scale');
+    return {
       outfit_id: id(o, 'outfit_id'),
       item_id: id(o, 'item_id'),
       x: num(o, 'x'),
       y: num(o, 'y'),
-      scale: num(o, 'scale'),
+      scale,
       rotation: num(o, 'rotation'),
       z: num(o, 'z'),
-    }),
-  );
+    };
+  });
   const weather_days = rows(raw, 'weather_days').map((o): BackupWeatherRow => {
     const date = id(o, 'date');
     if (!DATE.test(date)) throw new Corrupt('date');
@@ -203,7 +219,7 @@ function parseData(raw: unknown): BackupData {
       pop: numOrNull(o, 'pop'),
       wx_code: strOrNull(o, 'wx_code'),
       wx_text: strOrNull(o, 'wx_text'),
-      fetched_at: id(o, 'fetched_at'),
+      fetched_at: time(o, 'fetched_at'),
     };
   });
 
@@ -227,7 +243,8 @@ export function parseManifest(text: string, app: { schemaVersion: number }): Par
   }
   if (!isObj(raw) || raw.format !== BACKUP_FORMAT) return { ok: false, reason: 'notBackup' };
   const { formatVersion, schemaVersion } = raw;
-  if (typeof formatVersion !== 'number' || typeof schemaVersion !== 'number') return { ok: false, reason: 'corrupt' };
+  const positiveInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 1;
+  if (!positiveInt(formatVersion) || !positiveInt(schemaVersion)) return { ok: false, reason: 'corrupt' };
   if (formatVersion > BACKUP_FORMAT_VERSION || schemaVersion > app.schemaVersion) return { ok: false, reason: 'newerVersion' };
   try {
     const { language, county, currency, themeColor } = sanitizeSettings(

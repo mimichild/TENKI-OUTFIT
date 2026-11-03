@@ -97,6 +97,10 @@ describe('parseManifest', () => {
     ['同一套穿搭同一件重複', (m: any) => { m.data.outfit_items[1].item_id = 'a'; }],
     ['data 不是物件', (m: any) => { m.data = null; }],
     ['天氣溫度不是數字', (m: any) => { m.data.weather_days[0].max_t = 'hot'; }],
+    ['刪除時間不是日期時間', (m: any) => { m.data.items[1].deleted_at = 'zzz'; }],
+    ['建立時間不是日期時間', (m: any) => { m.data.outfits[0].created_at = 'yesterday'; }],
+    ['縮放 ≤ 0', (m: any) => { m.data.outfit_items[0].scale = 0; }],
+    ['formatVersion 不是正整數', (m: any) => { m.formatVersion = 0; }],
   ])('%s → corrupt', (_label, mutate) => {
     const m = JSON.parse(text());
     mutate(m);
