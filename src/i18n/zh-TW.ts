@@ -11,6 +11,7 @@ export const zhTW = {
   'settings.themeColor': '主題色',
   'settings.cwaApiKey': '氣象署授權碼',
   'settings.cwaApiKeyHint': '到 opendata.cwa.gov.tw 註冊後取得',
+  'settings.cwaApiKeyBuiltIn': '留空則使用內建授權碼',
   'settings.cwaApiKeyPlaceholder': 'CWA-XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX',
   'settings.save': '儲存',
   'settings.saveKey': '儲存授權碼',

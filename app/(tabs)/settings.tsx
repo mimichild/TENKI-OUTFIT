@@ -57,14 +57,13 @@ export default function SettingsScreen() {
 
       <Section title={t('settings.sectionWeather')} theme={theme}>
         <Row theme={theme} label={t('settings.region')} value={settings.county} onPress={() => setPicker('region')} />
-        {/* App 內建授權碼時不顯示（使用者不用自己申請） */}
-        {!hasBuiltInKey && (
-          <View style={styles.keyBlock}>
-            <Text style={[styles.label, { color: theme.text }]}>{t('settings.cwaApiKey')}</Text>
-            <ApiKeyField theme={theme} />
-            <Text style={[styles.hint, { color: theme.textMuted }]}>{t('settings.cwaApiKeyHint')}</Text>
-          </View>
-        )}
+        {/* 一律顯示：有內建授權碼時，想用自己額度的人仍可填自己的（自己的優先） */}
+        <View style={styles.keyBlock}>
+          <Text style={[styles.label, { color: theme.text }]}>{t('settings.cwaApiKey')}</Text>
+          <ApiKeyField theme={theme} />
+          <Text style={[styles.hint, { color: theme.textMuted }]}>{t('settings.cwaApiKeyHint')}</Text>
+          {hasBuiltInKey && <Text style={[styles.hint, { color: theme.textMuted }]}>{t('settings.cwaApiKeyBuiltIn')}</Text>}
+        </View>
       </Section>
 
       <Section title={t('settings.sectionData')} theme={theme}>

@@ -13,6 +13,7 @@ export const en: Record<keyof typeof zhTW, string> = {
   'settings.themeColor': 'Theme color',
   'settings.cwaApiKey': 'CWA API key',
   'settings.cwaApiKeyHint': 'Register at opendata.cwa.gov.tw to get one',
+  'settings.cwaApiKeyBuiltIn': 'Leave empty to use the built-in key',
   'settings.cwaApiKeyPlaceholder': 'CWA-XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX',
   'settings.save': 'Save',
   'settings.saveKey': 'Save API key',

@@ -10,7 +10,7 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 let mockBuiltInKey = '';
 jest.mock('@/lib/cwaKey', () => ({
   builtInCwaKey: () => mockBuiltInKey,
-  effectiveCwaKey: (k: string) => mockBuiltInKey || k.trim(),
+  effectiveCwaKey: (k: string) => k.trim() || mockBuiltInKey,
 }));
 jest.mock('@/lib/photoStorage', () => ({ listPhotoFiles: () => [], clearCutoutCache: jest.fn(), clearBackupTemp: jest.fn(), savePhoto: jest.fn(), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
 
@@ -92,12 +92,27 @@ describe('SettingsScreen', () => {
     expect(screen.getByText('尚未儲存')).toBeTruthy();
   });
 
-  it('hides the CWA key field when the app has a built-in key', async () => {
+  it('shows the CWA key field with a built-in key too, explaining that empty uses the built-in one', async () => {
     mockBuiltInKey = 'CWA-BUILTIN';
     await render(<SettingsScreen />);
-    expect(screen.queryByLabelText('氣象署授權碼')).toBeNull();
-    expect(screen.queryByRole('button', { name: '儲存授權碼' })).toBeNull();
-    expect(screen.getByText('地區')).toBeTruthy();
+    expect(screen.getByLabelText('氣象署授權碼')).toBeTruthy();
+    expect(screen.getByText('留空則使用內建授權碼')).toBeTruthy();
+    // 內建的授權碼不顯示在欄位裡
+    expect(screen.getByLabelText('氣象署授權碼').props.value).toBe('');
+  });
+
+  it('does not mention the built-in key when the app has none', async () => {
+    await render(<SettingsScreen />);
+    expect(screen.queryByText('留空則使用內建授權碼')).toBeNull();
+  });
+
+  it('can clear a saved key to go back to the built-in one', async () => {
+    mockBuiltInKey = 'CWA-BUILTIN';
+    useSettingsStore.setState({ cwaApiKey: 'CWA-MINE' });
+    await render(<SettingsScreen />);
+    fireEvent.changeText(screen.getByLabelText('氣象署授權碼'), '');
+    fireEvent.press(screen.getByRole('button', { name: '儲存授權碼' }));
+    expect(useSettingsStore.getState().cwaApiKey).toBe('');
   });
 
   it('shows the trash count and opens the trash page', async () => {

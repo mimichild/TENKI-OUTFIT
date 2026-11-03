@@ -13,6 +13,7 @@ export const ja: Record<keyof typeof zhTW, string> = {
   'settings.themeColor': 'テーマカラー',
   'settings.cwaApiKey': '気象署 API キー',
   'settings.cwaApiKeyHint': 'opendata.cwa.gov.tw で登録して取得',
+  'settings.cwaApiKeyBuiltIn': '空欄の場合は内蔵の認証キーを使用します',
   'settings.cwaApiKeyPlaceholder': 'CWA-XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX',
   'settings.save': '保存',
   'settings.saveKey': '認証コードを保存',

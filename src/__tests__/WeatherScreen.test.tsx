@@ -17,7 +17,7 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 let mockBuiltInKey = '';
 jest.mock('@/lib/cwaKey', () => ({
   builtInCwaKey: () => mockBuiltInKey,
-  effectiveCwaKey: (k: string) => mockBuiltInKey || k.trim(),
+  effectiveCwaKey: (k: string) => k.trim() || mockBuiltInKey,
 }));
 
 // 2026-11-03（二）10:00 台灣時間
@@ -90,6 +90,12 @@ describe('WeatherScreen', () => {
     expect(fetcher).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'CWA-BUILTIN', county: '臺北市' }));
     expect(screen.queryByText('請先到設定輸入氣象署授權碼')).toBeNull();
     expect(screen.getByText('25°')).toBeTruthy();
+  });
+
+  it("uses the user's own key over the built-in one", async () => {
+    mockBuiltInKey = 'CWA-BUILTIN';
+    const { fetcher } = await setup({ apiKey: 'CWA-MINE', result: { status: 'ok', days: [forecast('2026-11-03', 25)] } });
+    expect(fetcher).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'CWA-MINE' }));
   });
 
   it('fetches the selected county and shows today', async () => {
