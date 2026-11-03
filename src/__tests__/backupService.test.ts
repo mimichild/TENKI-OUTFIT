@@ -4,6 +4,7 @@ import type { BackupData, BackupSettings } from '@/lib/backupFormat';
 import {
   applyImport,
   BackupBusyError,
+  isBackupRunning,
   backupFileName,
   discardImport,
   exportBackup,
@@ -271,10 +272,13 @@ describe('applyImport', () => {
 
   it('同時只能進行一個匯出／匯入（離開畫面再回來也一樣）', async () => {
     const { b, r } = await prepared(bLocal());
+    expect(isBackupRunning()).toBe(false);
     const first = applyImport(b.deps, r, 'merge');
+    expect(isBackupRunning()).toBe(true);
     await expect(applyImport(b.deps, r, 'merge')).rejects.toBeInstanceOf(BackupBusyError);
     await expect(exportBackup(b.deps)).rejects.toBeInstanceOf(BackupBusyError);
     await first;
+    expect(isBackupRunning()).toBe(false);
     // 結束後可以再做
     await expect(exportBackup(b.deps)).resolves.toBeTruthy();
   });

@@ -7,4 +7,5 @@ export const boundsCache = {
   get: async (_path: string): Promise<PieceShape | null | undefined> => undefined,
   set: async (_path: string, _shape: PieceShape | null): Promise<void> => {},
   remove: async (_paths: string[]): Promise<void> => {},
+  retainOnly: async (_paths: string[]): Promise<void> => {},
 };

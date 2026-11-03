@@ -20,18 +20,19 @@ async function measure(uri: string): Promise<PieceShape | null> {
   try {
     const data = await Skia.Data.fromURI(uri);
     owned.push(data);
+    // 這些失敗可能是暫時的（檔案還沒寫完、記憶體不足）：丟例外，不寫進快取，下次再量
     const image = Skia.Image.MakeImageFromEncoded(data);
     owned.push(image);
-    if (!image) return null;
+    if (!image) throw new Error('cannot decode photo');
     const W = image.width();
     const H = image.height();
-    if (W <= 0 || H <= 0) return null;
+    if (W <= 0 || H <= 0) throw new Error('photo has no size');
     const k = Math.min(1, SAMPLE / Math.max(W, H));
     const w = Math.max(1, Math.round(W * k));
     const h = Math.max(1, Math.round(H * k));
     const surface = Skia.Surface.Make(w, h);
     owned.push(surface);
-    if (!surface) return null;
+    if (!surface) throw new Error('cannot create surface');
     const paint = Skia.Paint();
     owned.push(paint);
     surface.getCanvas().drawImageRect(image, Skia.XYWHRect(0, 0, W, H), Skia.XYWHRect(0, 0, w, h), paint);
@@ -39,7 +40,8 @@ async function measure(uri: string): Promise<PieceShape | null> {
     const snapshot = surface.makeImageSnapshot();
     owned.push(snapshot);
     const pixels = snapshot.readPixels(0, 0, { width: w, height: h, colorType: ColorType.RGBA_8888, alphaType: AlphaType.Unpremul });
-    if (!(pixels instanceof Uint8Array)) return null;
+    if (!(pixels instanceof Uint8Array)) throw new Error('cannot read pixels');
+    // 整張透明：量不到範圍（照片不會改，可以快取 null）
     const bounds = alphaBounds(pixels, w, h);
     return bounds ? { aspect: W / H, bounds } : null;
   } finally {

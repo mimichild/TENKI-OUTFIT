@@ -130,6 +130,20 @@ describe('sqlite backup store', () => {
     expect((await store.dump()).items).toHaveLength(1000);
   });
 
+  it('finalize 也失敗時仍回報原本的錯誤', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const { db, store } = await setup(local());
+    const real = db.prepareAsync.bind(db);
+    db.prepareAsync = async (sql: string) => {
+      const stmt = await real(sql);
+      return {
+        executeAsync: async () => { throw new Error('disk I/O error'); },
+        finalizeAsync: async () => { await stmt.finalizeAsync(); throw new Error('finalize failed'); },
+      };
+    };
+    await expect(store.replaceAll(backup())).rejects.toThrow('disk I/O error');
+  });
+
   it('寫到一半失敗時 statement 也有 finalize', async () => {
     const { db, store } = await setup(local());
     const opened = trackStatements(db);

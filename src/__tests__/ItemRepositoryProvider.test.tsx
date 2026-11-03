@@ -5,6 +5,10 @@ import { createMemoryDatabase } from '@/db/memoryItemRepository';
 import { EMPTY_ITEM_INPUT } from '@/components/ItemForm';
 import { clearBackupTemp, clearCutoutCache, deletePhotos, listPhotoFiles } from '@/lib/photoStorage';
 
+let mockBackupRunning = false;
+jest.mock('@/lib/backupService', () => ({ isBackupRunning: () => mockBackupRunning }));
+const mockRetainBounds = jest.fn();
+jest.mock('@/lib/photoBoundsCache', () => ({ boundsCache: { retainOnly: async (p: string[]) => mockRetainBounds(p) } }));
 jest.mock('@/lib/photoStorage', () => ({
   deletePhotos: jest.fn(),
   clearCutoutCache: jest.fn(),
@@ -19,6 +23,7 @@ const originalAddListener = AppState.addEventListener;
 beforeEach(() => {
   jest.clearAllMocks();
   (listPhotoFiles as jest.Mock).mockReturnValue([]);
+  mockBackupRunning = false;
   onAppState = undefined;
   AppState.addEventListener = ((_type: string, handler: (s: AppStateStatus) => void) => {
     onAppState = handler;
@@ -72,6 +77,28 @@ describe('startup photo cleanup', () => {
     expect(deletePhotos).toHaveBeenLastCalledWith(['photos/orphan.png']);
   });
 
+  it('drops cached photo bounds of photos no item uses any more', async () => {
+    await start();
+    expect(mockRetainBounds).toHaveBeenCalledWith(expect.arrayContaining(['photos/kept.png', 'photos/kept.jpg']));
+  });
+
+  it('skips photo and backup temp cleanup while a backup import or export is running (screens remounted mid-import)', async () => {
+    mockBackupRunning = true;
+    await start();
+    expect(clearCutoutCache).toHaveBeenCalled();
+    expect(clearBackupTemp).not.toHaveBeenCalled();
+    expect(listPhotoFiles).not.toHaveBeenCalled();
+    expect(deletePhotos).not.toHaveBeenCalledWith(['photos/orphan.png']);
+  });
+
+  it('deletes nothing when no item refers to any photo (database looks empty)', async () => {
+    const db = createMemoryDatabase({ now: () => NOW, newId: () => 'x' });
+    (listPhotoFiles as jest.Mock).mockReturnValue([{ path: 'photos/a.png', modifiedAt: t - 5 * HOUR }]);
+    render(<ItemRepositoryProvider repository={db.items} now={() => NOW}><Text>app</Text></ItemRepositoryProvider>);
+    await act(async () => {});
+    expect(deletePhotos).not.toHaveBeenCalledWith(['photos/a.png']);
+  });
+
   it('only logs when listing photos fails', async () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     (listPhotoFiles as jest.Mock).mockImplementation(() => { throw new Error('io'); });
@@ -106,6 +133,38 @@ describe('purge again when the app comes back on a new day', () => {
     expect(purge).toHaveBeenCalledTimes(2);
     expect(listPhotoFiles).not.toHaveBeenCalled();
 
+    await act(async () => onAppState?.('active'));
+    expect(purge).toHaveBeenCalledTimes(2);
+  });
+
+  it('tries again on the next foreground when the purge failed', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    let now = '2026-11-03T15:00:00.000Z';
+    const db = createMemoryDatabase({ now: () => now, newId: () => 'x' });
+    const purge = jest.spyOn(db.items, 'purgeExpired');
+    render(<ItemRepositoryProvider repository={db.items} now={() => now}><Text>app</Text></ItemRepositoryProvider>);
+    await act(async () => {});
+    now = '2026-11-03T16:10:00.000Z';
+    purge.mockRejectedValueOnce(new Error('SQLITE_BUSY'));
+    await act(async () => onAppState?.('active'));
+    expect(purge).toHaveBeenCalledTimes(2);
+    await act(async () => onAppState?.('active'));
+    expect(purge).toHaveBeenCalledTimes(3);
+    await act(async () => onAppState?.('active'));
+    expect(purge).toHaveBeenCalledTimes(3);
+  });
+
+  it('skips the foreground purge while a backup is running and tries next time', async () => {
+    let now = '2026-11-03T15:00:00.000Z';
+    const db = createMemoryDatabase({ now: () => now, newId: () => 'x' });
+    const purge = jest.spyOn(db.items, 'purgeExpired');
+    render(<ItemRepositoryProvider repository={db.items} now={() => now}><Text>app</Text></ItemRepositoryProvider>);
+    await act(async () => {});
+    now = '2026-11-03T16:10:00.000Z';
+    mockBackupRunning = true;
+    await act(async () => onAppState?.('active'));
+    expect(purge).toHaveBeenCalledTimes(1);
+    mockBackupRunning = false;
     await act(async () => onAppState?.('active'));
     expect(purge).toHaveBeenCalledTimes(2);
   });

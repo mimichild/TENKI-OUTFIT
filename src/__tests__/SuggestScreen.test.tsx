@@ -134,6 +134,43 @@ describe('SuggestScreen', () => {
     expect(screen.getByText('目前沒有這天的天氣資料，這套只依場合挑選。')).toBeTruthy();
   });
 
+  it('re-picks when an item it was missing (shoes) is added', async () => {
+    const { db } = await setup({ items: [{ name: '上衣', category: 'top' }, { name: '褲子', category: 'bottom' }] });
+    expect(screen.getByText('缺少：外套、鞋子')).toBeTruthy();
+    await act(async () => {
+      await db.items.create({ name: '球鞋', brand: '', category: 'shoes', price: null, occasions: [], seasons: [], imageUri: null, originalUri: null });
+      useItemsVersion.getState().bump();
+    });
+    expect(screen.getByText('缺少：外套')).toBeTruthy();
+  });
+
+  it('shows an error with retry when the local weather cache cannot be read', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    let n = 0;
+    const db = createMemoryDatabase({ now: () => NOW, newId: () => `id${++n}` });
+    await db.items.create({ name: '上衣', brand: '', category: 'top', price: null, occasions: [], seasons: [], imageUri: null, originalUri: null });
+    useSettingsStore.setState({ ...DEFAULT_SETTINGS });
+    const weatherRepo = createMemoryWeatherRepository([day('2026-11-03', 29, 19)]);
+    const realList = weatherRepo.list.bind(weatherRepo);
+    let failing = true;
+    weatherRepo.list = async (county: string) => {
+      if (failing) throw new Error('storage');
+      return realList(county);
+    };
+    render(
+      <ItemRepositoryProvider repository={db.items}>
+        <WeatherProvider repository={weatherRepo} fetcher={jest.fn()} now={() => NOW}>
+          <SuggestScreen />
+        </WeatherProvider>
+      </ItemRepositoryProvider>,
+    );
+    await act(async () => {});
+    expect(screen.getByText('讀取失敗')).toBeTruthy();
+    failing = false;
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: '重試' })));
+    expect(screen.queryByText('讀取失敗')).toBeNull();
+  });
+
   it('says a bottom is missing when the closet only has tops', async () => {
     await setup({ items: [{ name: '白T', category: 'top' }, { name: '球鞋', category: 'shoes' }] });
     expect(screen.getByText('還差一件下著（或一件連身）')).toBeTruthy();

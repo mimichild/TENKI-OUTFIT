@@ -68,6 +68,16 @@ describe('bounds cache file', () => {
     expect(Object.keys(JSON.parse(io.text!).entries)).toEqual(['photos/b.png']);
   });
 
+  it('keeps only the given paths', async () => {
+    const { io, api } = memoryIo(JSON.stringify({ version: 1, entries: { 'photos/a.png': shape, 'photos/b.png': shape } }));
+    const cache = createBoundsCache(api);
+    await cache.retainOnly(['photos/b.png', 'photos/z.png']);
+    expect(await cache.get('photos/a.png')).toBeUndefined();
+    expect(await cache.get('photos/b.png')).toEqual(shape);
+    await jest.advanceTimersByTimeAsync(500);
+    expect(Object.keys(JSON.parse(io.text!).entries)).toEqual(['photos/b.png']);
+  });
+
   it('does not write when removing paths that are not cached', async () => {
     const { io, api } = memoryIo();
     const cache = createBoundsCache(api);

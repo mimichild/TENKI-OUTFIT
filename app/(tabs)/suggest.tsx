@@ -17,7 +17,7 @@ import { usePieceShapes } from '@/lib/usePieceShapes';
 import { addDays } from '@/lib/weatherDates';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme } from '@/theme/useTheme';
-import type { Item, Occasion, OutfitPiece } from '@/types/models';
+import type { Category, Item, Occasion, OutfitPiece } from '@/types/models';
 
 type Day = 'today' | 'tomorrow';
 
@@ -59,10 +59,15 @@ export default function SuggestScreen() {
       const cur = byId.get(p.id);
       return !!cur && cur.category === p.category && candidatesFor([cur], cur.category, { band: probe.band, occasion }).length > 0;
     };
+    // 原本缺的分類（外套、鞋子）現在有可用的單品了
+    const missingNowAvailable = (c: Category) => candidatesFor(input.items, c, { band: probe.band, occasion }).length > 0;
     const stale =
       !picked ||
       picked.key !== key ||
-      (picked.input !== input && (picked.suggestion.status === 'empty' || !picked.suggestion.pieces.every(stillFits)));
+      (picked.input !== input &&
+        (picked.suggestion.status === 'empty' ||
+          !picked.suggestion.pieces.every(stillFits) ||
+          picked.suggestion.missing.some(missingNowAvailable)));
     if (stale) setPicked({ key, input, suggestion: suggestOutfit(input) });
   }
 
@@ -149,7 +154,9 @@ export default function SuggestScreen() {
         ))}
       </ScrollView>
 
-      {items === undefined && itemsError ? <LoadError onRetry={retryItems} /> : !ready || !shown ? null : (items ?? []).length === 0 ? (
+      {items === undefined && itemsError ? <LoadError onRetry={retryItems} /> : weather.days === undefined && weather.error === 'storage' ? (
+        <LoadError onRetry={weather.refresh} />
+      ) : !ready || !shown ? null : (items ?? []).length === 0 ? (
         <Message icon="shirt-outline" text={t('suggest.emptyCloset')} color={theme.textMuted} />
       ) : shown.status === 'empty' ? (
         <Message

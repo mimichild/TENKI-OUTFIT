@@ -23,6 +23,8 @@ export interface BoundsCache {
   get(path: string): Promise<PieceShape | null | undefined>;
   set(path: string, shape: PieceShape | null): Promise<void>;
   remove(paths: string[]): Promise<void>;
+  /** 只留下這些路徑（清掉已經沒有單品使用的照片的項目） */
+  retainOnly(paths: string[]): Promise<void>;
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -81,6 +83,13 @@ export function createBoundsCache(io: BoundsCacheIo): BoundsCache {
       const entries = await load();
       let changed = false;
       for (const p of paths) changed = entries.delete(p) || changed;
+      if (changed) scheduleWrite(entries);
+    },
+    async retainOnly(paths) {
+      const entries = await load();
+      const keep = new Set(paths);
+      let changed = false;
+      for (const k of [...entries.keys()]) if (!keep.has(k)) changed = entries.delete(k) || changed;
       if (changed) scheduleWrite(entries);
     },
   };

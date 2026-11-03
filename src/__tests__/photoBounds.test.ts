@@ -3,6 +3,8 @@ import { measurePhoto } from '@/lib/photoBounds';
 // jest.mock 會被提到 import 之前；工廠裡只在函式內用到 mock 開頭的變數
 const mockDisposed: string[] = [];
 const mockFromURI = jest.fn();
+let mockDecodeFails = false;
+let mockTransparent = false;
 
 jest.mock('@shopify/react-native-skia', () => {
   const disposable = (name: string, extra: object = {}) => ({ ...extra, dispose: () => mockDisposed.push(name) });
@@ -12,7 +14,7 @@ jest.mock('@shopify/react-native-skia', () => {
     Skia: {
       Data: { fromURI: (uri: string) => mockFromURI(uri) },
       Image: {
-        MakeImageFromEncoded: () => disposable('image', { width: () => 4, height: () => 2 }),
+        MakeImageFromEncoded: () => (mockDecodeFails ? null : disposable('image', { width: () => 4, height: () => 2 })),
       },
       XYWHRect: () => ({}),
       Paint: () => disposable('paint'),
@@ -23,7 +25,7 @@ jest.mock('@shopify/react-native-skia', () => {
             flush: () => {},
             makeImageSnapshot: () => {
               const px = new Uint8Array(4 * 2 * 4);
-              px[(1 * 4 + 2) * 4 + 3] = 255;
+              if (!mockTransparent) px[(1 * 4 + 2) * 4 + 3] = 255;
               return disposable('snapshot', { readPixels: () => px });
             },
           }),
@@ -50,6 +52,8 @@ beforeEach(() => {
   mockDisposed.length = 0;
   mockFromURI.mockReset();
   mockCached.clear();
+  mockDecodeFails = false;
+  mockTransparent = false;
 });
 
 describe('measurePhoto with the cache file', () => {
@@ -65,6 +69,25 @@ describe('measurePhoto with the cache file', () => {
     const shape = await measurePhoto('photos/new.png');
     expect(mockFromURI).toHaveBeenCalledWith('file:///doc/photos/new.png');
     expect(mockCached.get('photos/new.png')).toEqual(shape);
+  });
+
+  it('does not save a photo that could not be decoded (may be temporary, e.g. low memory)', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mockFromURI.mockResolvedValue({ dispose: () => {} });
+    mockDecodeFails = true;
+    expect(await measurePhoto('photos/undecodable.png')).toBeNull();
+    expect(mockCached.has('photos/undecodable.png')).toBe(false);
+    // 下次再量
+    mockDecodeFails = false;
+    expect(await measurePhoto('photos/undecodable.png')).not.toBeNull();
+  });
+
+  it('saves null for a fully transparent photo (nothing to measure, will not change)', async () => {
+    mockFromURI.mockResolvedValue({ dispose: () => {} });
+    mockTransparent = true;
+    expect(await measurePhoto('photos/empty.png')).toBeNull();
+    expect(mockCached.get('photos/empty.png')).toBeNull();
+    expect(mockCached.has('photos/empty.png')).toBe(true);
   });
 
   it('does not save temp files or failed measurements', async () => {

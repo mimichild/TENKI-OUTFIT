@@ -57,7 +57,8 @@ async function insertAll<T>(tx: WriteTx, table: string, cols: readonly (keyof T 
       await stmt.executeAsync(...cols.map(c => row[c] as string | number | null));
     }
   } finally {
-    await stmt.finalizeAsync();
+    // finalize 失敗只記錄，不蓋掉寫入時的錯誤（交易一樣會回復）
+    await stmt.finalizeAsync().catch(e => console.warn('finalize statement failed', e));
   }
 }
 

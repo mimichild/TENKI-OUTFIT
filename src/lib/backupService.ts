@@ -85,6 +85,10 @@ export class BackupBusyError extends Error {
 
 // 匯出、讀取、匯入全部互斥：鎖放在模組層級，不靠畫面元件（畫面卸載再進來是新的元件）
 let running = false;
+
+/** 正在匯出／讀取／匯入備份（App 啟動清除用：這時不清照片與備份暫存檔） */
+export const isBackupRunning = (): boolean => running;
+
 async function exclusive<T>(fn: () => Promise<T>): Promise<T> {
   if (running) throw new BackupBusyError();
   running = true;
