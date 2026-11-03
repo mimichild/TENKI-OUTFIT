@@ -29,6 +29,8 @@ export interface ItemRepository {
   purge(id: string): Promise<Item[]>;
   /** 對進暫存區超過 days 天的單品做 purge，回傳真正刪除的單品 */
   purgeExpired(days: number): Promise<Item[]>;
+  /** 所有單品（含暫存區、已封存）用到的照片路徑，不重複；清除孤兒照片用 */
+  photoPaths(): Promise<string[]>;
 }
 
 export function trashCutoff(nowIso: string, days: number): string {

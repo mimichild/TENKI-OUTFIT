@@ -143,6 +143,39 @@ else
 fi
 npx agent-browser screenshot "$OUT_DIR/weather-month.png" > /dev/null 2>&1
 npx agent-browser click '[role="tab"][aria-label="日"]' > /dev/null 2>&1 || true
+npx agent-browser wait 800 > /dev/null 2>&1
+
+# ── v2：英文介面單複數（同一個工作階段：切到英文，看剛存的穿搭「1 item」，再切回中文）──
+npx agent-browser click 'a[href="/settings"]' > /dev/null 2>&1 || log_fail "切不到設定分頁"
+npx agent-browser wait 1000 > /dev/null 2>&1
+npx agent-browser click '[aria-label="語言"]' > /dev/null 2>&1 || log_fail "設定頁找不到「語言」"
+npx agent-browser wait 800 > /dev/null 2>&1
+npx agent-browser find text English click > /dev/null 2>&1 || log_fail "語言選單找不到 English"
+npx agent-browser wait 800 > /dev/null 2>&1
+npx agent-browser click 'a[href="/"]' > /dev/null 2>&1 || log_fail "切不到每日氣象分頁"
+npx agent-browser wait 1500 > /dev/null 2>&1
+if npx agent-browser eval '!!document.querySelector("[aria-label=\"Edit outfit, 1 item, NT$1,290\"]")' 2>/dev/null | grep -q true; then
+  log_pass "英文介面穿搭件數用單數（1 item）"
+else
+  log_fail "英文介面穿搭件數沒有用單數（1 item）"
+fi
+npx agent-browser screenshot "$OUT_DIR/weather-day-en.png" > /dev/null 2>&1
+npx agent-browser click 'a[href="/settings"]' > /dev/null 2>&1 || true
+npx agent-browser wait 1000 > /dev/null 2>&1
+npx agent-browser click '[aria-label="Language"]' > /dev/null 2>&1 || log_fail "設定頁找不到「Language」"
+npx agent-browser wait 800 > /dev/null 2>&1
+npx agent-browser find text 繁體中文 click > /dev/null 2>&1 || log_fail "語言選單找不到繁體中文"
+npx agent-browser wait 800 > /dev/null 2>&1
+if npx agent-browser get text body 2>/dev/null | grep -q "語言"; then log_pass "切回中文介面"; else log_fail "沒有切回中文介面"; fi
+
+# ── v2：衣櫃只有上衣時，穿搭建議說出缺下著（同一個工作階段，此時只有 E2E白襯衫）──
+npx agent-browser click 'a[href="/suggest"]' > /dev/null 2>&1 || log_fail "切不到穿搭建議分頁"
+npx agent-browser wait 1500 > /dev/null 2>&1
+ONLY_TOPS_TEXT=$(npx agent-browser get text body 2>/dev/null)
+echo "$ONLY_TOPS_TEXT" > "$OUT_DIR/suggest-only-tops.txt"
+expect_text "只有上衣時提示還差下著" "還差一件下著（或一件連身）" "$ONLY_TOPS_TEXT"
+if echo "$ONLY_TOPS_TEXT" | grep -q "確認單品的季節、場合設定"; then log_fail "只有上衣時還顯示舊的誤導提示"; else log_pass "只有上衣時不顯示舊的誤導提示"; fi
+npx agent-browser screenshot "$OUT_DIR/suggest-only-tops.png" > /dev/null 2>&1
 
 
 # ── 第 6 階段：穿搭建議（同一個工作階段，沿用剛新增的白襯衫，再加一件下著）──

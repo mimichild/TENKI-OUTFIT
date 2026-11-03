@@ -54,6 +54,17 @@ export interface Suggestion {
   pop: number | null;
   /** 有給 previous，但找不到其他組合 */
   noAlternative: boolean;
+  /** status 為 empty 時：湊不成一套缺哪一類；ok 時為 null */
+  emptyReason: EmptyReason | null;
+}
+
+export type BaseCategory = 'top' | 'bottom';
+
+export interface EmptyReason {
+  /** 還差的分類（上衣、下著；有連身的話兩個都不缺） */
+  need: BaseCategory[];
+  /** need 之中，衣櫃裡其實有、但季節或場合不符合的分類 */
+  filtered: BaseCategory[];
 }
 
 export const RAIN_POP_THRESHOLD = 60;
@@ -180,6 +191,11 @@ export function suggestOutfit(input: SuggestionInput, options: SuggestionOptions
   const filter = { band, occasion: input.occasion };
   const pool = Object.fromEntries(SLOT_ORDER.map(s => [s, candidatesFor(input.items, s, filter)])) as Pool;
 
+  const emptyReason = (): EmptyReason => {
+    const need = (['top', 'bottom'] as const).filter(c => pool[c].length === 0);
+    return { need, filtered: need.filter(c => input.items.some(i => i.category === c)) };
+  };
+
   const result = (picks: Picks | null, noAlternative = false): Suggestion => {
     const missing: Category[] = [];
     if (picks) {
@@ -196,6 +212,7 @@ export function suggestOutfit(input: SuggestionInput, options: SuggestionOptions
       rainy: pop !== null && pop >= RAIN_POP_THRESHOLD,
       pop,
       noAlternative,
+      emptyReason: picks ? null : emptyReason(),
     };
   };
 

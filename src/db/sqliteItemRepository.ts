@@ -122,5 +122,11 @@ export function createSqliteItemRepository(db: Db, deps: RepositoryDeps): ItemRe
       );
       return purgeAll(rows.map(r => r.id));
     },
+    async photoPaths() {
+      const rows = await db.getAllAsync<{ image_uri: string | null; original_uri: string | null }>(
+        'SELECT image_uri, original_uri FROM items',
+      );
+      return [...new Set(rows.flatMap(r => [r.image_uri, r.original_uri]).filter((p): p is string => !!p))];
+    },
   };
 }

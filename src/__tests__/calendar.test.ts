@@ -1,4 +1,4 @@
-import { addMonths, monthGrid, monthOf, weekOf } from '@/lib/calendar';
+import { addMonths, monthGrid, monthOf, weekOf, weekTitle } from '@/lib/calendar';
 
 describe('calendar', () => {
   it('builds a Sunday-first month grid padded with neighbouring days', () => {
@@ -26,5 +26,17 @@ describe('calendar', () => {
     expect(weekOf('2026-11-04')).toEqual(['2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07']);
     expect(weekOf('2026-11-01')[0]).toBe('2026-11-01');
     expect(weekOf('2026-12-31')).toEqual(['2026-12-27', '2026-12-28', '2026-12-29', '2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02']);
+  });
+});
+
+describe('weekTitle', () => {
+  const fmt = (date: string, withYear: boolean) => (withYear ? `Y:${date}` : date.slice(5));
+
+  it('omits the year when the week is within one year', () => {
+    expect(weekTitle('2026-11-01', '2026-11-07', fmt)).toBe('11-01 – 11-07');
+  });
+
+  it('shows the year on both ends when the week crosses into a new year', () => {
+    expect(weekTitle('2026-12-27', '2027-01-02', fmt)).toBe('Y:2026-12-27 – Y:2027-01-02');
   });
 });

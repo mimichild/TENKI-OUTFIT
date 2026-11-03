@@ -76,20 +76,87 @@ describe('sqlite backup store', () => {
     expect(d.weather_days.find(w => w.date === '2026-11-01')!.max_t).toBe(99);
   });
 
-  /** 第 n 次 runAsync 丟例外（模擬寫到一半失敗，不依賴外鍵） */
-  function failOnRun(db: ReturnType<typeof openTestDb>, n: number) {
-    const real = db.runAsync.bind(db);
+  type Db = ReturnType<typeof openTestDb>;
+  type Statement = Awaited<ReturnType<Db['prepareAsync']>>;
+
+  /** 記錄 prepareAsync 開出來的 statement（SQL、執行次數、是否 finalize） */
+  function trackStatements(db: Db) {
+    const real = db.prepareAsync.bind(db);
+    const opened: { sql: string; runs: number; finalized: boolean }[] = [];
+    db.prepareAsync = async (sql: string) => {
+      const stmt = await real(sql);
+      const rec = { sql, runs: 0, finalized: false };
+      opened.push(rec);
+      const wrapped: Statement = {
+        executeAsync: async (...params) => { rec.runs++; return stmt.executeAsync(...params); },
+        finalizeAsync: async () => { rec.finalized = true; return stmt.finalizeAsync(); },
+      };
+      return wrapped;
+    };
+    return opened;
+  }
+
+  /** 第 n 次 statement executeAsync 丟例外（模擬寫到一半失敗，不依賴外鍵） */
+  function failOnExecute(db: Db, n: number) {
+    const real = db.prepareAsync.bind(db);
     let calls = 0;
-    db.runAsync = async (sql: string, ...params: (string | number | null)[]) => {
-      if (++calls === n) throw new Error('disk I/O error');
-      return real(sql, ...params);
+    db.prepareAsync = async (sql: string) => {
+      const stmt = await real(sql);
+      const wrapped: Statement = {
+        executeAsync: async (...params) => {
+          if (++calls === n) throw new Error('disk I/O error');
+          return stmt.executeAsync(...params);
+        },
+        finalizeAsync: () => stmt.finalizeAsync(),
+      };
+      return wrapped;
     };
   }
+
+  it('匯入 1000 件時每個資料表只準備一次語句，用完都 finalize', async () => {
+    const { db, store } = await setup();
+    const opened = trackStatements(db);
+    const big = empty();
+    for (let i = 0; i < 1000; i++) big.items.push(item(`i${i}`));
+    big.outfits.push(outfit('o1', '2026-11-05'));
+    big.outfit_items.push(at('o1', 'i0'), at('o1', 'i1', 1));
+    big.weather_days.push(weather('2026-11-01', 20));
+    await store.replaceAll(big);
+    const inserts = opened.filter(o => o.sql.startsWith('INSERT INTO'));
+    const tableOf = (sql: string) => sql.split(' ')[2];
+    expect(inserts.map(o => tableOf(o.sql))).toEqual(['items', 'outfits', 'outfit_items', 'weather_days']);
+    expect(inserts.map(o => o.runs)).toEqual([1000, 1, 2, 1]);
+    expect(opened.every(o => o.finalized)).toBe(true);
+    expect((await store.dump()).items).toHaveLength(1000);
+  });
+
+  it('finalize 也失敗時仍回報原本的錯誤', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const { db, store } = await setup(local());
+    const real = db.prepareAsync.bind(db);
+    db.prepareAsync = async (sql: string) => {
+      const stmt = await real(sql);
+      return {
+        executeAsync: async () => { throw new Error('disk I/O error'); },
+        finalizeAsync: async () => { await stmt.finalizeAsync(); throw new Error('finalize failed'); },
+      };
+    };
+    await expect(store.replaceAll(backup())).rejects.toThrow('disk I/O error');
+  });
+
+  it('寫到一半失敗時 statement 也有 finalize', async () => {
+    const { db, store } = await setup(local());
+    const opened = trackStatements(db);
+    failOnExecute(db, 2);
+    await expect(store.replaceAll(backup())).rejects.toThrow('disk I/O error');
+    expect(opened.length).toBeGreaterThan(0);
+    expect(opened.every(o => o.finalized)).toBe(true);
+  });
 
   it('replaceAll 中途失敗時整批放棄，原本資料不動', async () => {
     const { db, store } = await setup(local());
     const before = await store.dump();
-    failOnRun(db, 8);
+    failOnExecute(db, 3);
     await expect(store.replaceAll(backup())).rejects.toThrow('disk I/O error');
     expect(await store.dump()).toEqual(before);
   });
@@ -150,7 +217,7 @@ describe('sqlite backup store', () => {
   it('merge 中途失敗時整批放棄', async () => {
     const { db, store } = await setup(local());
     const before = await store.dump();
-    failOnRun(db, 4);
+    failOnExecute(db, 3);
     await expect(store.merge(backup())).rejects.toThrow('disk I/O error');
     expect(await store.dump()).toEqual(before);
   });

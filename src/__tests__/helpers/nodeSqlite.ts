@@ -22,6 +22,21 @@ export function openTestDb() {
     async getAllAsync<T>(sql: string, ...params: Param[]) {
       return raw.prepare(sql).all(...params) as T[];
     },
+    /** expo-sqlite 的 prepareAsync 子集：同一個 statement 重複 executeAsync，用完 finalizeAsync */
+    async prepareAsync(sql: string) {
+      const stmt = raw.prepare(sql);
+      let finalized = false;
+      return {
+        async executeAsync(...params: Param[]) {
+          if (finalized) throw new Error('statement already finalized');
+          const r = stmt.run(...params);
+          return { changes: Number(r.changes), lastInsertRowId: Number(r.lastInsertRowid) };
+        },
+        async finalizeAsync() {
+          finalized = true;
+        },
+      };
+    },
     async withTransactionAsync(fn: () => Promise<void>) {
       raw.exec('BEGIN');
       try {

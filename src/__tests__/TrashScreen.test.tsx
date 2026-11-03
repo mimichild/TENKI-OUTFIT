@@ -6,9 +6,10 @@ import { createMemoryItemRepository } from '@/db/memoryItemRepository';
 import { deletePhotos } from '@/lib/photoStorage';
 import { DEFAULT_SETTINGS, useSettingsStore } from '@/store/settingsStore';
 import type { Item } from '@/types/models';
+import { withFailures } from './helpers/failingRepo';
 
 jest.mock('expo-router', () => ({ Stack: { Screen: () => null } }));
-jest.mock('@/lib/photoStorage', () => ({ clearCutoutCache: jest.fn(), clearBackupTemp: jest.fn(), savePhoto: jest.fn(), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
+jest.mock('@/lib/photoStorage', () => ({ listPhotoFiles: () => [], clearCutoutCache: jest.fn(), clearBackupTemp: jest.fn(), savePhoto: jest.fn(), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
 
 const base: Omit<Item, 'id' | 'name' | 'deletedAt'> = {
   brand: '', category: 'top', price: null, occasions: [], seasons: [], imageUri: null, originalUri: null,
@@ -72,5 +73,20 @@ describe('TrashScreen', () => {
     repo = createMemoryItemRepository({ now: () => '2026-11-02T00:00:00.000Z', newId: () => 'n' });
     render(<ItemRepositoryProvider repository={repo}><TrashScreen /></ItemRepositoryProvider>);
     expect(await screen.findByText('暫存區是空的')).toBeTruthy();
+  });
+});
+
+describe('TrashScreen load error', () => {
+  it('shows an error with retry when the trash fails to load', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const wrapped = withFailures(createMemoryItemRepository({ now: () => '2026-11-02T00:00:00.000Z', newId: () => 'n' }, [
+      { ...base, id: 'b', name: '帽子', deletedAt: '2026-11-01T00:00:00.000Z' },
+    ]), ['listTrash']);
+    render(<ItemRepositoryProvider repository={wrapped.repo}><TrashScreen /></ItemRepositoryProvider>);
+    expect(await screen.findByText('讀取失敗')).toBeTruthy();
+    expect(screen.queryByText('暫存區是空的')).toBeNull();
+    wrapped.control.failing = false;
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: '重試' })));
+    expect(await screen.findByText('帽子')).toBeTruthy();
   });
 });

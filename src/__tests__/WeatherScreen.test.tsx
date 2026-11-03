@@ -10,13 +10,14 @@ import type { DailyForecast, FetchForecastResult } from '@/lib/cwaWeather';
 import { DEFAULT_SETTINGS, useSettingsStore } from '@/store/settingsStore';
 import type { WeatherDay } from '@/types/models';
 import type { WeatherRepository } from '@/db/weatherRepository';
+import { withFailures } from './helpers/failingRepo';
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 let mockBuiltInKey = '';
 jest.mock('@/lib/cwaKey', () => ({
   builtInCwaKey: () => mockBuiltInKey,
-  effectiveCwaKey: (k: string) => mockBuiltInKey || k.trim(),
+  effectiveCwaKey: (k: string) => k.trim() || mockBuiltInKey,
 }));
 
 // 2026-11-03（二）10:00 台灣時間
@@ -89,6 +90,12 @@ describe('WeatherScreen', () => {
     expect(fetcher).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'CWA-BUILTIN', county: '臺北市' }));
     expect(screen.queryByText('請先到設定輸入氣象署授權碼')).toBeNull();
     expect(screen.getByText('25°')).toBeTruthy();
+  });
+
+  it("uses the user's own key over the built-in one", async () => {
+    mockBuiltInKey = 'CWA-BUILTIN';
+    const { fetcher } = await setup({ apiKey: 'CWA-MINE', result: { status: 'ok', days: [forecast('2026-11-03', 25)] } });
+    expect(fetcher).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'CWA-MINE' }));
   });
 
   it('fetches the selected county and shows today', async () => {
@@ -269,6 +276,14 @@ describe('WeatherScreen outfits', () => {
     expect(cards()).toHaveLength(1);
   });
 
+  it('week title shows the year on both ends across new year', async () => {
+    await setup({ result: twoDays, outfits: planned });
+    await press(screen.getByRole('tab', { name: '週' }));
+    expect(screen.getByText('11/1（日） – 11/7（六）')).toBeTruthy();
+    for (let i = 0; i < 8; i++) await press(screen.getByRole('button', { name: '下一週' }));
+    expect(screen.getByText('2026/12/27（日） – 2027/1/2（六）')).toBeTruthy();
+  });
+
   it('month view marks days with outfits and shows the chosen day', async () => {
     await setup({ result: twoDays, outfits: planned });
     await press(screen.getByRole('tab', { name: '月' }));
@@ -296,5 +311,30 @@ describe('WeatherScreen outfits', () => {
     expect(screen.getByText('11/19（四）')).toBeTruthy();
     await press(screen.getByRole('button', { name: '新增穿搭' }));
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/outfit/edit', params: { date: '2026-11-19' } });
+  });
+});
+
+describe('WeatherScreen outfit load error', () => {
+  it.each(['日', '週', '月'])('shows an error with retry in the %s view when outfits fail to load', async mode => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const db = createMemoryDatabase({ now: () => NOW, newId: () => 'o1' });
+    const shirt = await db.items.create({ brand: '', category: 'top', occasions: [], seasons: [], imageUri: null, originalUri: null, name: '白襯衫', price: null });
+    await db.outfits.create({ name: '', date: '2026-11-02', items: [{ itemId: shirt.id, x: 0.5, y: 0.5, scale: 1, rotation: 0, z: 0 }] });
+    const { repo, control } = withFailures(db.outfits, ['listInRange']);
+    useSettingsStore.setState({ ...DEFAULT_SETTINGS, cwaApiKey: 'KEY' });
+    render(
+      <OutfitRepositoryProvider repository={repo}>
+        <WeatherProvider repository={createMemoryWeatherRepository([])} fetcher={jest.fn().mockResolvedValue({ status: 'ok', days: [] })} now={() => currentNow}>
+          <WeatherScreen />
+        </WeatherProvider>
+      </OutfitRepositoryProvider>,
+    );
+    await act(async () => {});
+    if (mode !== '日') await act(async () => fireEvent.press(screen.getByRole('tab', { name: mode })));
+    expect(await screen.findByText('讀取失敗')).toBeTruthy();
+    control.failing = false;
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: '重試' })));
+    expect(screen.queryByText('讀取失敗')).toBeNull();
+    expect(control.calls).toBeGreaterThan(1);
   });
 });

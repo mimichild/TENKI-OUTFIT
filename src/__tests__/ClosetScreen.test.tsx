@@ -4,6 +4,7 @@ import { ItemRepositoryProvider } from '@/db/ItemRepositoryContext';
 import { createMemoryItemRepository } from '@/db/memoryItemRepository';
 import { DEFAULT_SETTINGS, useSettingsStore } from '@/store/settingsStore';
 import type { Item } from '@/types/models';
+import { withFailures } from './helpers/failingRepo';
 
 const mockPush = jest.fn();
 const mockSetOptions = jest.fn();
@@ -11,7 +12,7 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
   useNavigation: () => ({ setOptions: mockSetOptions }),
 }));
-jest.mock('@/lib/photoStorage', () => ({ clearCutoutCache: jest.fn(), clearBackupTemp: jest.fn(), savePhoto: jest.fn(), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
+jest.mock('@/lib/photoStorage', () => ({ listPhotoFiles: () => [], clearCutoutCache: jest.fn(), clearBackupTemp: jest.fn(), savePhoto: jest.fn(), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
@@ -98,5 +99,19 @@ describe('ClosetScreen', () => {
     renderRaw(<ItemRepositoryProvider repository={repo}><ClosetScreen /></ItemRepositoryProvider>);
     await act(async () => {});
     expect(screen.getByText('還沒有單品，按右下角 ＋ 新增第一件')).toBeTruthy();
+  });
+});
+
+describe('ClosetScreen load error', () => {
+  it('shows an error with retry when items fail to load', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const { repo, control } = withFailures(createMemoryItemRepository({ now: () => '2026-11-02T00:00:00.000Z', newId: () => 'n' }, seed), ['list']);
+    renderRaw(<ItemRepositoryProvider repository={repo}><ClosetScreen /></ItemRepositoryProvider>);
+    expect(await screen.findByText('讀取失敗')).toBeTruthy();
+    expect(screen.queryByText('還沒有單品，按右下角 ＋ 新增第一件')).toBeNull();
+    control.failing = false;
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: '重試' })));
+    expect(await screen.findByLabelText('毛衣')).toBeTruthy();
+    expect(screen.queryByText('讀取失敗')).toBeNull();
   });
 });

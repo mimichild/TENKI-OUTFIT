@@ -5,6 +5,7 @@ import { ItemRepositoryProvider } from '@/db/ItemRepositoryContext';
 import type { ItemRepository } from '@/db/itemRepository';
 import { createMemoryItemRepository } from '@/db/memoryItemRepository';
 import { DEFAULT_SETTINGS, useSettingsStore } from '@/store/settingsStore';
+import { withFailures } from './helpers/failingRepo';
 
 const mockBack = jest.fn();
 let mockParams: Record<string, string> = {};
@@ -14,7 +15,7 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockParams,
   Stack: { Screen: ({ options }: { options: typeof mockScreenOptions }) => { mockScreenOptions = options; return null; } },
 }));
-jest.mock('@/lib/photoStorage', () => ({ clearCutoutCache: jest.fn(), clearBackupTemp: jest.fn(), savePhoto: jest.fn((u: string) => u), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
+jest.mock('@/lib/photoStorage', () => ({ listPhotoFiles: () => [], clearCutoutCache: jest.fn(), clearBackupTemp: jest.fn(), savePhoto: jest.fn((u: string) => u), deletePhotos: jest.fn(), resolvePhotoUri: (u: string | null) => u }));
 jest.mock('@/lib/pickPhoto', () => ({ pickPhoto: jest.fn() }));
 
 
@@ -93,5 +94,18 @@ describe('new item screen', () => {
     mockParams = { category: 'rocket' };
     wrap(<NewItemScreen />);
     expect(screen.getByRole('button', { name: '上衣' }).props.accessibilityState.selected).toBe(true);
+  });
+});
+
+describe('item detail load error', () => {
+  it('shows an error with retry when the item fails to load', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mockParams = { id: 'id1' };
+    const { repo: failing, control } = withFailures(repo, ['get']);
+    render(<ItemRepositoryProvider repository={failing}><ItemScreen /></ItemRepositoryProvider>);
+    expect(await screen.findByText('讀取失敗')).toBeTruthy();
+    control.failing = false;
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: '重試' })));
+    expect(await screen.findByText('白襯衫')).toBeTruthy();
   });
 });

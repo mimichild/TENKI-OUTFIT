@@ -26,3 +26,9 @@ export function monthGrid(month: string): string[][] {
   }
   return weeks;
 }
+
+/** 週檢視標題「頭 – 尾」；頭尾在不同年時兩端都帶年份 */
+export function weekTitle(from: string, to: string, format: (date: string, withYear: boolean) => string): string {
+  const withYear = from.slice(0, 4) !== to.slice(0, 4);
+  return `${format(from, withYear)} – ${format(to, withYear)}`;
+}

@@ -224,6 +224,22 @@ describe.each([
     expect(await env.items.purge(a)).toEqual([]);
     expect((await env.outfits.get(o.id))!.pieces).toHaveLength(1);
   });
+
+  it('photoPaths lists photos of every item: active, trashed and archived', async () => {
+    const active = await env.items.create({ ...shirt, imageUri: 'photos/active.png', originalUri: 'photos/active.jpg' });
+    const trashed = await env.items.create({ ...shirt, imageUri: 'photos/trash.png', originalUri: null });
+    const archived = await env.items.create({ ...shirt, imageUri: 'photos/arch.png', originalUri: 'photos/arch.jpg' });
+    await env.items.create({ ...shirt, imageUri: null, originalUri: null });
+    await env.outfits.create(outfit('2026-11-01', archived.id));
+    await env.items.moveToTrash(trashed.id);
+    await env.items.moveToTrash(archived.id);
+    await env.items.purge(archived.id);
+    expect((await env.items.get(archived.id))).toBeNull();
+    expect((await env.items.photoPaths()).sort()).toEqual(
+      ['photos/active.jpg', 'photos/active.png', 'photos/arch.jpg', 'photos/arch.png', 'photos/trash.png'],
+    );
+    expect(active.id).toBeTruthy();
+  });
 });
 
 describe('sqlite legacy data', () => {

@@ -7,10 +7,28 @@ import { createMemoryWeatherRepository } from '@/db/memoryWeatherRepository';
 import { WeatherProvider } from '@/db/WeatherContext';
 import { DEFAULT_SETTINGS, useSettingsStore } from '@/store/settingsStore';
 import type { Category, Occasion, Season, WeatherDay } from '@/types/models';
+import { withFailures } from './helpers/failingRepo';
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
+jest.mock('@/lib/photoStorage', () => ({
+  ...jest.requireActual('@/lib/photoStorage'),
+  clearCutoutCache: jest.fn(), clearBackupTemp: jest.fn(), deletePhotos: jest.fn(), listPhotoFiles: () => [],
+}));
 jest.mock('@/lib/cwaKey', () => ({ builtInCwaKey: () => '', effectiveCwaKey: () => '' }));
+// 記錄畫布掛載次數：卡片在換日期／場合時若中間閃一幀空白，畫布會被卸掉再掛上
+let mockCanvasMounts = 0;
+jest.mock('@/components/OutfitCanvasView', () => {
+  const actual = jest.requireActual('@/components/OutfitCanvasView');
+  const { useEffect } = jest.requireActual('react');
+  return {
+    ...actual,
+    OutfitCanvasView: (props: Parameters<typeof actual.OutfitCanvasView>[0]) => {
+      useEffect(() => { mockCanvasMounts++; }, []);
+      return actual.OutfitCanvasView(props);
+    },
+  };
+});
 
 // 2026-11-03（二）10:00 台灣時間
 const NOW = '2026-11-03T02:00:00.000Z';
@@ -53,7 +71,10 @@ async function setup({ items = BASIC, weather = [day('2026-11-03', 29, 19, 70), 
   return { ids, db, weatherRepo };
 }
 
-beforeEach(() => mockPush.mockClear());
+beforeEach(() => {
+  mockPush.mockClear();
+  mockCanvasMounts = 0;
+});
 
 describe('SuggestScreen', () => {
   it('suggests an outfit for today with two sentences', async () => {
@@ -82,7 +103,9 @@ describe('SuggestScreen', () => {
     fireEvent.press(screen.getByRole('radio', { name: '上班' }));
     expect(screen.getByText(/^襯衫搭配西裝褲/)).toBeTruthy();
     fireEvent.press(screen.getByRole('radio', { name: '正式' }));
-    expect(screen.getByText('沒有符合的單品')).toBeTruthy();
+    expect(screen.getByText('還湊不成一套')).toBeTruthy();
+    expect(screen.getByText('有上衣，但季節或場合不符合今天')).toBeTruthy();
+    expect(screen.getByText('有下著，但季節或場合不符合今天')).toBeTruthy();
   });
 
   it('shuffles to another outfit', async () => {
@@ -109,6 +132,72 @@ describe('SuggestScreen', () => {
     await setup({ weather: [] });
     expect(screen.getByText('沒有這天的天氣資料')).toBeTruthy();
     expect(screen.getByText('目前沒有這天的天氣資料，這套只依場合挑選。')).toBeTruthy();
+  });
+
+  it('re-picks when an item it was missing (shoes) is added', async () => {
+    const { db } = await setup({ items: [{ name: '上衣', category: 'top' }, { name: '褲子', category: 'bottom' }] });
+    expect(screen.getByText('缺少：外套、鞋子')).toBeTruthy();
+    await act(async () => {
+      await db.items.create({ name: '球鞋', brand: '', category: 'shoes', price: null, occasions: [], seasons: [], imageUri: null, originalUri: null });
+      useItemsVersion.getState().bump();
+    });
+    expect(screen.getByText('缺少：外套')).toBeTruthy();
+  });
+
+  it('shows an error with retry when the local weather cache cannot be read', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    let n = 0;
+    const db = createMemoryDatabase({ now: () => NOW, newId: () => `id${++n}` });
+    await db.items.create({ name: '上衣', brand: '', category: 'top', price: null, occasions: [], seasons: [], imageUri: null, originalUri: null });
+    useSettingsStore.setState({ ...DEFAULT_SETTINGS });
+    const weatherRepo = createMemoryWeatherRepository([day('2026-11-03', 29, 19)]);
+    const realList = weatherRepo.list.bind(weatherRepo);
+    let failing = true;
+    weatherRepo.list = async (county: string) => {
+      if (failing) throw new Error('storage');
+      return realList(county);
+    };
+    render(
+      <ItemRepositoryProvider repository={db.items}>
+        <WeatherProvider repository={weatherRepo} fetcher={jest.fn()} now={() => NOW}>
+          <SuggestScreen />
+        </WeatherProvider>
+      </ItemRepositoryProvider>,
+    );
+    await act(async () => {});
+    expect(screen.getByText('讀取失敗')).toBeTruthy();
+    failing = false;
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: '重試' })));
+    expect(screen.queryByText('讀取失敗')).toBeNull();
+  });
+
+  it('says a bottom is missing when the closet only has tops', async () => {
+    await setup({ items: [{ name: '白T', category: 'top' }, { name: '球鞋', category: 'shoes' }] });
+    expect(screen.getByText('還差一件下著（或一件連身）')).toBeTruthy();
+    expect(screen.queryByText('可以換個場合，或確認單品的季節、場合設定')).toBeNull();
+  });
+
+  it('says the bottom does not fit today when it is filtered out', async () => {
+    await setup({ items: [{ name: '白T', category: 'top' }, { name: '毛褲', category: 'bottom', seasons: ['winter'] }] });
+    expect(screen.getByText('有下著，但季節或場合不符合今天')).toBeTruthy();
+  });
+
+  it('keeps the card on screen while switching day or occasion (no blank frame)', async () => {
+    await setup();
+    expect(mockCanvasMounts).toBe(1);
+    await act(async () => fireEvent.press(screen.getByRole('tab', { name: '明日' })));
+    await act(async () => fireEvent.press(screen.getByRole('radio', { name: '上班' })));
+    await act(async () => fireEvent.press(screen.getByRole('tab', { name: '今日' })));
+    expect(screen.getByRole('button', { name: '存成穿搭' })).toBeTruthy();
+    expect(mockCanvasMounts).toBe(1);
+  });
+
+  it('wraps long item names to at most two lines', async () => {
+    await setup({ items: [{ name: '非常非常長的名稱'.repeat(6), category: 'onepiece' }] });
+    // 卡片下方的名稱列，以及畫布上沒有照片時的名稱
+    const texts = screen.getAllByText('非常非常長的名稱'.repeat(6));
+    expect(texts.length).toBeGreaterThan(1);
+    expect(texts.map(n => n.props.numberOfLines)).toEqual(texts.map(() => 2));
   });
 
   it('asks to add items when the closet is empty', async () => {
@@ -147,14 +236,15 @@ describe('SuggestScreen', () => {
     });
     await act(async () => useItemsVersion.getState().bump());
     // 上衣沒了 → 湊不出上衣＋下著，也沒有連身
-    expect(screen.getByText('沒有符合的單品')).toBeTruthy();
+    expect(screen.getByText('還差一件上衣（或一件連身）')).toBeTruthy();
   });
 
   it('describes the latest temperatures when re-read weather stays in the same band', async () => {
-    let onChange: ((s: AppStateStatus) => void) | undefined;
+    // 天氣與單品的 Provider 都會監聽回到前景
+    const handlers: ((s: AppStateStatus) => void)[] = [];
     const original = AppState.addEventListener;
     AppState.addEventListener = ((_type: string, handler: (s: AppStateStatus) => void) => {
-      onChange = handler;
+      handlers.push(handler);
       return { remove: () => {} };
     }) as typeof AppState.addEventListener;
     try {
@@ -165,12 +255,34 @@ describe('SuggestScreen', () => {
         [{ date: '2026-11-03', maxT: 28, minT: 18, maxAT: 28, minAT: 18, pop: 70, wxCode: '01', wxText: '晴天', hasDaytime: true }],
         NOW,
       );
-      await act(async () => { onChange?.('active'); });
+      await act(async () => { handlers.forEach(h => h('active')); });
       expect(screen.getByText('體感 18°–28°')).toBeTruthy();
       expect(screen.getByText(/^今天體感 18–28°/)).toBeTruthy();
       expect(screen.getByText(/^白色短袖搭配牛仔褲/).props.children).toBe(first);
     } finally {
       AppState.addEventListener = original;
     }
+  });
+});
+
+describe('SuggestScreen load error', () => {
+  it('shows an error with retry when items fail to load', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const { db } = await setup();
+    screen.unmount();
+    const { repo, control } = withFailures(db.items, ['list']);
+    useSettingsStore.setState({ ...DEFAULT_SETTINGS });
+    render(
+      <ItemRepositoryProvider repository={repo}>
+        <WeatherProvider repository={createMemoryWeatherRepository([day('2026-11-03', 29, 19, 70)])} fetcher={jest.fn()} now={() => NOW}>
+          <SuggestScreen />
+        </WeatherProvider>
+      </ItemRepositoryProvider>,
+    );
+    expect(await screen.findByText('讀取失敗')).toBeTruthy();
+    control.failing = false;
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: '重試' })));
+    expect(await screen.findByRole('button', { name: '更新' })).toBeTruthy();
+    expect(screen.queryByText('讀取失敗')).toBeNull();
   });
 });
