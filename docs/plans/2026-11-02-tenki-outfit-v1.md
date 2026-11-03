@@ -1,6 +1,6 @@
 # TENKI OUTFIT 天氣穿搭 — v1 開發計畫
 
-> 建立：2026-11-02　狀態：**第 6 階段完成（已實機驗收），待第 7 階段**
+> 建立：2026-11-02　狀態：**第 7 階段進行中（批次 A）**
 > 基礎設施沿用 `/Users/mimi/Documents/REUSABLE_INFRA.md`
 
 ## 技術選型（沿用基礎文件）
@@ -454,3 +454,41 @@
 - 驗證：Jest 318 項、tsc、lint 0 警告；`bash scripts/regression.sh` 4/4 全過（視覺 73 項）
 - APK `tenki-outfit-v0.1.0-20261103-1034.apk`（含 code review 修正），已確認 bundle 內含修正與內建授權碼、已上傳 Google Drive
 - **實機驗收通過（使用者回報 2026-11-03）**
+
+### 第 7 階段 — 進行中（2026-11-03，分支 `feat/phase-7-backup`，從 `feat/phase-6-suggestions` 分出，每批 commit）
+
+使用者決定（2026-11-03）：
+- **匯入時由使用者選「覆蓋」或「保留原本資料」**：
+  | 資料 | 覆蓋 | 保留原本資料（合併） |
+  |---|---|---|
+  | 單品、穿搭、照片 | 先清空再換成備份 | 手機上沒有的才加入；同 id 兩邊都有時用手機上的，備份的略過 |
+  | 穿搭的單品位置 | 跟著備份 | 跟著穿搭（只有新加入的穿搭才寫入） |
+  | 天氣快取 | 換成備份 | 手機上沒有的日期才補 |
+  | 設定（語言、縣市、幣別、主題色） | 換成備份 | 維持手機上的 |
+  - 兩種都先顯示備份摘要（單品、穿搭數），點兩次確認；任何一步失敗整批放棄，手機上的資料與照片不動
+  - 備份的 DB 版本比 App 新 → 拒絕匯入
+  - 暫存區單品沿用原本刪除日期算 30 天，過期的下次開 App 自動清除
+- **匯出兩種方式都要**：系統分享選單（可存 Google Drive）＋選資料夾存檔
+- **備份內容**：單品（含暫存區、已封存）、穿搭、照片、天氣快取、設定；氣象署授權碼一律不包含
+- **版本號改 1.0.0**
+- 簽章：使用者打算放官網給人下載（不上架商店）→ 建議批次 C 改用專屬 keystore（現在的 debug 鑰匙是公開的；一公開就不能再換）。手機需移除重裝一次，資料用匯出匯入搬。**批次 C 開工前再確認**
+- 不需要改 DB 結構（匯入只寫資料）
+
+分批：
+- **A｜資料層**：備份格式（`manifest.json` + `photos/`）、檢查、照片路徑換新檔名、SQLite 匯出／覆蓋／合併
+- **B｜zip 與畫面**：`react-native-zip-archive`（原生解壓縮，照片多也不吃記憶體）、`expo-sharing`、`expo-document-picker`；設定頁匯出（分享／存到資料夾）、匯入（選檔 → 摘要 → 覆蓋／保留 → 點兩次確認）、進度與結果；三語 → APK 實測
+- **C｜收尾與驗收**：Web 視覺測試（Web 顯示「僅手機版支援」）、code review、版本 1.0.0、簽章、最終 APK、實機驗收清單（含各階段未驗項目）
+
+#### 批次 A｜資料層 — 完成（2026-11-03）
+- `src/lib/backupFormat.ts`：
+  - 備份格式 `manifest.json`：`format: tenki-outfit-backup`、`formatVersion` 1、`schemaVersion`（DB 版本）、`appVersion`、`exportedAt`、`settings`（語言、縣市、幣別、主題色）、`data`（items／outfits／outfit_items／weather_days，直接存 DB 欄位）
+  - `buildManifest`；`parseManifest` → `notBackup`（不是 JSON、不是本 App 的備份）／`newerVersion`（格式或 DB 版本比 App 新）／`corrupt`（欄位型別錯、id 重複、日期格式錯、位置參照不存在的單品或穿搭）；舊版 DB 缺的欄位補 null；設定不合法退回預設
+  - 照片路徑不是 `photos/<檔名>` 的一律清成 null（擋 `../`、完整 URI，避免讀寫 App 資料夾外的檔案）
+  - `photoPathsOf`、`remapPhotoPaths`（匯入時照片換新檔名；備份裡沒有的照片 → null）、`filterNewRows`（「保留原本資料」只留手機上沒有的）、`summarizeBackup`（單品／暫存區／穿搭數）
+- `src/db/sqliteBackupStore.ts`：`dump`（含暫存區、封存、天氣）、`existingKeys`、`replaceAll`（覆蓋）、`merge`（保留原本，交易內重讀手機資料為準，重算「最近使用」）；都在排他交易內，失敗整批放棄
+- `src/lib/photoPath.ts`：`isOwnedPhotoPath`，`photoStorage.deletePhotos` 改用它（同一個規則）
+- 測試：`backupFormat.test.ts` 22 項、`backupStore.test.ts` 8 項（真 SQLite：dump→replaceAll 內容一樣、覆蓋、合併、合併後最近使用、失敗整批放棄）
+- 驗證：Jest 348 項通過（新增 30 項）、tsc、lint；`bash scripts/regression.sh` 4/4 全過（視覺 73 項）
+- 和計畫不同的地方：
+  - 只做 SQLite 版，沒做記憶體版（Web 預覽不支援備份，批次 C 顯示「僅手機版支援」）
+  - 合併時照片、設定、檔案處理放到批次 B 的 service（這批只有資料）

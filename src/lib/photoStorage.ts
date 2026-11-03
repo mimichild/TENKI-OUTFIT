@@ -1,13 +1,13 @@
 import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 import { copyAsync } from 'expo-file-system/legacy';
+import { isOwnedPhotoPath } from './photoPath';
 
 /**
  * DB 只存相對路徑（例如 `photos/<uuid>.jpg`），顯示時才用 resolvePhotoUri 組成完整路徑。
  * iOS 在 App 更新、從備份還原時，Documents 的絕對路徑可能改變，存絕對路徑會讓照片全部失效。
  */
 const PHOTO_DIR = 'photos';
-const OWNED = /^photos\/[\w-]+\.[a-z0-9]+$/;
 
 function photoDir(): Directory {
   const dir = new Directory(Paths.document, PHOTO_DIR);
@@ -40,7 +40,7 @@ export async function savePhoto(sourceUri: string): Promise<string> {
 /** 刪除 App 自己存的照片；不是 photos/ 底下的相對路徑一律不碰 */
 export function deletePhotos(stored: (string | null | undefined)[]): void {
   for (const path of new Set(stored)) {
-    if (!path || !OWNED.test(path)) continue;
+    if (!isOwnedPhotoPath(path)) continue;
     try {
       const file = new File(Paths.document, path);
       if (file.exists) file.delete();
