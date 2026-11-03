@@ -395,7 +395,7 @@
   - `tempBand`、`outerwearRule`（≥28 不加；20–27 可有可無；<20 或最低 <20 一定加；沒天氣 = 可有可無）
   - `candidatesFor`：季節／場合篩選
   - `suggestOutfit`：隨機組合；有 `previous` 時重抽最多 20 次，還是一樣就逐格換掉找第一個不同組合，都沒有 → `noAlternative`；回傳 `missing`（必要外套、鞋子）、`rainy`（≥60%）
-  - `suggestionLayout`：依分類自動排版（外套左上、上衣右上、下著中下、鞋子左下、包包右下、配件左上角）
+  - `suggestionLayout`：依分類自動排版（批次 B 後依使用者指定改版，見下方）
 - `src/lib/suggestionText.ts`：`describeSuggestion` 兩句說明；沒填名稱用分類名稱（英文用單數「a top」）
 - 三語字串新增 24 組（`suggest.*`）
 - 驗證：Jest 285 項通過（新增 32 項）、tsc、lint；`bash scripts/regression.sh` 視覺 56 項通過
@@ -416,3 +416,4 @@
   - 英文「更新」用 Shuffle（比 Refresh 清楚是重抽）
   - 帶傘提示沒有另外做圖示，寫在第二句說明裡
 - APK：`SPARK-Builds/TENKI-OUTFIT/tenki-outfit-v0.1.0-20261103-0941.apk`，已上傳 Google Drive；已確認 bundle 內含建議頁程式碼與內建授權碼；**待使用者實機檢測**
+- 實測回饋 1（2026-11-03）：**使用者指定排版**——上衣左上、外套右上、下著左下、包包右邊中間、鞋子右下；使用者沒指定的：連身放左半邊（上衣＋下著的位置）、配件放中間空隙。上衣、外套縮成 scale 1，左右不重疊。新增 1 項排版位置測試，Jest 298 項通過

@@ -210,15 +210,18 @@ export function suggestOutfit(input: SuggestionInput, options: SuggestionOptions
   return result(picks, true);
 }
 
-/** 依分類自動排版（位置以畫布寬度為單位，畫布 3:4） */
+/**
+ * 依分類自動排版（位置以畫布寬度為單位，畫布 3:4；使用者指定 2026-11-03）：
+ * 上衣左上、外套右上、下著左下、包包右邊中間、鞋子右下；連身放左半邊、配件放中間空隙
+ */
 const LAYOUT: Record<Category, Omit<OutfitItemPlacement, 'itemId' | 'z' | 'rotation'>> = {
-  outerwear: { x: 0.3, y: 0.42, scale: 1.1 },
-  top: { x: 0.64, y: 0.36, scale: 1 },
-  onepiece: { x: 0.6, y: 0.58, scale: 1.4 },
-  bottom: { x: 0.62, y: 0.8, scale: 1.1 },
-  shoes: { x: 0.3, y: 1.12, scale: 0.7 },
-  bag: { x: 0.8, y: 1.1, scale: 0.7 },
-  accessory: { x: 0.2, y: 0.13, scale: 0.5 },
+  top: { x: 0.27, y: 0.3, scale: 1 },
+  outerwear: { x: 0.73, y: 0.3, scale: 1 },
+  onepiece: { x: 0.3, y: 0.62, scale: 1.25 },
+  bottom: { x: 0.28, y: 0.96, scale: 1.1 },
+  bag: { x: 0.76, y: 0.72, scale: 0.75 },
+  shoes: { x: 0.76, y: 1.1, scale: 0.7 },
+  accessory: { x: 0.52, y: 0.62, scale: 0.4 },
   other: { x: 0.5, y: 0.67, scale: 1 },
 };
 

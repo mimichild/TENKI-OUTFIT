@@ -225,6 +225,22 @@ describe('suggestionLayout', () => {
     expect(y('top')).toBeLessThan(y('bottom'));
     expect(y('bottom')).toBeLessThan(y('shoes'));
   });
+
+  it('puts top left-upper, outerwear right-upper, bottom left-lower, bag right-middle, shoes right-lower', () => {
+    const items = [item('outerwear'), item('top'), item('bottom'), item('shoes'), item('bag')];
+    const at = (c: Category) => suggestionLayout(items)[items.findIndex(i => i.category === c)];
+    const mid = CANVAS_HEIGHT_RATIO / 2;
+    const half = (c: Category) => ({ left: at(c).x < 0.5, upper: at(c).y < mid });
+    expect(half('top')).toEqual({ left: true, upper: true });
+    expect(half('outerwear')).toEqual({ left: false, upper: true });
+    expect(half('bottom')).toEqual({ left: true, upper: false });
+    expect(at('bag').x).toBeGreaterThan(0.5);
+    expect(at('shoes').x).toBeGreaterThan(0.5);
+    expect(at('outerwear').y).toBeLessThan(at('bag').y);
+    expect(at('bag').y).toBeLessThan(at('shoes').y);
+    expect(Math.abs(at('bag').y - mid)).toBeLessThan(0.2);
+    expect(at('shoes').y).toBeGreaterThan(mid);
+  });
 });
 
 describe('describeSuggestion', () => {
