@@ -7,7 +7,7 @@
 **Architecture:** 不改資料庫結構（沒有遷移）、不改備份格式。錯誤狀態集中在共用的查詢 hook；照片範圍改存在 App 資料夾的 JSON 快取檔；清理工作都在 App 啟動（以及回到前景）時跑。
 **Tech Stack:** Expo SDK 54、RN 0.81、Expo Router、TypeScript strict、Zustand、expo-sqlite、expo-file-system、Jest + RNTL、agent-browser 視覺測試
 **Complexity Path:** `E2E path`（多數項目是畫面行為，沿用 `bash scripts/regression.sh` 的 Web 視覺測試＋最後實機驗收）
-**Status:** In Progress（批次 A 完成；批次 B 完成，B5 筆畫路徑一項待使用者決定 2026-11-03）
+**Status:** In Progress（批次 A、B 完成 2026-11-03；下一步批次 C）
 
 ---
 
@@ -165,7 +165,7 @@ journey
 - **B4 ✅** 新增 `src/lib/photoBoundsCache.ts`（＋`.web.ts`）：`documents/photo-bounds.json`，讀一次進記憶體、500 ms 合併寫入；JSON 壞掉／版本不對／單筆格式不對都當作沒有、不丟例外；讀寫失敗只記錄。`measurePhoto` 對 `photos/…` 先查檔案快取、量完寫入（暫存檔與量測失敗不寫）；`deletePhotos` 同時移除快取項目；`saveItem` 換照片成功後立刻量（不等待）
 - **B5（部分）**
   - ✅ 重新編輯已存單品的去背時，原圖就是已存的照片 → 沿用、不再複製；舊照片只刪被取代的去背圖，存檔失敗也不刪沿用的原圖
-  - ⏸ 筆畫路徑每次移動重建：Skia 2.2.12 reconciler 的 `prepareUpdate` 以 shallowEq 比對 props，原地 `lineTo` 同一個 SkPath 不會觸發重繪；要做到「只追加」需改成每次 `path.copy()`（新參照）或 Reanimated shared value＋`notifyChange`，畫面正確性只能實機確認。依計畫「改動範圍超出預期就停下回報」，未實作，待使用者決定
+  - ⏸ 筆畫路徑每次移動重建：Skia 2.2.12 reconciler 的 `prepareUpdate` 以 shallowEq 比對 props，原地 `lineTo` 同一個 SkPath 不會觸發重繪；要做到「只追加」需改成每次 `path.copy()`（新參照）或 Reanimated shared value＋`notifyChange`，畫面正確性只能實機確認。依計畫「改動範圍超出預期就停下回報」，未實作。**使用者決定（2026-11-03）：v2 不做，留待之後**（影響小，平常筆畫不長）
 - **其他修改：** 8 個測試檔的 photoStorage mock 補 `listPhotoFiles`；`SuggestScreen.test.tsx` 加 photoStorage mock，並把 AppState 測試改成通知所有監聽器（單品 Provider 也會監聽）
 - **驗證：** `bash scripts/regression.sh` 全過（tsc、ESLint、Jest 468 測試、視覺 80 項）
 - **偏離計畫：**
