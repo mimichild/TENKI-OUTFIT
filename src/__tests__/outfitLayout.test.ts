@@ -1,5 +1,5 @@
 import { CANVAS_HEIGHT_RATIO } from '@/lib/outfitCanvas';
-import { alphaBounds, layoutOutfit, visibleRect, type PieceShape } from '@/lib/outfitLayout';
+import { alphaBounds, layoutOutfit, visibleRect, type PieceShape, type Rect } from '@/lib/outfitLayout';
 import type { Category, Item } from '@/types/models';
 
 let seq = 0;
@@ -56,38 +56,45 @@ describe('visibleRect', () => {
   });
 });
 
-describe('layoutOutfit — worn look', () => {
+describe('layoutOutfit — fixed spots', () => {
   const top = item('top');
   const bottom = item('bottom');
   const shoes = item('shoes');
   const bag = item('bag');
   const accessory = item('accessory');
   const outerwear = item('outerwear');
+  const all = [outerwear, top, bottom, shoes, bag, accessory];
+  const mid = CANVAS_HEIGHT_RATIO / 2;
+  const cx = (r: Rect) => r.x + r.w / 2;
+  const cy = (r: Rect) => r.y + r.h / 2;
 
-  it('stacks top, bottom and shoes in one column so they touch', () => {
-    const r = rects([top, bottom, shoes], { [top.id]: wide, [bottom.id]: tall, [shoes.id]: padded });
-    const cx = (k: string) => r[k].x + r[k].w / 2;
-    expect(cx('top')).toBeCloseTo(0.5);
-    expect(cx('bottom')).toBeCloseTo(0.5);
-    expect(cx('shoes')).toBeCloseTo(0.5);
-    const topEnd = r.top.y + r.top.h;
-    // 下著上緣壓住上衣下襬一點
-    expect(r.bottom.y).toBeLessThan(topEnd);
-    expect(r.bottom.y).toBeGreaterThan(topEnd - r.top.h * 0.3);
-    // 鞋子壓在下著下緣
-    const bottomEnd = r.bottom.y + r.bottom.h;
-    expect(r.shoes.y).toBeLessThan(bottomEnd);
-    expect(r.shoes.y + r.shoes.h).toBeGreaterThan(bottomEnd);
-    expect(r.top.z).toBeGreaterThan(r.bottom.z);
-    expect(r.shoes.z).toBeGreaterThan(r.bottom.z);
+  it('top left-upper, bottom left-lower, outerwear right-upper, bag right-middle, shoes right-lower, accessory left of the bag', () => {
+    const r = rects(all, {});
+    expect(cx(r.top)).toBeLessThan(0.5);
+    expect(cy(r.top)).toBeLessThan(mid);
+    expect(cx(r.bottom)).toBeLessThan(0.5);
+    expect(cy(r.bottom)).toBeGreaterThan(mid);
+    expect(cx(r.outerwear)).toBeGreaterThan(0.5);
+    expect(cy(r.outerwear)).toBeLessThan(mid);
+    expect(cx(r.bag)).toBeGreaterThan(0.6);
+    expect(Math.abs(cy(r.bag) - mid)).toBeLessThan(0.2);
+    expect(cx(r.shoes)).toBeGreaterThan(0.5);
+    expect(cy(r.shoes)).toBeGreaterThan(cy(r.bag));
+    expect(r.accessory.x + r.accessory.w).toBeLessThanOrEqual(r.bag.x + 1e-9);
+    expect(Math.abs(cy(r.accessory) - cy(r.bag))).toBeLessThan(0.1);
   });
 
-  it('gives the same visible result whatever the transparent margins are', () => {
+  it('gives the bottom a longer, bigger spot than the top', () => {
+    const r = rects([top, bottom], { [top.id]: tall, [bottom.id]: tall });
+    expect(r.bottom.h).toBeGreaterThan(r.top.h * 1.4);
+    expect(r.bottom.w * r.bottom.h).toBeGreaterThan(r.top.w * r.top.h);
+  });
+
+  it('fills the spot with the visible clothing whatever the transparent margins are', () => {
     const tight: PieceShape = { aspect: 1, bounds: { x0: 0, y0: 0, x1: 1, y1: 1 } };
-    // 同一件衣服（寬:高 = 0.6*0.75 : 0.45 = 1:1）多了透明邊
-    const a = rects([top, bottom], { [top.id]: tight, [bottom.id]: tight });
-    const b = rects([top, bottom], { [top.id]: padded, [bottom.id]: padded });
-    for (const k of ['top', 'bottom']) {
+    const a = rects([top, bag], { [top.id]: tight, [bag.id]: tight });
+    const b = rects([top, bag], { [top.id]: padded, [bag.id]: padded });
+    for (const k of ['top', 'bag']) {
       expect(b[k].x).toBeCloseTo(a[k].x);
       expect(b[k].y).toBeCloseTo(a[k].y);
       expect(b[k].w).toBeCloseTo(a[k].w);
@@ -95,56 +102,36 @@ describe('layoutOutfit — worn look', () => {
     }
   });
 
-  it('keeps everything inside the canvas, shrinking tall outfits', () => {
-    const veryTall: PieceShape = { aspect: 0.3, bounds: { x0: 0, y0: 0, x1: 1, y1: 1 } };
-    const all = [outerwear, top, bottom, shoes, bag, accessory];
-    const r = rects(all, Object.fromEntries(all.map(i => [i.id, veryTall])));
-    for (const k of Object.keys(r)) {
+  it('keeps everything inside the canvas without overlapping between spots', () => {
+    const shapes = { [top.id]: wide, [bottom.id]: tall, [outerwear.id]: tall, [shoes.id]: wide, [bag.id]: padded, [accessory.id]: tall };
+    const r = rects(all, shapes);
+    const keys = Object.keys(r);
+    for (const k of keys) {
       expect(r[k].x).toBeGreaterThanOrEqual(-1e-9);
       expect(r[k].y).toBeGreaterThanOrEqual(-1e-9);
       expect(r[k].x + r[k].w).toBeLessThanOrEqual(1 + 1e-9);
       expect(r[k].y + r[k].h).toBeLessThanOrEqual(CANVAS_HEIGHT_RATIO + 1e-9);
     }
-  });
-
-  it('puts outerwear half-visible behind the top, on the left', () => {
-    const r = rects([outerwear, top, bottom], { [outerwear.id]: padded, [top.id]: padded, [bottom.id]: tall });
-    const cx = (k: string) => r[k].x + r[k].w / 2;
-    expect(cx('outerwear')).toBeLessThan(0.5);
-    expect(cx('top')).toBeGreaterThan(0.5);
-    expect(r.outerwear.x + r.outerwear.w).toBeGreaterThan(r.top.x); // 有重疊
-    expect(r.outerwear.y).toBeCloseTo(r.top.y);
-    expect(r.outerwear.z).toBeLessThan(r.top.z);
-    expect(cx('bottom')).toBeCloseTo(0.5);
-  });
-
-  it('puts the bag right-middle and the accessory left-middle, at waist height, on top', () => {
-    const r = rects([top, bottom, shoes, bag, accessory], {});
-    const cx = (k: string) => r[k].x + r[k].w / 2;
-    const cy = (k: string) => r[k].y + r[k].h / 2;
-    expect(cx('bag')).toBeGreaterThan(0.6);
-    expect(cx('accessory')).toBeLessThan(0.4);
-    const waist = r.bottom.y;
-    expect(Math.abs(cy('bag') - waist)).toBeLessThan(0.1);
-    expect(Math.abs(cy('accessory') - waist)).toBeLessThan(0.1);
-    expect(r.accessory.w).toBeGreaterThan(r.shoes.w * 0.9);
-    for (const k of ['top', 'bottom', 'shoes']) {
-      expect(r.bag.z).toBeGreaterThan(r[k].z);
-      expect(r.accessory.z).toBeGreaterThan(r[k].z);
+    const overlap = (a: Rect, b: Rect) =>
+      Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+    for (let i = 0; i < keys.length; i++) {
+      for (let j = i + 1; j < keys.length; j++) {
+        expect([keys[i], keys[j], overlap(r[keys[i]], r[keys[j]]) < 0.01]).toEqual([keys[i], keys[j], true]);
+      }
     }
   });
 
-  it('uses a one-piece as the whole body', () => {
+  it('gives a one-piece the whole left side', () => {
     const dress = item('onepiece');
     const r = rects([dress, shoes], { [dress.id]: tall });
-    expect(r.onepiece.x + r.onepiece.w / 2).toBeCloseTo(0.5);
-    expect(r.shoes.y).toBeLessThan(r.onepiece.y + r.onepiece.h);
+    expect(cx(r.onepiece)).toBeLessThan(0.5);
+    expect(r.onepiece.h).toBeGreaterThan(CANVAS_HEIGHT_RATIO * 0.7);
   });
 
-  it('keeps the input order and distinct z', () => {
-    const all = [outerwear, top, bottom, shoes, bag, accessory];
+  it('keeps the input order and distinct z, outerwear at the back', () => {
     const layout = layoutOutfit(all, new Map());
     expect(layout.map(p => p.itemId)).toEqual(all.map(i => i.id));
     expect(new Set(layout.map(p => p.z)).size).toBe(all.length);
+    expect(layout[0].z).toBe(0);
   });
 });
