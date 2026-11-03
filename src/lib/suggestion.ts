@@ -1,4 +1,4 @@
-import type { Category, Item, Occasion, OutfitItemPlacement, Season } from '@/types/models';
+import type { Category, Item, Occasion, OutfitItemPlacement, OutfitPiece, Season } from '@/types/models';
 
 /**
  * 穿搭建議引擎（純邏輯）。
@@ -224,4 +224,12 @@ const LAYOUT: Record<Category, Omit<OutfitItemPlacement, 'itemId' | 'z' | 'rotat
 
 export function suggestionLayout(items: Item[]): OutfitItemPlacement[] {
   return items.map((item, z) => ({ itemId: item.id, ...LAYOUT[item.category], rotation: 0, z }));
+}
+
+/** 「存成穿搭」：網址帶來的單品 id（逗號分隔）→ 已排好位置的畫布單品；找不到或重複的 id 略過 */
+export function presetPieces(idsParam: string | undefined, items: Item[]): OutfitPiece[] {
+  if (!idsParam) return [];
+  const byId = new Map(items.map(i => [i.id, i]));
+  const picked = [...new Set(idsParam.split(','))].flatMap(id => (byId.has(id) ? [byId.get(id)!] : []));
+  return suggestionLayout(picked).map((p, i) => ({ ...p, item: picked[i] }));
 }

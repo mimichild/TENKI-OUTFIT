@@ -2,6 +2,7 @@ import {
   candidatesFor,
   outerwearRule,
   suggestOutfit,
+  presetPieces,
   suggestionLayout,
   tempBand,
   weatherBasis,
@@ -269,5 +270,21 @@ describe('describeSuggestion', () => {
   it('returns nothing for an empty suggestion', () => {
     const r = suggestOutfit({ items: [], weather: null, occasion: null });
     expect(describeSuggestion(r, { language: 'zh-TW', day: 'today', occasion: null })).toEqual([]);
+  });
+});
+
+describe('presetPieces', () => {
+  it('lays out the given ids that are still in the closet, in suggestion order', () => {
+    const top = item('top');
+    const shoes = item('shoes');
+    const jacket = item('outerwear');
+    const pieces = presetPieces(`${top.id},missing,${shoes.id},${jacket.id},${top.id}`, [shoes, top, jacket]);
+    expect(pieces.map(p => p.item.id)).toEqual([top.id, shoes.id, jacket.id]);
+    expect(pieces.map(p => p.z)).toEqual([0, 1, 2]);
+    expect(pieces[0].y).toBe(suggestionLayout([top])[0].y);
+  });
+  it('is empty without ids', () => {
+    expect(presetPieces(undefined, [item('top')])).toEqual([]);
+    expect(presetPieces('', [item('top')])).toEqual([]);
   });
 });
