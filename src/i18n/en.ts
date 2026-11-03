@@ -230,4 +230,5 @@ export const en: Record<keyof typeof zhTW, string> = {
   'suggest.noMatch': 'No matching items',
   'suggest.noMatchHint': 'Try another occasion, or check the seasons and occasions set on your items.',
   'suggest.canvasLabel': 'Suggested outfit: {list}',
+  'suggest.airTemp': 'Temp {min}°–{max}°',
 };

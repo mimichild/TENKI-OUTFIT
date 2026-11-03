@@ -121,6 +121,14 @@ describe('layoutOutfit — fixed spots', () => {
     }
   });
 
+  it('keeps a very thin piece (e.g. a necklace) inside its spot even when the zoom limit kicks in', () => {
+    const thin: PieceShape = { aspect: 1, bounds: { x0: 0.49, y0: 0.45, x1: 0.51, y1: 0.55 } };
+    const r = rects([accessory, bag], { [accessory.id]: thin });
+    expect(r.accessory.x).toBeGreaterThanOrEqual(0);
+    expect(r.accessory.x + r.accessory.w).toBeLessThanOrEqual(r.bag.x + 1e-9);
+    expect(r.accessory.y + r.accessory.h).toBeLessThanOrEqual(CANVAS_HEIGHT_RATIO);
+  });
+
   it('gives a one-piece the whole left side', () => {
     const dress = item('onepiece');
     const r = rects([dress, shoes], { [dress.id]: tall });

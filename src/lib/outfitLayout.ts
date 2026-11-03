@@ -1,5 +1,5 @@
 import type { Category, Item, OutfitItemPlacement } from '@/types/models';
-import { CANVAS_HEIGHT_RATIO, MAX_SCALE, MIN_SCALE, PIECE_BASE_SIZE } from './outfitCanvas';
+import { MAX_SCALE, MIN_SCALE, PIECE_BASE_SIZE } from './outfitCanvas';
 
 /**
  * 穿搭建議的自動排版（使用者指定 2026-11-03）：每個分類一個固定格子——

@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Chip } from '@/components/Chip';
 import { OutfitCanvasView } from '@/components/OutfitCanvasView';
 import { OCCASIONS } from '@/constants/options';
@@ -10,13 +10,13 @@ import { useWeather } from '@/db/useWeather';
 import { useT, type TranslationKey } from '@/i18n';
 import { formatPrice } from '@/lib/currency';
 import { outfitTotal } from '@/lib/outfitTotals';
-import { suggestOutfit, suggestionLayout, type Suggestion } from '@/lib/suggestion';
+import { candidatesFor, suggestOutfit, suggestionLayout, type Suggestion } from '@/lib/suggestion';
 import { describeSuggestion } from '@/lib/suggestionText';
 import { usePieceShapes } from '@/lib/usePieceShapes';
 import { addDays } from '@/lib/weatherDates';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme } from '@/theme/useTheme';
-import type { Item, Occasion } from '@/types/models';
+import type { Item, Occasion, OutfitPiece } from '@/types/models';
 
 type Day = 'today' | 'tomorrow';
 
@@ -43,36 +43,46 @@ export default function SuggestScreen() {
   const dayWeather = weather.days?.find(d => d.date === date) ?? null;
   const ready = items !== undefined && weather.days !== undefined;
   const input = useMemo(() => ({ items: items ?? [], weather: dayWeather, occasion }), [items, dayWeather, occasion]);
-  // 天氣只看會影響挑選的條件，重抓到一樣的天氣不重抽
-  const probe = ready ? suggestOutfit(input, { rng: () => 0 }) : null;
+  // 目前的天氣條件（不抽籤）；天氣只看會影響挑選的條件，重抓到同一段溫度不重抽
+  const probe = useMemo(() => (ready ? suggestOutfit(input, { rng: () => 0 }) : null), [ready, input]);
   const key = probe ? `${date}|${occasion ?? ''}|${probe.band}|${probe.outerwear}` : '';
-  const itemIds = useMemo(() => new Set((items ?? []).map(i => i.id)), [items]);
+  const byId = useMemo(() => new Map((items ?? []).map(i => [i.id, i])), [items]);
 
-  // 換日期／場合／天氣條件、建議裡的單品不見了、或原本沒有建議而衣櫃變了 → 重抽
+  // 換日期／場合／天氣條件、或原本沒有建議而衣櫃變了 → 重抽；
+  // 建議裡的單品不見了、改了分類、或改到不符合目前的季節／場合 → 也重抽
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !probe) return;
     setPicked(prev => {
-      const stale =
-        !prev ||
-        prev.key !== key ||
-        prev.suggestion.status === 'empty' ||
-        prev.suggestion.pieces.some(p => !itemIds.has(p.id));
+      const stillFits = (p: Item) => {
+        const cur = byId.get(p.id);
+        return !!cur && cur.category === p.category && candidatesFor([cur], cur.category, { band: probe.band, occasion }).length > 0;
+      };
+      const stale = !prev || prev.key !== key || prev.suggestion.status === 'empty' || !prev.suggestion.pieces.every(stillFits);
       return stale ? { key, suggestion: suggestOutfit(input) } : prev;
     });
-  }, [ready, key, input, itemIds]);
+  }, [ready, probe, key, input, byId, occasion]);
 
   const shuffle = () => {
     if (!picked) return;
-    setPicked({ key, suggestion: suggestOutfit(input, { previous: picked.suggestion.pieces.map(p => p.id) }) });
+    const next = suggestOutfit(input, { previous: picked.suggestion.pieces.map(p => p.id) });
+    setPicked({ key, suggestion: next });
+    // accessibilityLiveRegion 只有 Android 有效，iOS 另外念
+    if (next.noAlternative) AccessibilityInfo.announceForAccessibility(t('suggest.noAlternative'));
   };
 
-  // 顯示用最新的單品資料（名稱、照片可能改過）；天氣（帶傘）也用最新的
+  // 顯示用最新的單品資料（名稱、照片可能改過）；天氣（溫度、帶傘）也用最新的
   const current = picked && picked.key === key ? picked.suggestion : null;
-  const byId = new Map((items ?? []).map(i => [i.id, i]));
-  const pieces: Item[] = current ? current.pieces.map(p => byId.get(p.id) ?? p) : [];
-  // 量到照片裡衣服的範圍後才排版，避免畫面跳動
+  const pieces: Item[] = useMemo(() => (current ? current.pieces.map(p => byId.get(p.id) ?? p) : []), [current, byId]);
+  // 量到照片裡衣服的範圍後才排版；量測中先顯示上一次排好的畫布，避免閃一下
   const shapes = usePieceShapes(current ? pieces : undefined);
-  const shown: Suggestion | null = current && probe ? { ...current, pieces, rainy: probe.rainy, pop: probe.pop } : null;
+  const lastCanvas = useRef<OutfitPiece[]>([]);
+  const canvasPieces = useMemo(
+    () => (shapes ? suggestionLayout(pieces, shapes).map((p, i) => ({ ...p, item: pieces[i] })) : null),
+    [shapes, pieces],
+  );
+  if (canvasPieces) lastCanvas.current = canvasPieces;
+  const shown: Suggestion | null =
+    current && probe ? { ...current, pieces, basis: probe.basis, rainy: probe.rainy, pop: probe.pop } : null;
   const lines = shown ? describeSuggestion(shown, { language, day, occasion }) : [];
   const canvasWidth = Math.min(window.width - 64, 360);
   const total = outfitTotal(pieces.map(item => ({ item })));
@@ -81,9 +91,8 @@ export default function SuggestScreen() {
   const saveAsOutfit = () =>
     router.push({ pathname: '/outfit/edit', params: { date, items: pieces.map(i => i.id).join(',') } });
 
-  const num = (v: number | null) => (v === null ? '—' : Math.round(v));
-  const feelsMin = dayWeather ? (dayWeather.minAT ?? dayWeather.minT) : null;
-  const feelsMax = dayWeather ? (dayWeather.maxAT ?? dayWeather.maxT) : null;
+  // 天氣卡和第二句用同一組溫度（體感優先，缺的話整組改用氣溫）
+  const basis = probe?.basis ?? null;
 
   return (
     <ScrollView style={{ backgroundColor: theme.background }} contentContainerStyle={styles.content}>
@@ -106,10 +115,13 @@ export default function SuggestScreen() {
       </View>
 
       <View style={[styles.weather, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-        {dayWeather ? (
+        {dayWeather && basis ? (
           <>
             <Text style={[styles.weatherMain, { color: theme.text }]}>
-              {t('weather.feelsLike', { min: num(feelsMin), max: num(feelsMax) })}
+              {t(basis.kind === 'feels' ? 'weather.feelsLike' : 'suggest.airTemp', {
+                min: Math.round(basis.min),
+                max: Math.round(basis.max),
+              })}
             </Text>
             <Text style={{ color: theme.textMuted }}>
               {dayWeather.pop === null ? t('weather.popUnknown') : t('weather.pop', { pop: Math.round(dayWeather.pop) })}
@@ -147,15 +159,15 @@ export default function SuggestScreen() {
           >
             <OutfitCanvasView
               width={canvasWidth}
-              pieces={shapes ? suggestionLayout(pieces, shapes).map((p, i) => ({ ...p, item: pieces[i] })) : []}
+              pieces={canvasPieces ?? lastCanvas.current}
             />
           </View>
           <Text style={[styles.pieceNames, { color: theme.textMuted }]}>{pieceNames}</Text>
           {total !== null && (
             <Text style={[styles.total, { color: theme.text }]}>{t('outfit.total', { amount: formatPrice(total, currency) })}</Text>
           )}
-          {lines.map(line => (
-            <Text key={line} style={[styles.line, { color: theme.text }]}>{line}</Text>
+          {lines.map((line, i) => (
+            <Text key={i} style={[styles.line, { color: theme.text }]}>{line}</Text>
           ))}
           {shown.missing.length > 0 && (
             <Text style={[styles.note, { color: theme.textMuted }]}>

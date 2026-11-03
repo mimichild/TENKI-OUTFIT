@@ -228,4 +228,5 @@ export const zhTW = {
   'suggest.noMatch': '沒有符合的單品',
   'suggest.noMatchHint': '可以換個場合，或確認單品的季節、場合設定',
   'suggest.canvasLabel': '建議穿搭：{list}',
+  'suggest.airTemp': '氣溫 {min}°–{max}°',
 };

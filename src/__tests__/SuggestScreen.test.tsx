@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { AppState, type AppStateStatus } from 'react-native';
 import SuggestScreen from '../../app/(tabs)/suggest';
 import { ItemRepositoryProvider, useItemsVersion } from '@/db/ItemRepositoryContext';
 import { createMemoryDatabase } from '@/db/memoryItemRepository';
@@ -40,15 +41,16 @@ async function setup({ items = BASIC, weather = [day('2026-11-03', 29, 19, 70), 
     ids[s.name] = created.id;
   }
   useSettingsStore.setState({ ...DEFAULT_SETTINGS });
+  const weatherRepo = createMemoryWeatherRepository(weather);
   render(
     <ItemRepositoryProvider repository={db.items}>
-      <WeatherProvider repository={createMemoryWeatherRepository(weather)} fetcher={jest.fn()} now={() => NOW}>
+      <WeatherProvider repository={weatherRepo} fetcher={jest.fn()} now={() => NOW}>
         <SuggestScreen />
       </WeatherProvider>
     </ItemRepositoryProvider>,
   );
   await act(async () => {});
-  return { ids, db };
+  return { ids, db, weatherRepo };
 }
 
 beforeEach(() => mockPush.mockClear());
@@ -135,5 +137,40 @@ describe('SuggestScreen', () => {
     // 暫存區的單品不會被建議；畫面要重新讀取（實際 App 由 bumpItemsVersion 通知）
     await act(async () => useItemsVersion.getState().bump());
     expect(screen.getByText(/搭配褲子/).props.children).not.toBe(first);
+  });
+
+  it('re-picks when a suggested item is edited so it no longer fits', async () => {
+    const { ids, db } = await setup();
+    const shirt = (await db.items.get(ids['白色短袖']))!;
+    await act(async () => {
+      await db.items.update(shirt.id, { ...shirt, category: 'shoes' });
+    });
+    await act(async () => useItemsVersion.getState().bump());
+    // 上衣沒了 → 湊不出上衣＋下著，也沒有連身
+    expect(screen.getByText('沒有符合的單品')).toBeTruthy();
+  });
+
+  it('describes the latest temperatures when re-read weather stays in the same band', async () => {
+    let onChange: ((s: AppStateStatus) => void) | undefined;
+    const original = AppState.addEventListener;
+    AppState.addEventListener = ((_type: string, handler: (s: AppStateStatus) => void) => {
+      onChange = handler;
+      return { remove: () => {} };
+    }) as typeof AppState.addEventListener;
+    try {
+      const { weatherRepo } = await setup();
+      const first = screen.getByText(/^白色短袖搭配牛仔褲/).props.children;
+      await weatherRepo.upsert(
+        '臺北市',
+        [{ date: '2026-11-03', maxT: 28, minT: 18, maxAT: 28, minAT: 18, pop: 70, wxCode: '01', wxText: '晴天', hasDaytime: true }],
+        NOW,
+      );
+      await act(async () => { onChange?.('active'); });
+      expect(screen.getByText('體感 18°–28°')).toBeTruthy();
+      expect(screen.getByText(/^今天體感 18–28°/)).toBeTruthy();
+      expect(screen.getByText(/^白色短袖搭配牛仔褲/).props.children).toBe(first);
+    } finally {
+      AppState.addEventListener = original;
+    }
   });
 });

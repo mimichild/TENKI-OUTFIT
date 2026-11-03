@@ -230,4 +230,5 @@ export const ja: Record<keyof typeof zhTW, string> = {
   'suggest.noMatch': '条件に合うアイテムがありません',
   'suggest.noMatchHint': 'シーンを変えるか、アイテムの季節・シーン設定を確認してください',
   'suggest.canvasLabel': 'おすすめコーデ：{list}',
+  'suggest.airTemp': '気温 {min}°–{max}°',
 };

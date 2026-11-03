@@ -1,4 +1,5 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
 import { OutfitEditor, type OutfitDraft } from '@/components/OutfitEditor';
 import { ScreenPlaceholder } from '@/components/ScreenPlaceholder';
 import { useOutfitRepository } from '@/db/OutfitRepositoryContext';
@@ -19,8 +20,12 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
  * 編輯：/outfit/edit?id=...
  */
 export default function OutfitEditScreen() {
-  const { id, date, items } = useLocalSearchParams<{ id?: string; date?: string; items?: string }>();
-  return id ? <EditExisting id={id} /> : <CreateNew date={date && DATE_RE.test(date) ? date : null} preset={items} />;
+  const params = useLocalSearchParams<{ id?: string | string[]; date?: string | string[]; items?: string | string[] }>();
+  // 同一個參數重複出現時 Expo Router 會給陣列，只取第一個
+  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  const id = one(params.id);
+  const date = one(params.date);
+  return id ? <EditExisting id={id} /> : <CreateNew date={date && DATE_RE.test(date) ? date : null} preset={one(params.items)} />;
 }
 
 function useCommon() {
@@ -33,11 +38,17 @@ function useCommon() {
 
 function CreateNew({ date, preset }: { date: string | null; preset?: string }) {
   const { t, router, repo, items, today } = useCommon();
-  // 從穿搭建議來的單品：量好照片範圍再排版（編輯器只在第一次顯示時讀 initial）
-  const presetItems = items && preset ? presetPieces(preset, items).map(p => p.item) : [];
-  const shapes = usePieceShapes(items ? presetItems : undefined);
-  if (items === undefined || shapes === undefined) return <Stack.Screen options={{ headerShown: false }} />;
-  const initial: OutfitDraft = { name: '', date, pieces: presetPieces(preset, items, shapes) };
+  // 從穿搭建議來的單品：量好照片範圍再排版。編輯器只在第一次顯示時讀 initial，
+  // 所以第一次排好就鎖住，之後單品資料變了也不會把編輯中的畫布卸掉重來
+  const [initial, setInitial] = useState<OutfitDraft | null>(null);
+  const presetItems = useMemo(() => (items && preset ? presetPieces(preset, items).map(p => p.item) : []), [items, preset]);
+  const shapes = usePieceShapes(items && preset && !initial ? presetItems : undefined);
+  useEffect(() => {
+    if (initial || items === undefined) return;
+    if (!preset) setInitial({ name: '', date, pieces: [] });
+    else if (shapes) setInitial({ name: '', date, pieces: presetPieces(preset, items, shapes) });
+  }, [initial, items, preset, shapes, date]);
+  if (!initial || items === undefined) return <Stack.Screen options={{ headerShown: false }} />;
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />

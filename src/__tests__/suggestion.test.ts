@@ -53,6 +53,12 @@ describe('weatherBasis', () => {
   it('falls back to air temperature when feels-like is missing', () => {
     expect(weatherBasis(weather(null, 18, { maxT: 26, minT: 17 }))).toEqual({ min: 17, max: 26, avg: 21.5, kind: 'air' });
   });
+  it('prefers complete air temperatures over incomplete feels-like', () => {
+    expect(weatherBasis(weather(25, null, { maxT: 24, minT: 18 }))).toEqual({ min: 18, max: 24, avg: 21, kind: 'air' });
+  });
+  it('uses a single feels-like value when that is all there is', () => {
+    expect(weatherBasis(weather(25, null))).toEqual({ min: 25, max: 25, avg: 25, kind: 'feels' });
+  });
   it('is null without usable temperatures', () => {
     expect(weatherBasis(null)).toBeNull();
     expect(weatherBasis(weather(null, null))).toBeNull();
@@ -189,6 +195,27 @@ describe('suggestOutfit', () => {
     expect(first.pieces[0].id).toBe(a.id);
     const next = suggestOutfit(base([a, b, bottom], { weather: w }), { rng: () => 0, previous: first.pieces.map(i => i.id) });
     expect(next.pieces[0].id).toBe(b.id);
+    expect(next.noAlternative).toBe(false);
+  });
+
+  it('finds the other base (one-piece ↔ top + bottom) when random picks keep repeating', () => {
+    const top = item('top');
+    const bottom = item('bottom');
+    const dress = item('onepiece');
+    const w = weather(30, 28);
+    const input = base([top, bottom, dress], { weather: w });
+    const next = suggestOutfit(input, { rng: () => 0, previous: [top.id, bottom.id] });
+    expect(next.pieces.map(i => i.id)).toEqual([dress.id]);
+  });
+
+  it('toggles optional outerwear when that is the only other choice', () => {
+    const top = item('top');
+    const bottom = item('bottom');
+    const jacket = item('outerwear');
+    const input = base([top, bottom, jacket], { weather: weather(26, 21) });
+    // rng 0 → 一定加外套；上一套就是有外套的 → 找不同的就只能拿掉外套
+    const next = suggestOutfit(input, { rng: () => 0, previous: [jacket.id, top.id, bottom.id] });
+    expect(next.pieces.map(i => i.id)).toEqual([top.id, bottom.id]);
     expect(next.noAlternative).toBe(false);
   });
 
