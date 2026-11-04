@@ -294,22 +294,42 @@ describe('describeSuggestion', () => {
   const jacket = item('outerwear', { name: '' });
   const shoes = item('shoes');
 
-  it('writes two sentences about the pieces and the weather', () => {
+  const vibeOf = (line: string, prefix: string) => line.slice(prefix.length, -1);
+
+  it('第一句寫穿搭和風格，第二句體感與降雨，第三句溫度和穿搭合不合適', () => {
     const r = suggestOutfit(
       { items: [top, bottom, jacket, shoes], weather: weather(29, 19, { pop: 70 }), occasion: 'travel' },
       { rng: () => 0 },
     );
-    const [line1, line2] = describeSuggestion(r, { language: 'zh-TW', day: 'today', occasion: 'travel' });
-    expect(line1).toBe('白色短袖搭配牛仔褲，外加一件外套，適合旅行場合。');
-    expect(line2).toBe('今天體感 19–29°，早晚偏涼、中午偏暖，外套方便穿脫。降雨機率 70%，記得帶傘。');
+    const lines = describeSuggestion(r, { language: 'zh-TW', day: 'today', occasion: 'travel' });
+    expect(lines).toHaveLength(3);
+    const [line1, line2, line3] = lines;
+    // 外套（沒填名稱用分類名）內搭上衣，配上下著，加上旅行場合的風格形容
+    expect(line1.startsWith('外套內搭白色短袖，配上牛仔褲，')).toBe(true);
+    expect(['舒適好走', '輕鬆有型', '隨性自在']).toContain(vibeOf(line1, '外套內搭白色短袖，配上牛仔褲，'));
+    expect(line2).toBe('今天體感 19–29°，降雨機率 70%。');
+    expect(line3).toBe('早晚偏涼、中午偏暖，這套有外套方便穿脫。容易下雨，記得帶傘。');
+  });
+
+  it('同一套穿搭每次的風格形容都一樣', () => {
+    const r = suggestOutfit({ items: [top, bottom], weather: weather(25, 21), occasion: null }, { rng: () => 0 });
+    const a = describeSuggestion(r, { language: 'zh-TW', day: 'today', occasion: null })[0];
+    expect(describeSuggestion(r, { language: 'zh-TW', day: 'today', occasion: null })[0]).toBe(a);
+    expect(['知性溫柔', '簡約大方', '清爽自在', '溫柔有氣質', '俐落有型']).toContain(vibeOf(a, '白色短袖搭配牛仔褲，'));
   });
 
   it('describes a one-piece and hot weather', () => {
     const dress = item('onepiece', { name: '洋裝' });
     const r = suggestOutfit({ items: [dress], weather: weather(33, 28), occasion: null }, { rng: () => 0 });
-    const [line1, line2] = describeSuggestion(r, { language: 'zh-TW', day: 'tomorrow', occasion: null });
-    expect(line1).toBe('洋裝一件就完成造型，輕鬆好搭，日常都適合。');
-    expect(line2).toBe('明天體感 28–33°，天氣炎熱，透氣的夏季單品最舒服。');
+    const [line1, line2, line3] = describeSuggestion(r, { language: 'zh-TW', day: 'tomorrow', occasion: null });
+    expect(line1).toMatch(/^洋裝一件完成造型，.+。$/);
+    expect(line2).toBe('明天體感 28–33°，降雨機率未知。');
+    expect(line3).toBe('天氣炎熱，這套輕薄透氣，穿起來清爽。');
+  });
+
+  it('天氣偏涼卻沒有外套時，提醒加外套', () => {
+    const r = suggestOutfit({ items: [top, bottom], weather: weather(16, 14, { pop: 20 }), occasion: null }, { rng: () => 0 });
+    expect(describeSuggestion(r, { language: 'zh-TW', day: 'today', occasion: null })[2]).toBe('天氣偏涼，記得再加一件外套。');
   });
 
   it('says when there is no weather data', () => {
@@ -323,7 +343,8 @@ describe('describeSuggestion', () => {
     const r = suggestOutfit({ items: [top, bottom], weather: weather(16, 14, { maxT: 18 }), occasion: null }, { rng: () => 0 });
     const en = describeSuggestion(r, { language: 'en', day: 'today', occasion: null });
     const ja = describeSuggestion(r, { language: 'ja', day: 'today', occasion: null });
-    expect(en).toHaveLength(2);
+    expect(en).toHaveLength(3);
+    expect(ja).toHaveLength(3);
     expect(en[1]).toContain('14–16°');
     expect(ja[1]).toContain('14–16°');
   });

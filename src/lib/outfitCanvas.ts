@@ -75,3 +75,22 @@ export function removePiece<T extends OutfitItemPlacement>(list: T[], itemId: st
 export function editorCanvasRatio(area: { width: number; height: number }, current: number): number {
   return area.width > 0 && area.height > 0 ? area.height / area.width : current;
 }
+
+/** 畫布底部中央的垃圾桶（px）：直徑、離底部距離、判定半徑 */
+export const TRASH_SIZE = 56;
+export const TRASH_BOTTOM = 16;
+const TRASH_HIT_RADIUS = 64;
+/** 手指要真的拖動超過這個距離（px）才算拖進垃圾桶，避免只是縮放時誤刪 */
+const TRASH_MIN_DRAG = 12;
+
+/** 單品中心是否在垃圾桶上（位置以畫布寬度為單位，ratio = 畫布高 / 寬） */
+export function isOverTrash(p: Pick<OutfitItemPlacement, 'x' | 'y'>, width: number, ratio: number): boolean {
+  const cx = width / 2;
+  const cy = width * ratio - TRASH_BOTTOM - TRASH_SIZE / 2;
+  return Math.hypot(p.x * width - cx, p.y * width - cy) <= TRASH_HIT_RADIUS;
+}
+
+/** 拖拉放開時要不要丟進垃圾桶：有實際拖動，且最後停在垃圾桶上 */
+export function droppedInTrash(end: Pick<OutfitItemPlacement, 'x' | 'y'>, g: Pick<GestureDelta, 'dx' | 'dy'>, width: number, ratio: number): boolean {
+  return Math.hypot(g.dx, g.dy) >= TRASH_MIN_DRAG && isOverTrash(end, width, ratio);
+}

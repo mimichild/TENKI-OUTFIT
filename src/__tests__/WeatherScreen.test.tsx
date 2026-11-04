@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import { useState, type ReactNode } from 'react';
 import { AppState, RefreshControl, StyleSheet, type AppStateStatus } from 'react-native';
 import { OUTFIT_CARD_FOOTER_HEIGHT } from '@/components/OutfitCard';
@@ -145,6 +145,19 @@ describe('WeatherScreen', () => {
     await setup({ result: { status: 'ok', days: [forecast('2026-11-03', 25)] } });
     expect(screen.queryByText(/更新於/)).toBeNull();
     expect(screen.queryByText('資料來源：中央氣象署')).toBeNull();
+  });
+
+  it('體感溫度在氣溫右邊；天氣描述和降雨機率在第二行；＋不會蓋住總金額', async () => {
+    await setup({ result: { status: 'ok', days: [forecast('2026-11-03', 25, { pop: 70, wxText: '短暫陣雨', wxCode: '08' })] } });
+    const main = within(screen.getByTestId('weather-main-row'));
+    expect(main.getByText('25°')).toBeTruthy();
+    expect(main.getByText('體感 17°–26°')).toBeTruthy();
+    expect(main.queryByText('短暫陣雨')).toBeNull();
+    const sub = within(screen.getByTestId('weather-sub-row'));
+    expect(sub.getByText('短暫陣雨')).toBeTruthy();
+    expect(sub.getByText('降雨機率 70%')).toBeTruthy();
+    const fab = StyleSheet.flatten(screen.getByRole('button', { name: '新增穿搭' }).props.style);
+    expect(fab.bottom).toBeGreaterThan(OUTFIT_CARD_FOOTER_HEIGHT);
   });
 
   it('moves between cached dates; past days have no limit, future stops at the last forecast', async () => {

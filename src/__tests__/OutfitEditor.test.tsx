@@ -99,7 +99,7 @@ describe('OutfitEditor', () => {
     expect(screen.getByText('這個分類還沒有單品')).toBeTruthy();
   });
 
-  it('dragging, pinching and rotating a piece moves it, brings it to the front and can remove it', async () => {
+  it('dragging, pinching and rotating a piece moves it and brings it to the front', async () => {
     const { onSave } = setup({
       initial: {
         name: '', date: '2026-11-02',
@@ -140,21 +140,45 @@ describe('OutfitEditor', () => {
       { itemId: 'a', x: 1, y: 0.5, scale: 2, rotation: 0.5, z: 1 },
       { itemId: 'bb', x: 0.3, y: 0.3, scale: 1, rotation: 0, z: 0 },
     ]);
-
-    fireEvent.press(screen.getByRole('button', { name: '從畫布移除' }));
-    expect(screen.queryByLabelText('白襯衫，在畫布上')).toBeNull();
+    // 不再有選取虛線框
+    expect(StyleSheet.flatten(screen.getByTestId('piece-a').props.style).borderStyle).toBeUndefined();
   });
 
-  it('a plain tap selects a piece; tapping the empty canvas deselects it', () => {
+  it('把衣服往下拖到垃圾桶放開就從畫布移除', async () => {
+    const { onSave } = setup({
+      initial: {
+        name: '', date: '2026-11-02',
+        pieces: [
+          { itemId: 'a', x: 0.5, y: 0.5, scale: 1, rotation: 0, z: 0, item: shirt },
+          { itemId: 'bb', x: 0.3, y: 0.3, scale: 1, rotation: 0, z: 1, item: jeans },
+        ],
+      },
+    });
+    fireEvent(screen.getByTestId('canvas-area'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 600 } } });
+    expect(screen.queryByTestId('canvas-trash')).toBeNull();
+    act(() => fireGestureHandler(getByGestureTestId('pan-a'), [
+      { state: State.BEGAN, translationX: 0, translationY: 0 },
+      { state: State.ACTIVE, translationX: 0, translationY: 0 },
+      { state: State.ACTIVE, translationX: 0, translationY: 2000 },
+      { state: State.END, translationX: 0, translationY: 2000 },
+    ]));
+    expect(screen.queryByLabelText('白襯衫，在畫布上')).toBeNull();
+    expect(screen.queryByTestId('canvas-trash')).toBeNull();
+    await act(async () => fireEvent.press(saveButton()));
+    expect(onSave.mock.calls[0][0].items.map((i: { itemId: string }) => i.itemId)).toEqual(['bb']);
+  });
+
+  it('拖到垃圾桶以外的地方放開不會移除', () => {
     setup({ initial: { name: '', date: '2026-11-02', pieces: [{ itemId: 'a', x: 0.5, y: 0.5, scale: 1, rotation: 0, z: 0, item: shirt }] } });
-    act(() => {
-      fireGestureHandler(getByGestureTestId('pan-a'), [{ state: State.BEGAN }, { state: State.FAILED }]);
-    });
-    expect(screen.getByRole('button', { name: '從畫布移除' })).toBeTruthy();
-    act(() => {
-      fireGestureHandler(getByGestureTestId('canvas-tap'), [{ state: State.BEGAN }, { state: State.ACTIVE }, { state: State.END }]);
-    });
-    expect(screen.queryByRole('button', { name: '從畫布移除' })).toBeNull();
+    fireEvent(screen.getByTestId('canvas-area'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 600 } } });
+    act(() => fireGestureHandler(getByGestureTestId('pan-a'), [
+      { state: State.BEGAN, translationX: 0, translationY: 0 },
+      { state: State.ACTIVE, translationX: 0, translationY: 0 },
+      { state: State.ACTIVE, translationX: -2000, translationY: 2000 },
+      { state: State.END, translationX: -2000, translationY: 2000 },
+    ]));
+    expect(screen.getByLabelText('白襯衫，在畫布上')).toBeTruthy();
+    expect(screen.queryByTestId('canvas-trash')).toBeNull();
   });
 
   it('pinching past the limit does not leave a dead zone when pinching back', async () => {
@@ -170,11 +194,12 @@ describe('OutfitEditor', () => {
     expect(onSave.mock.calls[0][0].items[0].scale).toBe(2);
   });
 
-  it('pieces can be selected with a screen reader', () => {
+  it('螢幕閱讀器可以用「移除」動作把衣服拿掉', () => {
     setup({ initial: { name: '', date: '2026-11-02', pieces: [{ itemId: 'a', x: 0.5, y: 0.5, scale: 1, rotation: 0, z: 0, item: shirt }] } });
     const piece = screen.getByRole('button', { name: '白襯衫，在畫布上' });
-    act(() => piece.props.onAccessibilityTap());
-    expect(screen.getByRole('button', { name: '從畫布移除' })).toBeTruthy();
+    expect(piece.props.accessibilityActions).toEqual([{ name: 'remove', label: '從畫布移除' }]);
+    act(() => piece.props.onAccessibilityAction({ nativeEvent: { actionName: 'remove' } }));
+    expect(screen.queryByLabelText('白襯衫，在畫布上')).toBeNull();
   });
 
   it('shows an error when saving fails and lets the user retry', async () => {

@@ -6,7 +6,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { OutfitInput } from '@/db/outfitRepository';
 import { useT, type TranslationKey } from '@/i18n';
 import { formatPrice } from '@/lib/currency';
-import { addPiece, applyGesture, bringToFront, CANVAS_HEIGHT_RATIO, editorCanvasRatio, removePiece, type GestureDelta } from '@/lib/outfitCanvas';
+import {
+  addPiece, applyGesture, bringToFront, CANVAS_HEIGHT_RATIO, droppedInTrash, editorCanvasRatio, removePiece, TRASH_BOTTOM, TRASH_SIZE,
+  type GestureDelta,
+} from '@/lib/outfitCanvas';
 import { outfitTotal } from '@/lib/outfitTotals';
 import { weekdayOf } from '@/lib/weatherDates';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -45,7 +48,8 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
   const window = useWindowDimensions();
   const [date, setDate] = useState(initial.date);
   const [pieces, setPieces] = useState(initial.pieces);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** 拖拉中：none = 沒在拖，drag = 拖拉中，over = 停在垃圾桶上 */
+  const [drag, setDrag] = useState<DragState>('none');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -71,18 +75,16 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
     });
   };
 
-  const select = (itemId: string) => {
-    setSelectedId(itemId);
-    setPieces(list => bringToFront(list, itemId));
+  // 手指碰到的單品移到最上層
+  const raise = (itemId: string) => setPieces(list => bringToFront(list, itemId));
+  const trash = (itemId: string) => {
+    setDrag('none');
+    setPieces(list => removePiece(list, itemId));
   };
 
-  // 只回寫位置／大小／角度；z 由 select 時的 bringToFront 決定
-  const canvasTap = Gesture.Tap()
-    .withTestId('canvas-tap')
-    .runOnJS(true)
-    .onEnd(() => setSelectedId(null));
-
+  // 只回寫位置／大小／角度；z 由 raise 時的 bringToFront 決定
   const commit = (itemId: string, { x, y, scale, rotation }: OutfitItemPlacement) => {
+    setDrag('none');
     setPieces(list => list.map(p => (p.itemId === itemId ? { ...p, x, y, scale, rotation } : p)));
   };
 
@@ -161,12 +163,11 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
             accessibilityLabel={t('outfit.canvas')}
             style={[s.canvas, { width: canvasWidth, height: canvasWidth * canvasRatio, borderColor: theme.border }]}
           >
-            {/* 點空白處取消選取。用手勢而不是 Pressable：Pressable 會在點單品放開時也收到 onPress，把剛選的又取消 */}
-            <GestureDetector gesture={canvasTap}>
+            {pieces.length === 0 && (
               <View style={s.canvasBackground}>
-                {pieces.length === 0 && <Text style={s.emptyHint}>{t('outfit.emptyCanvas')}</Text>}
+                <Text style={s.emptyHint}>{t('outfit.emptyCanvas')}</Text>
               </View>
-            </GestureDetector>
+            )}
             {/* 疊放順序用 zIndex，不重新排列子元件，避免手勢進行中原生畫面被搬動 */}
             {pieces.map(p => (
               <CanvasPiece
@@ -174,13 +175,25 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
                 piece={p}
                 width={canvasWidth}
                 ratio={canvasRatio}
-                selected={p.itemId === selectedId}
                 label={t('outfit.pieceLabel', { name: p.item.name || p.item.brand || t('item.untitled') })}
-                color={theme.primaryText}
-                onBegin={() => select(p.itemId)}
+                removeLabel={t('outfit.removePiece')}
+                onBegin={() => raise(p.itemId)}
+                onDrag={setDrag}
                 onCommit={next => commit(p.itemId, next)}
+                onTrash={() => trash(p.itemId)}
               />
             ))}
+            {/* 拖拉單品時才出現：把衣服拖到這裡放開就從畫布移除 */}
+            {drag !== 'none' && (
+              <View
+                testID="canvas-trash"
+                pointerEvents="none"
+                importantForAccessibility="no-hide-descendants"
+                style={[s.trash, drag === 'over' && s.trashOver]}
+              >
+                <Ionicons name="trash-outline" size={drag === 'over' ? 30 : 26} color={drag === 'over' ? '#FFFFFF' : '#5F5F5F'} />
+              </View>
+            )}
           </View>
         </View>
 
@@ -189,19 +202,6 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
             <Ionicons name="add" size={18} color={theme.onPrimary} />
             <Text style={s.toolText}>{t('outfit.addItems')}</Text>
           </Pressable>
-          {selectedId && (
-            <Pressable
-              onPress={() => {
-                setPieces(list => removePiece(list, selectedId));
-                setSelectedId(null);
-              }}
-              accessibilityRole="button"
-              style={[s.toolButton, { borderColor: theme.border, borderWidth: 1 }]}
-            >
-              <Ionicons name="remove-circle-outline" size={18} color={theme.text} />
-              <Text style={{ color: theme.text, fontSize: 14 }}>{t('outfit.removePiece')}</Text>
-            </Pressable>
-          )}
           <Text style={[s.total, { color: theme.text }]}>{t('outfit.total', { amount: formatPrice(total, currency) })}</Text>
         </View>
 
@@ -241,12 +241,16 @@ interface PieceProps {
   width: number;
   /** 畫布高 / 寬 */
   ratio: number;
-  selected: boolean;
   label: string;
-  color: string;
+  /** 螢幕閱讀器的「移除」動作名稱（無法拖到垃圾桶時用） */
+  removeLabel: string;
   onBegin: () => void;
+  onDrag: (state: DragState) => void;
   onCommit: (next: OutfitItemPlacement) => void;
+  onTrash: () => void;
 }
+
+type DragState = 'none' | 'drag' | 'over';
 
 type GestureKind = 'pan' | 'pinch' | 'rotate';
 const NO_CHANGE: GestureDelta = { dx: 0, dy: 0, scale: 1, rotation: 0 };
@@ -256,11 +260,12 @@ const NO_CHANGE: GestureDelta = { dx: 0, dy: 0, scale: 1, rotation: 0 };
  * 手勢進行中只更新這件單品自己的狀態，放開後才回寫到編輯器。
  * 手指放開又按下時各手勢會從頭計算，所以把已結束的部分累加到 done。
  */
-function CanvasPiece({ piece, width, ratio, selected, label, color, onBegin, onCommit }: PieceProps) {
+function CanvasPiece({ piece, width, ratio, label, removeLabel, onBegin, onDrag, onCommit, onTrash }: PieceProps) {
   const [live, setLive] = useState<OutfitItemPlacement | null>(null);
   // 手勢的 callback 可能是較早 render 時建立的，一律從 ref 讀最新的值
-  const latest = useRef({ piece, width, ratio, onBegin, onCommit });
-  latest.current = { piece, width, ratio, onBegin, onCommit };
+  const latest = useRef({ piece, width, ratio, onBegin, onDrag, onCommit, onTrash });
+  latest.current = { piece, width, ratio, onBegin, onDrag, onCommit, onTrash };
+  const dragState = useRef<DragState>('none');
   /** 已經 onBegin 的手勢；onFinalize 也可能發生在沒有 onBegin 的手勢上，要配對才算 */
   const active = useRef(new Set<GestureKind>());
   const start = useRef<OutfitItemPlacement>(piece);
@@ -275,7 +280,16 @@ function CanvasPiece({ piece, width, ratio, selected, label, color, onBegin, onC
   });
   const update = (patch: Partial<GestureDelta>) => {
     current.current = { ...current.current, ...patch };
-    setLive(applyGesture(start.current, total(), latest.current.width, latest.current.ratio));
+    const { width: w, ratio: r } = latest.current;
+    const next = applyGesture(start.current, total(), w, r);
+    setLive(next);
+    // 有拖動才顯示垃圾桶；停在垃圾桶上時反白
+    const t = total();
+    const state: DragState = droppedInTrash(next, t, w, r) ? 'over' : Math.hypot(t.dx, t.dy) > 0 ? 'drag' : 'none';
+    if (state !== dragState.current) {
+      dragState.current = state;
+      latest.current.onDrag(state);
+    }
   };
   /**
    * 某個手勢結束：它的變化併入 done（其他還在進行的手勢留在 current）。
@@ -311,9 +325,13 @@ function CanvasPiece({ piece, width, ratio, selected, label, color, onBegin, onC
   };
   const finalize = (kind: GestureKind) => {
     if (!active.current.delete(kind) || active.current.size > 0) return;
-    const next = applyGesture(start.current, total(), latest.current.width, latest.current.ratio);
+    const { width: w, ratio: r } = latest.current;
+    const t = total();
+    const next = applyGesture(start.current, t, w, r);
     setLive(null);
-    latest.current.onCommit(next);
+    dragState.current = 'none';
+    if (droppedInTrash(next, t, w, r)) latest.current.onTrash();
+    else latest.current.onCommit(next);
   };
 
   const pan = Gesture.Pan()
@@ -347,9 +365,11 @@ function CanvasPiece({ piece, width, ratio, selected, label, color, onBegin, onC
         accessible
         accessibilityRole="button"
         accessibilityLabel={label}
-        accessibilityState={{ selected }}
-        onAccessibilityTap={() => latest.current.onBegin()}
-        style={[pieceStyle(shown, width), selected && { borderWidth: 1.5, borderColor: color, borderStyle: 'dashed' }]}
+        accessibilityActions={[{ name: 'remove', label: removeLabel }]}
+        onAccessibilityAction={e => {
+          if (e.nativeEvent.actionName === 'remove') latest.current.onTrash();
+        }}
+        style={pieceStyle(shown, width)}
       >
         <PieceImage item={piece.item} />
       </View>
@@ -371,6 +391,13 @@ const makeStyles = (theme: Theme) =>
     canvasArea: { flex: 1, alignSelf: 'stretch', marginHorizontal: -16 },
     canvas: { backgroundColor: '#FFFFFF', borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
     canvasBackground: { ...StyleSheet.absoluteFillObject, justifyContent: 'center' },
+    // 蓋在所有單品上面（單品的 zIndex 是 0..n-1）
+    trash: {
+      position: 'absolute', left: '50%', bottom: TRASH_BOTTOM, marginLeft: -TRASH_SIZE / 2,
+      width: TRASH_SIZE, height: TRASH_SIZE, borderRadius: TRASH_SIZE / 2, zIndex: 100000,
+      alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFFE6', borderWidth: 1, borderColor: '#D0D0D0',
+    },
+    trashOver: { backgroundColor: '#D93025', borderColor: '#D93025', transform: [{ scale: 1.15 }] },
     emptyHint: { color: '#8A8A8A', textAlign: 'center', paddingHorizontal: 24, fontSize: 14, lineHeight: 20 },
     toolbar: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
     toolButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18 },

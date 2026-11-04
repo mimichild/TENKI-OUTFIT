@@ -77,19 +77,24 @@ beforeEach(() => {
 });
 
 describe('SuggestScreen', () => {
-  it('suggests an outfit for today with two sentences', async () => {
+  it('上方顯示氣溫與天氣；下方說明穿搭風格、體感與降雨、溫度適配；不列出單品名稱', async () => {
     await setup();
     expect(screen.getByRole('tab', { name: '今日' }).props.accessibilityState).toEqual({ selected: true });
-    expect(screen.getByText('體感 19°–29°')).toBeTruthy();
-    expect(screen.getByText('白色短袖搭配牛仔褲，外加一件薄外套，輕鬆好搭，日常都適合。')).toBeTruthy();
-    expect(screen.getByText('今天體感 19–29°，早晚偏涼、中午偏暖，外套方便穿脫。降雨機率 70%，記得帶傘。')).toBeTruthy();
+    expect(screen.getByText('氣溫 19°–29°')).toBeTruthy();
+    expect(screen.getByText('晴天')).toBeTruthy();
+    expect(screen.queryByText('體感 19°–29°')).toBeNull();
+    expect(screen.getByText(/^薄外套內搭白色短袖，配上牛仔褲，.+。$/)).toBeTruthy();
+    expect(screen.getByText('今天體感 19–29°，降雨機率 70%。')).toBeTruthy();
+    expect(screen.getByText('早晚偏涼、中午偏暖，這套有外套方便穿脫。容易下雨，記得帶傘。')).toBeTruthy();
+    expect(screen.queryByText(/白色短袖、牛仔褲/)).toBeNull();
   });
 
   it('switches to tomorrow', async () => {
     await setup();
     fireEvent.press(screen.getByRole('tab', { name: '明日' }));
-    expect(screen.getByText('白色短袖搭配牛仔褲，輕鬆好搭，日常都適合。')).toBeTruthy();
-    expect(screen.getByText('明天體感 28–33°，天氣炎熱，透氣的夏季單品最舒服。')).toBeTruthy();
+    expect(screen.getByText(/^白色短袖搭配牛仔褲，.+。$/)).toBeTruthy();
+    expect(screen.getByText('明天體感 28–33°，降雨機率 10%。')).toBeTruthy();
+    expect(screen.getByText('天氣炎熱，這套輕薄透氣，穿起來清爽。')).toBeTruthy();
   });
 
   it('filters by occasion', async () => {
@@ -194,10 +199,10 @@ describe('SuggestScreen', () => {
 
   it('wraps long item names to at most two lines', async () => {
     await setup({ items: [{ name: '非常非常長的名稱'.repeat(6), category: 'onepiece' }] });
-    // 卡片下方的名稱列，以及畫布上沒有照片時的名稱
+    // 卡片下方不再列出單品名稱；只剩畫布上沒有照片時的名稱，最多兩行
     const texts = screen.getAllByText('非常非常長的名稱'.repeat(6));
-    expect(texts.length).toBeGreaterThan(1);
-    expect(texts.map(n => n.props.numberOfLines)).toEqual(texts.map(() => 2));
+    expect(texts).toHaveLength(1);
+    expect(texts[0].props.numberOfLines).toBe(2);
   });
 
   it('asks to add items when the closet is empty', async () => {
@@ -249,16 +254,16 @@ describe('SuggestScreen', () => {
     }) as typeof AppState.addEventListener;
     try {
       const { weatherRepo } = await setup();
-      const first = screen.getByText(/^白色短袖搭配牛仔褲/).props.children;
+      const first = screen.getByText(/內搭白色短袖，配上牛仔褲/).props.children;
       await weatherRepo.upsert(
         '臺北市',
         [{ date: '2026-11-03', maxT: 28, minT: 18, maxAT: 28, minAT: 18, pop: 70, wxCode: '01', wxText: '晴天', hasDaytime: true }],
         NOW,
       );
       await act(async () => { handlers.forEach(h => h('active')); });
-      expect(screen.getByText('體感 18°–28°')).toBeTruthy();
+      expect(screen.getByText('氣溫 18°–28°')).toBeTruthy();
       expect(screen.getByText(/^今天體感 18–28°/)).toBeTruthy();
-      expect(screen.getByText(/^白色短袖搭配牛仔褲/).props.children).toBe(first);
+      expect(screen.getByText(/內搭白色短袖，配上牛仔褲/).props.children).toBe(first);
     } finally {
       AppState.addEventListener = original;
     }

@@ -4,28 +4,18 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, PanResponder, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { LoadError } from '@/components/LoadError';
 import { MonthOutfitGrid } from '@/components/MonthOutfitGrid';
-import { OutfitCard } from '@/components/OutfitCard';
+import { OUTFIT_CARD_FOOTER_HEIGHT, OutfitCard } from '@/components/OutfitCard';
 import { ViewModeSwitch, type ViewMode } from '@/components/ViewModeSwitch';
 import { useOutfitsInRangeQuery } from '@/db/useOutfits';
 import { useWeather } from '@/db/useWeather';
 import { useT, type TranslationKey } from '@/i18n';
-import { wxCategory, type WxCategory } from '@/lib/cwaWeather';
+import { wxCategory } from '@/lib/cwaWeather';
 import { addMonths, monthGrid, monthOf, weekOf, weekTitle } from '@/lib/calendar';
 import { addDays, browsableRange, weekdayOf } from '@/lib/weatherDates';
+import { WX_ICONS } from '@/constants/wxIcons';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme, type Theme } from '@/theme/useTheme';
 import type { WeatherDay } from '@/types/models';
-
-const WX_ICONS: Record<WxCategory, keyof typeof Ionicons.glyphMap> = {
-  clear: 'sunny-outline',
-  partlyCloudy: 'partly-sunny-outline',
-  cloudy: 'cloudy-outline',
-  rain: 'rainy-outline',
-  thunder: 'thunderstorm-outline',
-  fog: 'cloudy-outline',
-  snow: 'snow-outline',
-  unknown: 'help-circle-outline',
-};
 
 const SWIPE_DISTANCE = 50;
 /** 週檢視縮圖的高度；寬度依每套穿搭的畫布比例 */
@@ -316,7 +306,7 @@ function DayDetails({ day, theme, language, t }: {
   const wxLabel = language === 'zh-TW' && day.wxText ? day.wxText : t(`wx.${category}`);
   return (
     <View style={styles.details}>
-      <View style={styles.mainRow}>
+      <View testID="weather-main-row" style={styles.mainRow}>
         <Ionicons name={WX_ICONS[category]} size={40} color={theme.primaryText} accessible={false} importantForAccessibility="no" />
         <View
           style={styles.temps}
@@ -327,15 +317,16 @@ function DayDetails({ day, theme, language, t }: {
           <Text style={[styles.slash, { color: theme.textMuted }]}>/</Text>
           <Text style={[styles.minT, { color: theme.textMuted }]}>{deg(day.minT)}</Text>
         </View>
-        <Text style={[styles.wx, { color: theme.text }]}>{wxLabel}</Text>
-      </View>
-      <View style={styles.metaRow}>
         <View style={styles.meta}>
           <Ionicons name="body-outline" size={16} color={theme.textMuted} accessible={false} importantForAccessibility="no" />
           <Text style={[styles.metaText, { color: theme.textMuted }]}>
             {t('weather.feelsLike', { min: num(day.minAT), max: num(day.maxAT) })}
           </Text>
         </View>
+      </View>
+      {/* 第二行：天氣描述在左、降雨機率在右 */}
+      <View testID="weather-sub-row" style={styles.metaRow}>
+        <Text style={[styles.wx, { color: theme.text }]}>{wxLabel}</Text>
         <View style={styles.meta}>
           <Ionicons name="umbrella-outline" size={16} color={theme.textMuted} accessible={false} importantForAccessibility="no" />
           <Text style={[styles.metaText, { color: theme.textMuted }]}>
@@ -353,8 +344,9 @@ const styles = StyleSheet.create({
   // 日、週檢視：內容延伸到分頁列，＋浮在上面
   contentFill: { paddingBottom: 16, gap: DAY_GAP },
   fillCard: { flex: 1 },
+  // 往上避開穿搭卡片底部的總金額列
   fab: {
-    position: 'absolute', right: 20, bottom: 20, width: 58, height: 58, borderRadius: 29,
+    position: 'absolute', right: 20, bottom: OUTFIT_CARD_FOOTER_HEIGHT + 12, width: 58, height: 58, borderRadius: 29,
     alignItems: 'center', justifyContent: 'center',
     shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 5,
   },
@@ -380,7 +372,7 @@ const styles = StyleSheet.create({
   slash: { fontSize: 20 },
   minT: { fontSize: 20 },
   wx: { fontSize: 16, fontWeight: '600' },
-  metaRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 18, rowGap: 6 },
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', columnGap: 18, rowGap: 6 },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   metaText: { fontSize: 14 },
   // 日檢視穿搭區：抵銷內容左右內距貼齊手機邊緣，撐滿到分頁列

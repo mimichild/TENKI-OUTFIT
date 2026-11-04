@@ -6,10 +6,12 @@ import { Chip } from '@/components/Chip';
 import { LoadError } from '@/components/LoadError';
 import { OutfitCanvasView } from '@/components/OutfitCanvasView';
 import { OCCASIONS } from '@/constants/options';
+import { WX_ICONS } from '@/constants/wxIcons';
 import { useActiveItemsQuery } from '@/db/useItems';
 import { useWeather } from '@/db/useWeather';
 import { useT, type TranslationKey } from '@/i18n';
 import { formatPrice } from '@/lib/currency';
+import { wxCategory } from '@/lib/cwaWeather';
 import { outfitTotal } from '@/lib/outfitTotals';
 import { candidatesFor, suggestOutfit, suggestionLayout, type Suggestion, type SuggestionInput } from '@/lib/suggestion';
 import { describeSuggestion } from '@/lib/suggestionText';
@@ -100,8 +102,11 @@ export default function SuggestScreen() {
   const saveAsOutfit = () =>
     router.push({ pathname: '/outfit/edit', params: { date, items: pieces.map(i => i.id).join(',') } });
 
-  // 天氣卡和第二句用同一組溫度（體感優先，缺的話整組改用氣溫）
-  const basis = probe?.basis ?? null;
+  // 上方天氣卡：氣溫＋天氣（中文用氣象署的描述，和「天氣穿搭」頁一樣）；體感與降雨放在下方說明
+  const wx = dayWeather ? wxCategory(dayWeather.wxCode) : 'unknown';
+  const wxLabel = dayWeather && language === 'zh-TW' && dayWeather.wxText ? dayWeather.wxText : t(`wx.${wx}`);
+  const airMin = dayWeather ? (dayWeather.minT ?? dayWeather.maxT) : null;
+  const airMax = dayWeather ? (dayWeather.maxT ?? dayWeather.minT) : null;
 
   return (
     <ScrollView style={{ backgroundColor: theme.background }} contentContainerStyle={styles.content}>
@@ -124,17 +129,17 @@ export default function SuggestScreen() {
       </View>
 
       <View style={[styles.weather, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-        {dayWeather && basis ? (
+        {dayWeather && (airMin !== null || wx !== 'unknown') ? (
           <>
             <Text style={[styles.weatherMain, { color: theme.text }]}>
-              {t(basis.kind === 'feels' ? 'weather.feelsLike' : 'suggest.airTemp', {
-                min: Math.round(basis.min),
-                max: Math.round(basis.max),
-              })}
+              {airMin !== null && airMax !== null
+                ? t('suggest.airTemp', { min: Math.round(Math.min(airMin, airMax)), max: Math.round(Math.max(airMin, airMax)) })
+                : '—'}
             </Text>
-            <Text style={{ color: theme.textMuted }}>
-              {dayWeather.pop === null ? t('weather.popUnknown') : t('weather.pop', { pop: Math.round(dayWeather.pop) })}
-            </Text>
+            <View style={styles.wxRow}>
+              <Ionicons name={WX_ICONS[wx]} size={20} color={theme.primaryText} accessible={false} importantForAccessibility="no" />
+              <Text style={[styles.weatherMain, { color: theme.text }]}>{wxLabel}</Text>
+            </View>
           </>
         ) : (
           <Text style={{ color: theme.textMuted }}>{t('suggest.noWeatherShort')}</Text>
@@ -180,12 +185,11 @@ export default function SuggestScreen() {
               pieces={canvasPieces ?? lastCanvas.current}
             />
           </View>
-          <Text numberOfLines={2} style={[styles.pieceNames, { color: theme.textMuted }]}>{pieceNames}</Text>
           {total !== null && (
             <Text style={[styles.total, { color: theme.text }]}>{t('outfit.total', { amount: formatPrice(total, currency) })}</Text>
           )}
           {lines.map((line, i) => (
-            <Text key={i} style={[styles.line, { color: theme.text }]}>{line}</Text>
+            <Text key={i} style={[styles.line, i === 0 ? styles.headline : null, { color: i === 0 ? theme.text : theme.textMuted }]}>{line}</Text>
           ))}
           {shown.missing.length > 0 && (
             <Text style={[styles.note, { color: theme.textMuted }]}>
@@ -240,9 +244,11 @@ const styles = StyleSheet.create({
   chips: { gap: 8, paddingVertical: 2 },
   card: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 8, alignItems: 'stretch' },
   canvasFrame: { alignSelf: 'center', borderWidth: 1, borderRadius: 8, overflow: 'hidden' },
-  pieceNames: { fontSize: 13, textAlign: 'center' },
+  wxRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   total: { fontSize: 14, fontWeight: '600', textAlign: 'center' },
   line: { fontSize: 15, lineHeight: 22 },
+  // 第一行：穿搭與風格
+  headline: { fontSize: 16, fontWeight: '600' },
   note: { fontSize: 13 },
   actions: { flexDirection: 'row', gap: 12, marginTop: 4 },
   button: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderRadius: 10, paddingVertical: 10 },

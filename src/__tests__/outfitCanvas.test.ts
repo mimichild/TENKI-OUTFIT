@@ -1,4 +1,6 @@
 import {
+  droppedInTrash,
+  isOverTrash,
   CANVAS_HEIGHT_RATIO, MAX_SCALE, editorCanvasRatio, MIN_SCALE, addPiece, applyGesture, bringToFront, normalizeRotation, pieceBox, removePiece,
 } from '@/lib/outfitCanvas';
 
@@ -67,5 +69,22 @@ describe('畫布比例', () => {
     expect(editorCanvasRatio({ width: 300, height: 360 }, 2)).toBeCloseTo(1.2);
     // 還沒量到版面時沿用原本的
     expect(editorCanvasRatio({ width: 0, height: 0 }, 2)).toBe(2);
+  });
+});
+
+describe('垃圾桶', () => {
+  // 畫布 400 × 600（ratio 1.5），垃圾桶中心在 (200, 600 - 16 - 28 = 556)
+  const W = 400;
+  const R = 1.5;
+  it('單品中心在垃圾桶附近才算', () => {
+    expect(isOverTrash({ x: 0.5, y: 556 / W }, W, R)).toBe(true);
+    expect(isOverTrash({ x: 0.5, y: R }, W, R)).toBe(true); // 拖到最底
+    expect(isOverTrash({ x: 0.5, y: 0.5 }, W, R)).toBe(false);
+    expect(isOverTrash({ x: 0.05, y: R }, W, R)).toBe(false); // 左下角不算
+  });
+  it('只是在垃圾桶上縮放（沒有拖動）不會被丟掉', () => {
+    const end = { x: 0.5, y: R };
+    expect(droppedInTrash(end, { dx: 0, dy: 3 }, W, R)).toBe(false);
+    expect(droppedInTrash(end, { dx: 0, dy: 200 }, W, R)).toBe(true);
   });
 });
