@@ -10,7 +10,7 @@ import { LoadError } from '@/components/LoadError';
 import { CATEGORIES } from '@/constants/options';
 import { useActiveItemsQuery } from '@/db/useItems';
 import { useT } from '@/i18n';
-import { applyItemQuery, DEFAULT_ITEM_QUERY, isQueryFiltered, type ItemQuery } from '@/lib/itemQueries';
+import { applyItemQuery, DEFAULT_ITEM_QUERY, isQueryFiltered, itemQueryParams, type ItemQuery } from '@/lib/itemQueries';
 import { useTheme } from '@/theme/useTheme';
 
 const TABS = ['all', ...CATEGORIES] as const;
@@ -60,7 +60,7 @@ export default function ClosetScreen() {
           numColumns={3}
           contentContainerStyle={styles.grid}
           renderItem={({ item }) => (
-            <ItemTile item={item} onPress={() => router.push({ pathname: '/item/[id]', params: { id: item.id } })} />
+            <ItemTile item={item} onPress={() => router.push({ pathname: '/item/[id]', params: { id: item.id, ...itemQueryParams(query) } })} />
           )}
         />
       )}

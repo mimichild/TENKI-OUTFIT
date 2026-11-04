@@ -115,6 +115,8 @@ export const ja: Record<keyof typeof zhTW, string> = {
   'filter.hint': '季節・シーン未設定のアイテムは常に表示',
   'item.new': '新規アイテム',
   'item.detail': 'アイテム',
+  'item.prev': '前のアイテム',
+  'item.next': '次のアイテム',
   'item.edit': '編集',
   'item.brand': 'ブランド',
   'item.name': '名前',

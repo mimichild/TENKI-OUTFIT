@@ -1,4 +1,4 @@
-import { applyItemQuery, DEFAULT_ITEM_QUERY } from '@/lib/itemQueries';
+import { adjacentItems, applyItemQuery, DEFAULT_ITEM_QUERY, itemQueryParams, parseItemQueryParams } from '@/lib/itemQueries';
 import type { Item } from '@/types/models';
 
 function item(partial: Partial<Item> & { id: string }): Item {
@@ -51,5 +51,46 @@ describe('applyItemQuery', () => {
     const copy = [...items];
     applyItemQuery(items, { ...DEFAULT_ITEM_QUERY, sort: 'oldest' });
     expect(items).toEqual(copy);
+  });
+});
+
+describe('單品頁左右滑的隔壁單品', () => {
+  const list: Item[] = [
+    item({ id: 'old', category: 'top', createdAt: '2026-01-01T00:00:00.000Z' }),
+    item({ id: 'mid', category: 'bottom', createdAt: '2026-02-01T00:00:00.000Z' }),
+    item({ id: 'new', category: 'top', createdAt: '2026-03-01T00:00:00.000Z' }),
+  ];
+
+  it('照服裝頁格子的順序找前一格、後一格，頭尾沒有就是 null', () => {
+    expect(adjacentItems(list, DEFAULT_ITEM_QUERY, 'mid')).toEqual({ prev: 'new', next: 'old' });
+    expect(adjacentItems(list, DEFAULT_ITEM_QUERY, 'new')).toEqual({ prev: null, next: 'mid' });
+    expect(adjacentItems(list, DEFAULT_ITEM_QUERY, 'old')).toEqual({ prev: 'mid', next: null });
+    expect(adjacentItems(list, DEFAULT_ITEM_QUERY, 'gone')).toEqual({ prev: null, next: null });
+  });
+
+  it('沿用服裝頁的排序：最舊排序時前一格是較舊的', () => {
+    expect(adjacentItems(list, { ...DEFAULT_ITEM_QUERY, sort: 'oldest' }, 'mid')).toEqual({ prev: 'old', next: 'new' });
+  });
+
+  it('沿用最近穿過排序', () => {
+    const used = [
+      item({ id: 'x', createdAt: '2026-01-01T00:00:00.000Z', lastUsedAt: '2026-05-01' }),
+      item({ id: 'y', createdAt: '2026-02-01T00:00:00.000Z', lastUsedAt: '2026-04-01' }),
+      item({ id: 'z', createdAt: '2026-03-01T00:00:00.000Z' }),
+    ];
+    // 順序 x（最近穿）→ y → z（沒穿過）
+    expect(adjacentItems(used, { ...DEFAULT_ITEM_QUERY, sort: 'recentlyUsed' }, 'y')).toEqual({ prev: 'x', next: 'z' });
+  });
+
+  it('沿用服裝頁的分類篩選', () => {
+    const tops = { ...DEFAULT_ITEM_QUERY, category: 'top' as const };
+    expect(adjacentItems(list, tops, 'new')).toEqual({ prev: null, next: 'old' });
+  });
+
+  it('篩選條件可以用網址參數來回轉換，不合法的值略過', () => {
+    const q = { ...DEFAULT_ITEM_QUERY, category: 'top' as const, sort: 'unused' as const, seasons: ['summer' as const], occasions: ['work' as const, 'date' as const] };
+    expect(parseItemQueryParams(itemQueryParams(q))).toEqual(q);
+    expect(itemQueryParams(DEFAULT_ITEM_QUERY)).toEqual({});
+    expect(parseItemQueryParams({ category: 'hat', sort: 'random', seasons: 'summer,monsoon' })).toEqual({ ...DEFAULT_ITEM_QUERY, seasons: ['summer'] });
   });
 });

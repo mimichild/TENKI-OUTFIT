@@ -1,15 +1,17 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { FittedPhoto } from '@/components/FittedPhoto';
 import { ItemForm } from '@/components/ItemForm';
 import { LoadError } from '@/components/LoadError';
 import { ScreenPlaceholder } from '@/components/ScreenPlaceholder';
 import { useItemRepository } from '@/db/ItemRepositoryContext';
-import { useItemQuery } from '@/db/useItems';
+import { useActiveItemsQuery, useItemQuery } from '@/db/useItems';
 import { useT } from '@/i18n';
 import { formatPrice } from '@/lib/currency';
+import { adjacentItems, itemQueryParams, parseItemQueryParams } from '@/lib/itemQueries';
 import { moveItemToTrash, saveItem } from '@/lib/itemService';
 import { pickPhoto } from '@/lib/pickPhoto';
 import { removeBackground } from '@/lib/backgroundRemoval';
@@ -23,9 +25,38 @@ export default function ItemScreen() {
   const router = useRouter();
   const repo = useItemRepository();
   const currency = useSettingsStore(s => s.currency);
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string; category?: string; sort?: string; seasons?: string; occasions?: string; dir?: string }>();
+  const { id } = params;
   const { value: item, error, retry } = useItemQuery(id);
+  const { value: allItems } = useActiveItemsQuery();
   const [editing, setEditing] = useState(false);
+
+  // 左右滑換到隔壁的單品（服裝頁格子的順序，沿用篩選與排序）：由左往右 = 前一格，由右往左 = 後一格
+  const query = useMemo(
+    () => parseItemQueryParams(params),
+    [params.category, params.sort, params.seasons, params.occasions], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const neighbors = useMemo(
+    () => (allItems ? adjacentItems(allItems, query, id) : { prev: null, next: null }),
+    [allItems, query, id],
+  );
+  const go = (dir: 'prev' | 'next') => {
+    const target = neighbors[dir];
+    // replace：滑過好幾件後按返回，直接回到服裝頁
+    if (target) router.replace({ pathname: '/item/[id]', params: { id: target, ...itemQueryParams(query), dir } });
+  };
+  // 水平滑超過 20px 才啟動，上下捲動時讓給 ScrollView
+  const swipe = Gesture.Pan()
+    .withTestId('item-swipe')
+    .runOnJS(true)
+    .activeOffsetX([-20, 20])
+    .failOffsetY([-15, 15])
+    .onEnd(e => {
+      if (e.translationX >= SWIPE_DISTANCE) go('prev');
+      else if (e.translationX <= -SWIPE_DISTANCE) go('next');
+    });
+  // 從哪邊滑進來：前一格從左邊進來，後一格從右邊進來
+  const animation = params.dir === 'prev' ? 'slide_from_left' : params.dir === 'next' ? 'slide_from_right' : undefined;
 
   if (item === undefined) {
     return (
@@ -83,6 +114,7 @@ export default function ItemScreen() {
       <Stack.Screen
         options={{
           title: t('item.detail'),
+          animation,
           headerRight: () => (
             <Pressable accessibilityRole="button" accessibilityLabel={t('item.edit')} onPress={() => setEditing(true)} hitSlop={10}>
               <Text style={{ color: theme.primaryText, fontSize: 16 }}>{t('item.edit')}</Text>
@@ -90,30 +122,46 @@ export default function ItemScreen() {
           ),
         }}
       />
-      <ScrollView style={{ backgroundColor: theme.background }} contentContainerStyle={styles.content}>
-        <View style={[styles.photoBox, { borderColor: theme.border }]}>
-          {item.imageUri ? (
-            <FittedPhoto uri={item.imageUri} />
-          ) : (
-            <View style={styles.noPhoto}>
-              <Ionicons name="image-outline" size={40} color={theme.textMuted} />
-              <Text style={{ color: theme.textMuted }}>{t('item.noPhoto')}</Text>
-            </View>
-          )}
-        </View>
-        <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
-        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          {rows.map(([label, value]) => (
-            <View key={label} style={[styles.row, { borderColor: theme.border }]}>
-              <Text style={{ color: theme.textMuted, fontSize: 15 }}>{label}</Text>
-              <Text style={[styles.value, { color: theme.text }]}>{value}</Text>
-            </View>
-          ))}
-        </View>
-      </ScrollView>
+      <GestureDetector gesture={swipe}>
+        <ScrollView
+          style={{ backgroundColor: theme.background }}
+          contentContainerStyle={styles.content}
+          accessibilityActions={[
+            ...(neighbors.prev ? [{ name: 'prev', label: t('item.prev') }] : []),
+            ...(neighbors.next ? [{ name: 'next', label: t('item.next') }] : []),
+          ]}
+          onAccessibilityAction={e => {
+            const name = e.nativeEvent.actionName;
+            if (name === 'prev' || name === 'next') go(name);
+          }}
+        >
+          <View style={[styles.photoBox, { borderColor: theme.border }]}>
+            {item.imageUri ? (
+              <FittedPhoto uri={item.imageUri} />
+            ) : (
+              <View style={styles.noPhoto}>
+                <Ionicons name="image-outline" size={40} color={theme.textMuted} />
+                <Text style={{ color: theme.textMuted }}>{t('item.noPhoto')}</Text>
+              </View>
+            )}
+          </View>
+          <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
+          <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            {rows.map(([label, value]) => (
+              <View key={label} style={[styles.row, { borderColor: theme.border }]}>
+                <Text style={{ color: theme.textMuted, fontSize: 15 }}>{label}</Text>
+                <Text style={[styles.value, { color: theme.text }]}>{value}</Text>
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+      </GestureDetector>
     </>
   );
 }
+
+/** 水平滑多遠（px）才換單品 */
+const SWIPE_DISTANCE = 60;
 
 const styles = StyleSheet.create({
   content: { padding: 16, gap: 16 },

@@ -113,6 +113,8 @@ export const zhTW = {
   'filter.hint': '沒填季節或場合的單品一律顯示',
   'item.new': '新增單品',
   'item.detail': '單品',
+  'item.prev': '上一件',
+  'item.next': '下一件',
   'item.edit': '編輯',
   'item.brand': '品牌',
   'item.name': '名稱',

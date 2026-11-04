@@ -115,6 +115,8 @@ export const en: Record<keyof typeof zhTW, string> = {
   'filter.hint': 'Items without seasons/occasions always show',
   'item.new': 'New item',
   'item.detail': 'Item',
+  'item.prev': 'Previous item',
+  'item.next': 'Next item',
   'item.edit': 'Edit',
   'item.brand': 'Brand',
   'item.name': 'Name',

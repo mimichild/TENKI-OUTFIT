@@ -1,4 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { State } from 'react-native-gesture-handler';
+import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 import ItemScreen from '../../app/item/[id]';
 import NewItemScreen from '../../app/item/new';
 import { ItemRepositoryProvider } from '@/db/ItemRepositoryContext';
@@ -8,10 +10,11 @@ import { DEFAULT_SETTINGS, useSettingsStore } from '@/store/settingsStore';
 import { withFailures } from './helpers/failingRepo';
 
 const mockBack = jest.fn();
+const mockReplace = jest.fn();
 let mockParams: Record<string, string> = {};
-let mockScreenOptions: { headerRight?: () => React.ReactElement } = {};
+let mockScreenOptions: { headerRight?: () => React.ReactElement; animation?: string } = {};
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ back: mockBack }),
+  useRouter: () => ({ back: mockBack, replace: mockReplace }),
   useLocalSearchParams: () => mockParams,
   Stack: { Screen: ({ options }: { options: typeof mockScreenOptions }) => { mockScreenOptions = options; return null; } },
 }));
@@ -76,6 +79,67 @@ describe('item detail screen', () => {
     mockParams = { id: 'nope' };
     wrap(<ItemScreen />);
     expect(await screen.findByText('找不到這件單品')).toBeTruthy();
+  });
+});
+
+describe('item detail swipe', () => {
+  // 三件單品依序新增：a（最舊）→ b → c（最新）；b 是下著
+  beforeEach(async () => {
+    let n = 0;
+    const ids = ['a', 'b', 'c'];
+    repo = createMemoryItemRepository({ now: () => `2026-11-0${n + 1}T00:00:00.000Z`, newId: () => ids[n++] });
+    for (const [name, category] of [['舊上衣', 'top'], ['褲子', 'bottom'], ['新上衣', 'top']] as const) {
+      await repo.create({ name, brand: '', category, price: null, occasions: [], seasons: [], imageUri: null, originalUri: null });
+    }
+  });
+  const swipe = (dx: number) =>
+    act(() => fireGestureHandler(getByGestureTestId('item-swipe'), [
+      { state: State.BEGAN, translationX: 0 },
+      { state: State.ACTIVE, translationX: 0 },
+      { state: State.ACTIVE, translationX: dx },
+      { state: State.END, translationX: dx },
+    ]));
+
+  it('預設（最新排序）由左往右滑到較新的單品，由右往左滑到較舊的單品', async () => {
+    mockParams = { id: 'b' };
+    wrap(<ItemScreen />);
+    await screen.findByText('褲子');
+    swipe(120);
+    expect(mockReplace).toHaveBeenLastCalledWith({ pathname: '/item/[id]', params: { id: 'c', dir: 'prev' } });
+    swipe(-120);
+    expect(mockReplace).toHaveBeenLastCalledWith({ pathname: '/item/[id]', params: { id: 'a', dir: 'next' } });
+  });
+
+  it('滑太短不換；已經是最新的一件就不動', async () => {
+    mockParams = { id: 'c' };
+    wrap(<ItemScreen />);
+    await screen.findByText('新上衣');
+    swipe(-30);
+    swipe(120);
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('沿用服裝頁的分類：在「上衣」裡滑會跳過下著', async () => {
+    mockParams = { id: 'c', category: 'top' };
+    wrap(<ItemScreen />);
+    await screen.findByText('新上衣');
+    swipe(-120);
+    expect(mockReplace).toHaveBeenLastCalledWith({ pathname: '/item/[id]', params: { id: 'a', category: 'top', dir: 'next' } });
+  });
+
+  it('沿用服裝頁的排序：最舊排序時由左往右滑是較舊的單品', async () => {
+    mockParams = { id: 'b', sort: 'oldest' };
+    wrap(<ItemScreen />);
+    await screen.findByText('褲子');
+    swipe(120);
+    expect(mockReplace).toHaveBeenLastCalledWith({ pathname: '/item/[id]', params: { id: 'a', sort: 'oldest', dir: 'prev' } });
+  });
+
+  it('前一格從左邊滑進來，後一格從右邊滑進來', async () => {
+    mockParams = { id: 'a', dir: 'next' };
+    wrap(<ItemScreen />);
+    await screen.findByText('舊上衣');
+    expect(mockScreenOptions.animation).toBe('slide_from_right');
   });
 });
 
