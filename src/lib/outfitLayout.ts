@@ -98,6 +98,9 @@ function placementFor(rect: Rect, shape: PieceShape | null): Pick<OutfitItemPlac
 /** 每個分類的格子（畫布寬度為單位；畫布 1 × 4/3） */
 const SPOTS: Record<Category, Rect> = {
   top: { x: 0.04, y: 0.04, w: 0.44, h: 0.44 },
+  // 內搭放在上衣的位置；外搭疊在上衣上面（稍微小一點，看得到裡面的上衣）
+  inner: { x: 0.04, y: 0.04, w: 0.44, h: 0.44 },
+  overlay: { x: 0.08, y: 0.08, w: 0.36, h: 0.4 },
   bottom: { x: 0.04, y: 0.5, w: 0.44, h: 0.79 },
   onepiece: { x: 0.04, y: 0.04, w: 0.44, h: 1.25 },
   outerwear: { x: 0.52, y: 0.04, w: 0.44, h: 0.46 },
@@ -113,6 +116,8 @@ const Z_RANK: Record<Category, number> = {
   onepiece: 1,
   bottom: 1,
   top: 2,
+  inner: 2,
+  overlay: 2.5,
   shoes: 3,
   other: 4,
   bag: 5,

@@ -185,7 +185,11 @@ export function ItemForm({ initial, onPickPhoto, onRemoveBackground, onSubmit, o
         <Field theme={theme} label={t('item.name')}>
           <TextInput accessibilityLabel={t('item.name')} value={form.name} onChangeText={name => update({ name })} style={s.input} />
         </Field>
-        <Field theme={theme} label={t('item.category')}>
+        <Field
+          theme={theme}
+          label={t('item.category')}
+          hint={form.category === 'inner' || form.category === 'overlay' ? t(`item.categoryHint.${form.category}`) : undefined}
+        >
           <View style={s.chipRow}>
             {CATEGORIES.map(c => (
               <Chip key={c} label={t(`category.${c}`)} selected={form.category === c} onPress={() => update({ category: c })} />

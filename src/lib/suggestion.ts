@@ -8,6 +8,8 @@ import { layoutOutfit, type PieceShape } from './outfitLayout';
  * - 溫度：最高／最低體感的平均分段；缺體感時改用氣溫
  * - 單品沒有厚薄資料，用季節代表厚薄；沒填季節 = 四季、沒填場合 = 全場合
  * - 組合：上衣＋下著 或 連身 ＋ 外套（依溫度）＋ 鞋子；包包、配件有就各配一件；「其他」不推薦
+ * - 內著（內搭）可以當上衣，但一定要搭外套（炎熱時有一般上衣就不用內著）；
+ *   外搭（例如小背心）只會疊在一般上衣外面，不單穿（2026-11-04）
  * - 配色與風格（2026-11-04）：隨機產生多組候選，依配色（同色系、黑白灰、大地色、一點亮色；撞色扣分）
  *   與風格（淑女風、休閒風是否一致、是否符合場合）評分，從接近最高分的候選中挑一組，按「更新」才有變化
  */
@@ -155,28 +157,42 @@ export function candidatesFor(
   );
 }
 
-type Slot = 'outerwear' | 'top' | 'bottom' | 'onepiece' | 'shoes' | 'bag' | 'accessory';
-const SLOT_ORDER: Slot[] = ['outerwear', 'top', 'bottom', 'onepiece', 'shoes', 'bag', 'accessory'];
+/** top 這一格可能放上衣或內著 */
+type Slot = 'outerwear' | 'top' | 'overlay' | 'bottom' | 'onepiece' | 'shoes' | 'bag' | 'accessory';
+const SLOT_ORDER: Slot[] = ['outerwear', 'top', 'overlay', 'bottom', 'onepiece', 'shoes', 'bag', 'accessory'];
 type Picks = Partial<Record<Slot, Item>>;
-type Pool = Record<Slot, Item[]>;
+type Pool = Record<Slot | 'inner', Item[]>;
+
+/** top 這一格可以放的單品：有外套可搭時內著也可以（炎熱、不需要外套時，有一般上衣就只用上衣） */
+function topChoices(pool: Pool, rule: OuterwearRule): Item[] {
+  if (pool.inner.length === 0 || pool.outerwear.length === 0) return pool.top;
+  if (rule === 'none' && pool.top.length > 0) return pool.top;
+  return [...pool.top, ...pool.inner];
+}
+
+/** 內著一定有外套；外搭一定疊在一般上衣外面 */
+const isValid = (p: Picks) => (p.top?.category !== 'inner' || !!p.outerwear) && (!p.overlay || p.top?.category === 'top');
 
 const pick = (list: Item[], rng: () => number) => list[Math.min(list.length - 1, Math.floor(rng() * list.length))];
 
 function randomPicks(pool: Pool, rule: OuterwearRule, rng: () => number): Picks | null {
-  const separates = pool.top.length > 0 && pool.bottom.length > 0;
+  const tops = topChoices(pool, rule);
+  const separates = tops.length > 0 && pool.bottom.length > 0;
   const onepiece = pool.onepiece.length > 0;
   if (!separates && !onepiece) return null;
   const useSeparates = separates && onepiece ? rng() < 0.5 : separates;
   const picks: Picks = {};
   if (useSeparates) {
-    picks.top = pick(pool.top, rng);
+    picks.top = pick(tops, rng);
     picks.bottom = pick(pool.bottom, rng);
   } else {
     picks.onepiece = pick(pool.onepiece, rng);
   }
-  if (pool.outerwear.length > 0 && (rule === 'required' || (rule === 'optional' && rng() < 0.5))) {
+  const innerNeedsOuter = picks.top?.category === 'inner';
+  if (pool.outerwear.length > 0 && (innerNeedsOuter || rule === 'required' || (rule === 'optional' && rng() < 0.5))) {
     picks.outerwear = pick(pool.outerwear, rng);
   }
+  if (picks.top?.category === 'top' && pool.overlay.length > 0 && rng() < 0.5) picks.overlay = pick(pool.overlay, rng);
   if (pool.shoes.length > 0) picks.shoes = pick(pool.shoes, rng);
   if (pool.bag.length > 0) picks.bag = pick(pool.bag, rng);
   if (pool.accessory.length > 0) picks.accessory = pick(pool.accessory, rng);
@@ -189,22 +205,27 @@ const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every(i
 /** 隨機抽不到不同的組合時，逐一換掉某一格，找第一個不同的組合 */
 function alternativePicks(base: Picks, pool: Pool, rule: OuterwearRule, previous: string[]): Picks | null {
   const variants: Picks[] = [];
+  const tops = topChoices(pool, rule);
   for (const slot of SLOT_ORDER) {
     const current = base[slot];
     if (!current) continue;
-    for (const other of pool[slot]) if (other.id !== current.id) variants.push({ ...base, [slot]: other });
+    for (const other of slot === 'top' ? tops : pool[slot]) if (other.id !== current.id) variants.push({ ...base, [slot]: other });
   }
   if (rule === 'optional' && pool.outerwear.length > 0) {
     if (base.outerwear) variants.push({ ...base, outerwear: undefined });
     else for (const o of pool.outerwear) variants.push({ ...base, outerwear: o });
   }
-  const rest = { outerwear: base.outerwear, shoes: base.shoes, bag: base.bag, accessory: base.accessory };
-  if (base.onepiece && pool.top.length > 0 && pool.bottom.length > 0) {
-    for (const top of pool.top) for (const bottom of pool.bottom) variants.push({ ...rest, top, bottom });
-  } else if (!base.onepiece) {
-    for (const onepiece of pool.onepiece) variants.push({ ...rest, onepiece });
+  if (base.top?.category === 'top' && pool.overlay.length > 0) {
+    if (base.overlay) variants.push({ ...base, overlay: undefined });
+    else for (const o of pool.overlay) variants.push({ ...base, overlay: o });
   }
-  return variants.find(v => !sameSet(idsOf(v), previous)) ?? null;
+  const rest = { outerwear: base.outerwear ?? pool.outerwear[0], shoes: base.shoes, bag: base.bag, accessory: base.accessory };
+  if (base.onepiece && tops.length > 0 && pool.bottom.length > 0) {
+    for (const top of tops) for (const bottom of pool.bottom) variants.push({ ...rest, outerwear: top.category === 'inner' ? rest.outerwear : base.outerwear, top, bottom });
+  } else if (!base.onepiece) {
+    for (const onepiece of pool.onepiece) variants.push({ ...rest, outerwear: base.outerwear, onepiece });
+  }
+  return variants.filter(isValid).find(v => !sameSet(idsOf(v), previous)) ?? null;
 }
 
 const RANDOM_TRIES = 20;
@@ -213,7 +234,7 @@ const CANDIDATES = 24;
 /** 和最高分差距小於這個值的候選都可能被選中（讓「更新」有變化；差一個等級就不選） */
 const NEAR_BEST = 0.5;
 
-const CLOTHES: Slot[] = ['outerwear', 'top', 'bottom', 'onepiece'];
+const CLOTHES: Category[] = ['outerwear', 'top', 'inner', 'overlay', 'bottom', 'onepiece'];
 
 /** 整套的配色與風格 */
 export function lookOf(pieces: Item[], colorOf: (item: Item) => ColorTag | null): Look {
@@ -268,11 +289,11 @@ export function suggestOutfit(input: SuggestionInput, options: SuggestionOptions
   const rule = outerwearRule(basis);
   const pop = input.weather?.pop ?? null;
   const filter = { band, occasion: input.occasion };
-  const pool = Object.fromEntries(SLOT_ORDER.map(s => [s, candidatesFor(input.items, s, filter)])) as Pool;
+  const pool = Object.fromEntries([...SLOT_ORDER, 'inner' as const].map(s => [s, candidatesFor(input.items, s, filter)])) as Pool;
   const colorOf = input.colorOf ?? ((item: Item) => item.color ?? null);
 
   const emptyReason = (): EmptyReason => {
-    const need = (['top', 'bottom'] as const).filter(c => pool[c].length === 0);
+    const need = (['top', 'bottom'] as const).filter(c => (c === 'top' ? topChoices(pool, rule) : pool[c]).length === 0);
     return { need, filtered: need.filter(c => input.items.some(i => i.category === c)) };
   };
 

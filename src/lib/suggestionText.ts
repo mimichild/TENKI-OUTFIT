@@ -42,12 +42,17 @@ export function describeSuggestion(s: Suggestion, opts: DescribeOptions): string
   const outerwear = find('outerwear');
   const outer = outerwear ? label(outerwear) : '';
   const onepiece = find('onepiece');
-  const top = find('top');
+  // 上衣那一格可能是內著；有外搭時寫成「上衣外搭小背心」
+  const top = s.pieces.find(p => p.category === 'top' || p.category === 'inner');
+  const overlay = find('overlay');
   const bottom = find('bottom');
   const line1 =
     onepiece || !top || !bottom
       ? t(outerwear ? 'suggest.line1.onepieceOuter' : 'suggest.line1.onepiece', { onepiece: onepiece ? label(onepiece) : '', outer, vibe })
-      : t(outerwear ? 'suggest.line1.separatesOuter' : 'suggest.line1.separates', { top: label(top), bottom: label(bottom), outer, vibe });
+      : t(outerwear ? 'suggest.line1.separatesOuter' : 'suggest.line1.separates', {
+          top: overlay ? t('suggest.topWithOverlay', { top: label(top), overlay: label(overlay) }) : label(top),
+          bottom: label(bottom), outer, vibe,
+        });
 
   if (!s.basis || !s.band) return [line1, t('suggest.noWeather')];
 

@@ -1,7 +1,7 @@
 import type { Category, ColorTag, Occasion, Season, StyleTag } from '@/types/models';
 
 export const CATEGORIES: Category[] = [
-  'top', 'bottom', 'onepiece', 'outerwear', 'shoes', 'bag', 'accessory', 'other',
+  'top', 'inner', 'overlay', 'bottom', 'onepiece', 'outerwear', 'shoes', 'bag', 'accessory', 'other',
 ];
 
 export const SEASONS: Season[] = ['spring', 'summer', 'autumn', 'winter'];

@@ -476,3 +476,81 @@ describe('配色與風格', () => {
     expect(next.noAlternative).toBe(false);
   });
 });
+
+describe('內著與外搭', () => {
+  const seeded = (seed: number) => () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648;
+  };
+  const cats = (r: { pieces: Item[] }) => r.pieces.map(p => p.category);
+
+  it('用到內著時一定搭外套，即使天氣熱到不需要外套', () => {
+    const items = [item('inner', { name: '細肩帶' }), item('bottom'), item('outerwear', { name: '薄襯衫外套' })];
+    for (const w of [weather(33, 28), weather(25, 21), null]) {
+      for (let seed = 1; seed <= 10; seed++) {
+        const r = suggestOutfit({ items, weather: w, occasion: null }, { rng: seeded(seed) });
+        expect(cats(r)).toEqual(expect.arrayContaining(['inner', 'outerwear']));
+      }
+    }
+  });
+
+  it('沒有外套可搭時不會推薦內著單穿', () => {
+    const r = suggestOutfit({ items: [item('inner'), item('bottom')], weather: weather(25, 21), occasion: null }, { rng: () => 0 });
+    expect(r.status).toBe('empty');
+    expect(r.emptyReason?.need).toEqual(['top']);
+  });
+
+  it('炎熱時有一般上衣就用上衣，不用內著＋外套', () => {
+    const items = [item('top', { name: 'T恤' }), item('inner'), item('bottom'), item('outerwear')];
+    for (let seed = 1; seed <= 20; seed++) {
+      const r = suggestOutfit({ items, weather: weather(33, 28), occasion: null }, { rng: seeded(seed) });
+      expect(cats(r)).not.toContain('inner');
+    }
+  });
+
+  it('外搭只會疊在一般上衣外面：不會單穿、不會配連身或內著', () => {
+    const vest = item('overlay', { name: '針織背心' });
+    const items = [item('top', { name: '白T' }), item('inner'), item('onepiece'), item('bottom'), item('outerwear'), vest];
+    let withVest = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const r = suggestOutfit({ items, weather: weather(22, 18), occasion: null }, { rng: seeded(seed) });
+      const c = cats(r);
+      if (c.includes('overlay')) {
+        withVest++;
+        expect(c).toContain('top');
+        expect(c).not.toContain('onepiece');
+        expect(c).not.toContain('inner');
+      }
+    }
+    expect(withVest).toBeGreaterThan(0);
+    // 只有外搭、沒有上衣：湊不成一套
+    expect(suggestOutfit({ items: [vest, item('bottom')], weather: null, occasion: null }).status).toBe('empty');
+  });
+
+  it('「更新」換組合時也遵守內著、外搭的規則', () => {
+    const items = [item('inner', { name: 'A' }), item('top', { name: 'B' }), item('bottom'), item('outerwear'), item('overlay')];
+    let prev: string[] = [];
+    for (let i = 0; i < 15; i++) {
+      const r = suggestOutfit({ items, weather: weather(22, 18), occasion: null }, { rng: seeded(i + 1), previous: prev });
+      const c = cats(r);
+      if (c.includes('inner')) expect(c).toContain('outerwear');
+      if (c.includes('overlay')) expect(c).toContain('top');
+      prev = r.pieces.map(p => p.id);
+    }
+  });
+
+  it('說明寫成「上衣外搭背心」', () => {
+    const r = suggestOutfit(
+      { items: [item('top', { name: '白T' }), item('overlay', { name: '針織背心' }), item('bottom', { name: '長裙' })], weather: weather(25, 21), occasion: null },
+      { rng: () => 0 },
+    );
+    expect(describeSuggestion(r, { language: 'zh-TW', day: 'today', occasion: null })[0]).toMatch(/^白T外搭針織背心搭配長裙，/);
+  });
+
+  it('排版時外搭疊在上衣上面', () => {
+    const top = item('top');
+    const vest = item('overlay');
+    const [t, v] = suggestionLayout([top, vest]);
+    expect(v.z).toBeGreaterThan(t.z);
+  });
+});

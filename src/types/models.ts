@@ -1,5 +1,9 @@
 export type Category =
   | 'top'
+  /** 內著（內搭，例如細肩帶、坦克背心）：穿搭建議一定會搭外套，不單穿 */
+  | 'inner'
+  /** 外搭（例如外罩小背心）：穿搭建議一定會內搭上衣，不單穿 */
+  | 'overlay'
   | 'bottom'
   | 'onepiece'
   | 'outerwear'
