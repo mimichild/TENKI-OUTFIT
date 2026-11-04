@@ -1,9 +1,13 @@
-import type { Item } from '@/types/models';
+import type { ColorTag, Item, StyleTag } from '@/types/models';
 
 export type ItemInput = Pick<
   Item,
   'name' | 'brand' | 'category' | 'price' | 'occasions' | 'seasons' | 'imageUri' | 'originalUri'
->;
+> & {
+  /** 新增時沒給 = null；更新時沒給 = 保留原值（null = 清掉） */
+  color?: ColorTag | null;
+  style?: StyleTag | null;
+};
 
 export interface RepositoryDeps {
   now: () => string;

@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,6 +15,7 @@ import { outfitTotal } from '@/lib/outfitTotals';
 import { pieceAt } from '@/lib/pieceHit';
 import { usePieceShapes } from '@/lib/usePieceShapes';
 import { weekdayOf } from '@/lib/weatherDates';
+import { useCanvasStore, useSharedCanvasRatio } from '@/store/canvasStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme, type Theme } from '@/theme/useTheme';
 import type { Item, OutfitItemPlacement, OutfitPiece } from '@/types/models';
@@ -65,7 +66,13 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
   // 畫布寬度填滿、高度延伸到底部按鈕列：量出日期列與按鈕列之間的空間，比例存進穿搭
   const [area, setArea] = useState<{ width: number; height: number } | null>(null);
   const initialRatio = initial.canvasRatio ?? CANVAS_HEIGHT_RATIO;
-  const canvasRatio = area ? editorCanvasRatio(area, initialRatio) : initialRatio;
+  // 和天氣穿搭日檢視共用同一個比例（兩邊可用空間比較小的那個）
+  const ownRatio = area ? editorCanvasRatio(area, initialRatio) : null;
+  const reportCanvas = useCanvasStore(st => st.report);
+  useEffect(() => {
+    if (ownRatio !== null) reportCanvas('editor', ownRatio);
+  }, [ownRatio, reportCanvas]);
+  const canvasRatio = useSharedCanvasRatio(ownRatio ?? initialRatio);
   const canvasWidth = area && area.width > 0 ? area.width : window.width;
   const selectedIds = useMemo(() => new Set(pieces.map(p => p.itemId)), [pieces]);
   // 照片裡衣服的形狀：判斷手指有沒有碰到衣服（透明的部分不算）

@@ -104,7 +104,8 @@ describe('measurePhoto', () => {
   it('measures the visible area and releases every native object', async () => {
     mockFromURI.mockResolvedValue({ dispose: () => mockDisposed.push('data') });
     const shape = await measurePhoto('file:///a.png');
-    expect(shape).toEqual({ aspect: 2, bounds: { x0: 0.5, y0: 0.5, x1: 0.75, y1: 1 }, mask: expect.any(String) });
+    expect(shape).toEqual({ aspect: 2, bounds: { x0: 0.5, y0: 0.5, x1: 0.75, y1: 1 }, mask: expect.any(String), color: 'black' });
+    // 測試的像素 RGB 都是 0（只有透明度 255）→ 黑色
     // 遮罩只在衣服的範圍（右下那塊）有 1
     expect(isMask(shape!.mask)).toBe(true);
     const at = (u: number, v: number) => shape!.mask![Math.floor(v * MASK_GRID) * MASK_GRID + Math.floor(u * MASK_GRID)];

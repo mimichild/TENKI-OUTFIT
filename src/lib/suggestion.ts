@@ -1,4 +1,6 @@
-import type { Category, Item, Occasion, OutfitItemPlacement, OutfitPiece, Season } from '@/types/models';
+import type { Category, ColorTag, Item, Occasion, OutfitItemPlacement, OutfitPiece, Season, StyleTag } from '@/types/models';
+import { colorGroup, isNeutralGroup } from './itemColor';
+import { inferStyle } from './itemStyle';
 import { layoutOutfit, type PieceShape } from './outfitLayout';
 
 /**
@@ -6,6 +8,8 @@ import { layoutOutfit, type PieceShape } from './outfitLayout';
  * - 溫度：最高／最低體感的平均分段；缺體感時改用氣溫
  * - 單品沒有厚薄資料，用季節代表厚薄；沒填季節 = 四季、沒填場合 = 全場合
  * - 組合：上衣＋下著 或 連身 ＋ 外套（依溫度）＋ 鞋子；包包、配件有就各配一件；「其他」不推薦
+ * - 配色與風格（2026-11-04）：隨機產生多組候選，依配色（同色系、黑白灰、大地色、一點亮色；撞色扣分）
+ *   與風格（淑女風、休閒風是否一致、是否符合場合）評分，從接近最高分的候選中挑一組，按「更新」才有變化
  */
 
 export type TempBand = 'hot' | 'warm' | 'cool' | 'cold';
@@ -32,6 +36,27 @@ export interface SuggestionInput {
   weather: SuggestionWeather | null;
   /** null = 不限場合 */
   occasion: Occasion | null;
+  /** 單品的顏色（手動設定或照片自動判斷）；沒給時只用 item.color */
+  colorOf?: (item: Item) => ColorTag | null;
+}
+
+/**
+ * 配色：
+ * - tonal：同色系（兩件以上同一色系，其餘黑白灰／大地色）
+ * - mono：黑白灰
+ * - earth：大地色（可搭黑白灰）
+ * - accent：一件有彩色＋其餘中性色
+ * - clash：兩種以上不同色系（扣分，盡量不推薦）
+ * - unknown：知道顏色的衣服不到兩件
+ */
+export type ColorScheme = 'tonal' | 'mono' | 'earth' | 'accent' | 'clash' | 'unknown';
+
+export interface Look {
+  scheme: ColorScheme;
+  /** tonal、accent 時是哪個顏色 */
+  schemeColor: ColorTag | null;
+  /** 整套一致的風格；null = 看不出來或混搭 */
+  style: StyleTag | null;
 }
 
 export interface SuggestionOptions {
@@ -56,6 +81,8 @@ export interface Suggestion {
   noAlternative: boolean;
   /** status 為 empty 時：湊不成一套缺哪一類；ok 時為 null */
   emptyReason: EmptyReason | null;
+  /** 配色與風格（說明文字用） */
+  look: Look;
 }
 
 export type BaseCategory = 'top' | 'bottom';
@@ -181,6 +208,58 @@ function alternativePicks(base: Picks, pool: Pool, rule: OuterwearRule, previous
 }
 
 const RANDOM_TRIES = 20;
+/** 有顏色／風格資料時，一次產生幾組候選來評分 */
+const CANDIDATES = 24;
+/** 和最高分差距小於這個值的候選都可能被選中（讓「更新」有變化；差一個等級就不選） */
+const NEAR_BEST = 0.5;
+
+const CLOTHES: Slot[] = ['outerwear', 'top', 'bottom', 'onepiece'];
+
+/** 整套的配色與風格 */
+export function lookOf(pieces: Item[], colorOf: (item: Item) => ColorTag | null): Look {
+  const clothes = pieces.filter(p => (CLOTHES as string[]).includes(p.category));
+  const colors = clothes.map(colorOf).filter((c): c is ColorTag => c !== null);
+  let scheme: ColorScheme = 'unknown';
+  let schemeColor: ColorTag | null = null;
+  if (colors.length >= 2) {
+    const chromatic = colors.filter(c => !isNeutralGroup(colorGroup(c)));
+    const families = new Set(chromatic.map(colorGroup));
+    if (families.size >= 2) scheme = 'clash';
+    else if (families.size === 1) {
+      scheme = chromatic.length >= 2 ? 'tonal' : 'accent';
+      schemeColor = chromatic[0];
+    } else scheme = colors.some(c => colorGroup(c) === 'earth') ? 'earth' : 'mono';
+  }
+  const styles = styleSet(pieces);
+  return { scheme, schemeColor, style: styles.size === 1 ? [...styles][0] : null };
+}
+
+/** 風格看衣服和鞋子（包包、配件不算）；沒手動設定的用名稱與場合推測 */
+function styleSet(pieces: Item[]): Set<StyleTag> {
+  return new Set(
+    pieces
+      .filter(p => p.category !== 'bag' && p.category !== 'accessory')
+      .map(p => p.style ?? inferStyle(p))
+      .filter((x): x is StyleTag => x !== null),
+  );
+}
+
+const SCHEME_SCORE: Record<ColorScheme, number> = { tonal: 3, mono: 3, earth: 3, accent: 2.5, unknown: 1.5, clash: 0 };
+
+/** 配色＋風格一致＋符合場合 */
+function scoreLook(pieces: Item[], colorOf: (item: Item) => ColorTag | null, occasion: Occasion | null): number {
+  const look = lookOf(pieces, colorOf);
+  let score = SCHEME_SCORE[look.scheme];
+  const styles = styleSet(pieces);
+  // 風格一致加分、淑女混休閒扣分
+  score += styles.size === 1 ? 2 : styles.size === 0 ? 1 : 0;
+  if (occasion === 'date' || occasion === 'formal') score += look.style === 'feminine' ? 1 : 0;
+  if (occasion === 'casual' || occasion === 'sport' || occasion === 'travel') score += look.style === 'casual' ? 1 : 0;
+  if ((occasion === 'work' || occasion === 'formal') && (look.scheme === 'mono' || look.scheme === 'earth')) score += 0.5;
+  return score;
+}
+
+const picked = (picks: Picks) => SLOT_ORDER.flatMap(s => (picks[s] ? [picks[s]] : []));
 
 export function suggestOutfit(input: SuggestionInput, options: SuggestionOptions = {}): Suggestion {
   const rng = options.rng ?? Math.random;
@@ -190,6 +269,7 @@ export function suggestOutfit(input: SuggestionInput, options: SuggestionOptions
   const pop = input.weather?.pop ?? null;
   const filter = { band, occasion: input.occasion };
   const pool = Object.fromEntries(SLOT_ORDER.map(s => [s, candidatesFor(input.items, s, filter)])) as Pool;
+  const colorOf = input.colorOf ?? ((item: Item) => item.color ?? null);
 
   const emptyReason = (): EmptyReason => {
     const need = (['top', 'bottom'] as const).filter(c => pool[c].length === 0);
@@ -202,9 +282,10 @@ export function suggestOutfit(input: SuggestionInput, options: SuggestionOptions
       if (rule === 'required' && !picks.outerwear) missing.push('outerwear');
       if (!picks.shoes) missing.push('shoes');
     }
+    const pieces = picks ? picked(picks) : [];
     return {
       status: picks ? 'ok' : 'empty',
-      pieces: picks ? SLOT_ORDER.flatMap(s => (picks[s] ? [picks[s]] : [])) : [],
+      pieces,
       missing,
       basis,
       band,
@@ -213,12 +294,37 @@ export function suggestOutfit(input: SuggestionInput, options: SuggestionOptions
       pop,
       noAlternative,
       emptyReason: picks ? null : emptyReason(),
+      look: lookOf(pieces, colorOf),
     };
   };
 
+  const previous = options.previous ?? [];
+  const isPrevious = (p: Picks) => previous.length > 0 && sameSet(idsOf(p), previous);
+
+  // 衣櫃裡有顏色或風格資料：產生多組候選評分
+  const informative = SLOT_ORDER.some(s => pool[s].some(i => colorOf(i) !== null || (i.style ?? inferStyle(i)) !== null));
+  if (informative) {
+    const candidates: { picks: Picks; score: number }[] = [];
+    let first: Picks | null = null;
+    for (let i = 0; i < CANDIDATES; i++) {
+      const p = randomPicks(pool, rule, rng);
+      if (!p) return result(null);
+      first ??= p;
+      if (isPrevious(p) || candidates.some(c => sameSet(idsOf(c.picks), idsOf(p)))) continue;
+      candidates.push({ picks: p, score: scoreLook(picked(p), colorOf, input.occasion) });
+    }
+    if (candidates.length > 0) {
+      const best = Math.max(...candidates.map(c => c.score));
+      const near = candidates.filter(c => c.score > best - NEAR_BEST);
+      return result(near[Math.min(near.length - 1, Math.floor(rng() * near.length))].picks);
+    }
+    const alt = first && alternativePicks(first, pool, rule, previous);
+    return alt ? result(alt) : result(first, true);
+  }
+
+  // 沒有任何顏色、風格資料：照舊隨機挑
   let picks = randomPicks(pool, rule, rng);
-  const previous = options.previous;
-  if (!picks || !previous || previous.length === 0 || !sameSet(idsOf(picks), previous)) return result(picks);
+  if (!picks || !isPrevious(picks)) return result(picks);
   for (let i = 0; i < RANDOM_TRIES; i++) {
     const next = randomPicks(pool, rule, rng);
     if (next && !sameSet(idsOf(next), previous)) return result(next);

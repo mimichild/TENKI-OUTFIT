@@ -36,7 +36,7 @@ export interface BackupStore {
 
 const ITEM_COLS = [
   'id', 'name', 'brand', 'category', 'price', 'occasions', 'seasons', 'image_uri', 'original_uri',
-  'created_at', 'updated_at', 'last_used_at', 'deleted_at', 'archived_at',
+  'created_at', 'updated_at', 'last_used_at', 'deleted_at', 'archived_at', 'color', 'style',
 ] as const satisfies readonly (keyof BackupItemRow)[];
 const OUTFIT_COLS = ['id', 'name', 'date', 'created_at', 'updated_at', 'canvas_ratio'] as const satisfies readonly (keyof BackupOutfitRow)[];
 const PLACEMENT_COLS = ['outfit_id', 'item_id', 'x', 'y', 'scale', 'rotation', 'z'] as const satisfies readonly (keyof BackupPlacementRow)[];
@@ -54,7 +54,8 @@ async function insertAll<T>(tx: WriteTx, table: string, cols: readonly (keyof T 
   const stmt = await tx.prepareAsync(sql);
   try {
     for (const row of list) {
-      await stmt.executeAsync(...cols.map(c => row[c] as string | number | null));
+      // 舊版備份沒有的欄位（undefined）寫入 NULL
+      await stmt.executeAsync(...cols.map(c => (row[c] ?? null) as string | number | null));
     }
   } finally {
     // finalize 失敗只記錄，不蓋掉寫入時的錯誤（交易一樣會回復）

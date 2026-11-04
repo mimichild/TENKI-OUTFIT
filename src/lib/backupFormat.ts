@@ -1,3 +1,4 @@
+import { COLORS, STYLES } from '@/constants/options';
 import { sanitizeSettings, type Settings } from '@/store/settingsStore';
 import { DEFAULT_CANVAS_RATIO } from '@/db/outfitRepository';
 import { isOwnedPhotoPath } from './photoPath';
@@ -29,6 +30,9 @@ export interface BackupItemRow {
   last_used_at: string | null;
   deleted_at: string | null;
   archived_at: string | null;
+  /** 單品主色與風格（DB v4 起）；舊備份沒有 = null */
+  color?: string | null;
+  style?: string | null;
 }
 
 export interface BackupOutfitRow {
@@ -160,6 +164,7 @@ const photo = (o: Obj, key: string) => {
   const v = strOrNull(o, key);
   return isOwnedPhotoPath(v) ? v : null;
 };
+const oneOf = (v: string | null, allowed: readonly string[]): string | null => (v !== null && allowed.includes(v) ? v : null);
 function unique<T>(list: T[], keyOf: (v: T) => string): void {
   const seen = new Set<string>();
   for (const v of list) {
@@ -188,6 +193,9 @@ function parseData(raw: unknown): BackupData {
       last_used_at: strOrNull(o, 'last_used_at'),
       deleted_at: timeOrNull(o, 'deleted_at'),
       archived_at: timeOrNull(o, 'archived_at'),
+      // 不認得的值當作沒設定，不算備份損壞
+      color: oneOf(strOrNull(o, 'color'), COLORS),
+      style: oneOf(strOrNull(o, 'style'), STYLES),
     }),
   );
   const outfits = rows(raw, 'outfits').map((o): BackupOutfitRow => {

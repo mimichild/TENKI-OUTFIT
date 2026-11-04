@@ -12,6 +12,8 @@ import { useActiveItemsQuery, useItemQuery } from '@/db/useItems';
 import { useT } from '@/i18n';
 import { formatPrice } from '@/lib/currency';
 import { adjacentItems, itemQueryParams, parseItemQueryParams } from '@/lib/itemQueries';
+import { inferStyle } from '@/lib/itemStyle';
+import { useAutoColor } from '@/lib/useAutoColor';
 import { moveItemToTrash, saveItem } from '@/lib/itemService';
 import { pickPhoto } from '@/lib/pickPhoto';
 import { removeBackground } from '@/lib/backgroundRemoval';
@@ -29,6 +31,7 @@ export default function ItemScreen() {
   const { id } = params;
   const { value: item, error, retry } = useItemQuery(id);
   const { value: allItems } = useActiveItemsQuery();
+  const autoColor = useAutoColor(item?.imageUri ?? null);
   const [editing, setEditing] = useState(false);
 
   // 左右滑換到隔壁的單品（服裝頁格子的順序，沿用篩選與排序）：由左往右 = 前一格，由右往左 = 後一格
@@ -83,6 +86,7 @@ export default function ItemScreen() {
           initial={{
             name: item.name, brand: item.brand, category: item.category, price: item.price,
             occasions: item.occasions, seasons: item.seasons, imageUri: item.imageUri, originalUri: item.originalUri,
+            color: item.color ?? null, style: item.style ?? null,
           }}
           onPickPhoto={pickPhoto}
           onRemoveBackground={removeBackground}
@@ -108,6 +112,13 @@ export default function ItemScreen() {
     [t('item.occasions'), item.occasions.length ? item.occasions.map(o => t(`occasion.${o}`)).join(t('common.listSeparator')) : t('item.allOccasions')],
     [t('item.seasons'), item.seasons.length ? item.seasons.map(s => t(`season.${s}`)).join(t('common.listSeparator')) : t('item.allSeasons')],
   ];
+  // 沒手動設定時顯示自動判斷的結果（加註「自動」）
+  const color = item.color ?? autoColor;
+  const style = item.style ?? inferStyle(item);
+  rows.push(
+    [t('item.color'), color ? t(`color.${color}`) + (item.color ? '' : t('item.autoSuffix')) : '—'],
+    [t('item.style'), style ? t(`style.${style}`) + (item.style ? '' : t('item.autoSuffix')) : t('item.anyStyle')],
+  );
 
   return (
     <>

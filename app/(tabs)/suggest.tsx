@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Chip } from '@/components/Chip';
 import { LoadError } from '@/components/LoadError';
@@ -46,8 +46,11 @@ export default function SuggestScreen() {
 
   const date = day === 'today' ? weather.today : addDays(weather.today, 1);
   const dayWeather = weather.days?.find(d => d.date === date) ?? null;
-  const ready = items !== undefined && weather.days !== undefined;
-  const input = useMemo(() => ({ items: items ?? [], weather: dayWeather, occasion }), [items, dayWeather, occasion]);
+  // 單品顏色：手動設定優先，沒設定的用照片自動判斷（量過的會快取，不會每次重算）
+  const allShapes = usePieceShapes(items);
+  const colorOf = useCallback((item: Item) => item.color ?? allShapes?.get(item.id)?.color ?? null, [allShapes]);
+  const ready = items !== undefined && weather.days !== undefined && allShapes !== undefined;
+  const input = useMemo(() => ({ items: items ?? [], weather: dayWeather, occasion, colorOf }), [items, dayWeather, occasion, colorOf]);
   // 目前的天氣條件（不抽籤）；天氣只看會影響挑選的條件，重抓到同一段溫度不重抽
   const probe = useMemo(() => (ready ? suggestOutfit(input, { rng: () => 0 }) : null), [ready, input]);
   const key = probe ? `${date}|${occasion ?? ''}|${probe.band}|${probe.outerwear}` : '';

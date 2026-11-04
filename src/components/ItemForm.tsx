@@ -1,14 +1,16 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { CATEGORIES, OCCASIONS, SEASONS } from '@/constants/options';
+import { CATEGORIES, COLOR_SWATCHES, COLORS, OCCASIONS, SEASONS, STYLES } from '@/constants/options';
 import type { ItemInput } from '@/db/itemRepository';
 import { useT } from '@/i18n';
 import { CURRENCIES } from '@/lib/currency';
 import type { BgRemovalResult } from '@/lib/backgroundRemoval';
 import type { PhotoChange } from '@/lib/itemService';
 import type { PhotoSource } from '@/lib/pickPhoto';
+import { inferStyle } from '@/lib/itemStyle';
 import { ITEM_PHOTO_ASPECT } from '@/lib/photoFit';
+import { useAutoColor } from '@/lib/useAutoColor';
 import { resolvePhotoUri } from '@/lib/photoStorage';
 import { FittedPhoto } from './FittedPhoto';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -69,6 +71,11 @@ export function ItemForm({ initial, onPickPhoto, onRemoveBackground, onSubmit, o
   const pickSeq = useRef(0);
 
   const previewUri = photo.kind === 'replace' ? photo.imageUri : photo.kind === 'remove' ? null : initial.imageUri;
+  // 顏色、風格沒手動選時自動判斷（資料庫只存手動選的，null = 自動）
+  const autoColor = useAutoColor(cutout === 'running' ? null : previewUri);
+  const autoStyle = inferStyle(form);
+  const shownColor = form.color ?? autoColor;
+  const shownStyle = form.style ?? autoStyle;
   const busy = saving || cutout === 'running';
 
   /** 手動修改用的兩張圖：目前顯示圖 + 補回筆刷的來源（沒有原圖的舊資料就用顯示圖） */
@@ -195,6 +202,36 @@ export function ItemForm({ initial, onPickPhoto, onRemoveBackground, onSubmit, o
               keyboardType="decimal-pad"
               style={[s.input, { flex: 1 }]}
             />
+          </View>
+        </Field>
+        <Field
+          theme={theme}
+          label={t('item.color')}
+          hint={form.color ? t('item.colorManual') : autoColor ? t('item.colorAuto', { color: t(`color.${autoColor}`) }) : t('item.colorAutoNone')}
+        >
+          <View style={s.chipRow}>
+            {COLORS.map(c => (
+              <Chip
+                key={c}
+                role="radio"
+                swatch={COLOR_SWATCHES[c]}
+                label={t(`color.${c}`)}
+                selected={shownColor === c}
+                // 再點一次手動選的顏色 = 改回自動判斷
+                onPress={() => update({ color: form.color === c ? null : c })}
+              />
+            ))}
+          </View>
+        </Field>
+        <Field
+          theme={theme}
+          label={t('item.style')}
+          hint={form.style ? t('item.styleManual') : autoStyle ? t('item.styleAuto', { style: t(`style.${autoStyle}`) }) : t('item.styleAutoNone')}
+        >
+          <View style={s.chipRow}>
+            {STYLES.map(x => (
+              <Chip key={x} role="radio" label={t(`style.${x}`)} selected={shownStyle === x} onPress={() => update({ style: form.style === x ? null : x })} />
+            ))}
           </View>
         </Field>
         <Field theme={theme} label={t('item.occasions')} hint={t('item.allOccasions')}>

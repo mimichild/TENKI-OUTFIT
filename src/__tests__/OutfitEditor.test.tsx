@@ -7,6 +7,7 @@ import { OutfitEditor, type OutfitDraft } from '@/components/OutfitEditor';
 import { CANVAS_HEIGHT_RATIO } from '@/lib/outfitCanvas';
 import type { PieceShape } from '@/lib/outfitLayout';
 import { MASK_GRID } from '@/lib/pieceHit';
+import { useCanvasStore } from '@/store/canvasStore';
 import { DEFAULT_SETTINGS, useSettingsStore } from '@/store/settingsStore';
 import type { Item } from '@/types/models';
 
@@ -15,6 +16,7 @@ let mockShapes: Map<string, PieceShape | null> | undefined;
 jest.mock('@/lib/usePieceShapes', () => ({ usePieceShapes: () => mockShapes }));
 beforeEach(() => {
   mockShapes = undefined;
+  useCanvasStore.setState({ day: null, editor: null });
 });
 
 const item = (id: string, name: string, price: number | null, category: Item['category'] = 'top'): Item => ({
@@ -118,6 +120,21 @@ describe('OutfitEditor', () => {
     fireEvent.press(screen.getByRole('button', { name: '加入單品' }));
     const top = StyleSheet.flatten(screen.getByTestId('picker-backdrop').props.style).height;
     expect(top).toBeGreaterThan(0);
+  });
+
+  it('和天氣穿搭的畫布共用同一個比例：天氣穿搭那邊比較矮時用它的，存檔也記這個比例', async () => {
+    useCanvasStore.setState({ day: 1.2 });
+    const { onSave } = setup({ initial: { name: '', date: '2026-11-05', pieces: [] } });
+    layoutCanvas();
+    // 自己可用 600 / 400 = 1.5，比天氣穿搭的 1.2 大 → 用 1.2
+    expect(useCanvasStore.getState().editor).toBeCloseTo(1.5);
+    const canvas = StyleSheet.flatten(screen.getByTestId('outfit-canvas').props.style);
+    expect(canvas.width).toBe(400);
+    expect(canvas.height).toBeCloseTo(480);
+    fireEvent.press(screen.getByRole('button', { name: '加入單品' }));
+    pick('白襯衫');
+    await act(async () => fireEvent.press(saveButton()));
+    expect(onSave.mock.calls[0][0].canvasRatio).toBeCloseTo(1.2);
   });
 
   it('cannot save an empty canvas even with a date', () => {

@@ -1,4 +1,4 @@
-import type { Category, Item, OutfitItemPlacement } from '@/types/models';
+import type { Category, ColorTag, Item, OutfitItemPlacement } from '@/types/models';
 import { MAX_SCALE, MIN_SCALE, PIECE_BASE_SIZE } from './outfitCanvas';
 
 /**
@@ -26,6 +26,8 @@ export interface PieceShape {
    * '1' = 這格有衣服。編輯穿搭時用來判斷手指有沒有碰到衣服（舊快取沒有這個欄位時改用 bounds）
    */
   mask?: string;
+  /** 照片主色（衣服部分像素最多的顏色），單品沒設定顏色時給穿搭建議用 */
+  color?: ColorTag;
 }
 
 export interface Rect {

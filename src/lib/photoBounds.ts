@@ -1,6 +1,7 @@
 import { AlphaType, ColorType, Skia } from '@shopify/react-native-skia';
 import { alphaBounds, type PieceShape } from './outfitLayout';
 import { boundsCache } from './photoBoundsCache';
+import { dominantColor } from './itemColor';
 import { alphaMask } from './pieceHit';
 import { isOwnedPhotoPath } from './photoPath';
 import { resolvePhotoUri } from './photoStorage';
@@ -44,7 +45,9 @@ async function measure(uri: string): Promise<PieceShape | null> {
     if (!(pixels instanceof Uint8Array)) throw new Error('cannot read pixels');
     // 整張透明：量不到範圍（照片不會改，可以快取 null）
     const bounds = alphaBounds(pixels, w, h);
-    return bounds ? { aspect: W / H, bounds, mask: alphaMask(pixels, w, h) } : null;
+    if (!bounds) return null;
+    const color = dominantColor(pixels, w, h);
+    return { aspect: W / H, bounds, mask: alphaMask(pixels, w, h), ...(color ? { color } : {}) };
   } finally {
     disposeAll(owned.reverse());
   }

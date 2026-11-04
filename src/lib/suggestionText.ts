@@ -17,7 +17,7 @@ function pickVibe(list: string[], pieces: Item[]): string {
 
 /**
  * 建議下方的說明（固定句型）：
- * 1. 穿搭組合與風格，例如「薄針織外套搭配長裙，知性溫柔。」
+ * 1. 穿搭組合、配色與風格，例如「米色針織外套內搭白襯衫，配上卡其長裙，大地色系溫柔低調，淑女風優雅溫柔。」
  * 2. 體感溫度與降雨機率
  * 3. 溫度和這套穿搭合不合適（有沒有外套）＋下雨帶傘
  * 沒有天氣資料時，第 2 句改成提示，沒有第 3 句
@@ -28,8 +28,17 @@ export function describeSuggestion(s: Suggestion, opts: DescribeOptions): string
   const label = (item: Item) => item.name.trim() || t(`suggest.piece.${item.category}` as TranslationKey);
   const find = (category: Item['category']) => s.pieces.find(p => p.category === category);
 
-  const vibes = t(`suggest.vibes.${opts.occasion ?? 'any'}` as TranslationKey).split('|');
-  const vibe = pickVibe(vibes, s.pieces);
+  // 配色＋風格的形容；兩個都看不出來時用場合的形容
+  const { scheme, schemeColor, style } = s.look;
+  let colorLabel = schemeColor ? t(`color.${schemeColor}` as TranslationKey) : '';
+  if (opts.language === 'en') colorLabel = colorLabel.toLowerCase();
+  const schemePart = scheme === 'tonal' || scheme === 'mono' || scheme === 'earth' || scheme === 'accent'
+    ? t(`suggest.look.${scheme}` as TranslationKey, { color: colorLabel })
+    : '';
+  const stylePart = style ? pickVibe(t(`suggest.styleVibes.${style}` as TranslationKey).split('|'), s.pieces) : '';
+  const vibe = schemePart || stylePart
+    ? [schemePart, stylePart].filter(Boolean).join(t('suggest.lookSep'))
+    : pickVibe(t(`suggest.vibes.${opts.occasion ?? 'any'}` as TranslationKey).split('|'), s.pieces);
   const outerwear = find('outerwear');
   const outer = outerwear ? label(outerwear) : '';
   const onepiece = find('onepiece');

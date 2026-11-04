@@ -9,6 +9,7 @@ import { createMemoryDatabase } from '@/db/memoryItemRepository';
 import { OutfitRepositoryProvider } from '@/db/OutfitRepositoryContext';
 import type { OutfitInput } from '@/db/outfitRepository';
 import type { DailyForecast, FetchForecastResult } from '@/lib/cwaWeather';
+import { useCanvasStore } from '@/store/canvasStore';
 import { DEFAULT_SETTINGS, useSettingsStore } from '@/store/settingsStore';
 import type { WeatherDay } from '@/types/models';
 import type { WeatherRepository } from '@/db/weatherRepository';
@@ -81,6 +82,7 @@ async function setup({ apiKey = 'KEY', result, seed = [], fetcher: customFetcher
 
 beforeEach(() => {
   mockPush.mockClear();
+  useCanvasStore.setState({ day: null, editor: null });
   mockSetOptions.mockClear();
   mockBuiltInKey = '';
   currentNow = NOW;
@@ -327,6 +329,18 @@ describe('WeatherScreen outfits', () => {
     expect(canvas.width).toBe(390);
     // 扣掉下方總金額列
     expect(canvas.height).toBe(522 - OUTFIT_CARD_FOOTER_HEIGHT);
+  });
+
+  it('日檢視和新增穿搭的畫布共用同一個比例：新增穿搭那邊比較矮時用它的', async () => {
+    useCanvasStore.setState({ editor: 1 });
+    await setup({ result: twoDays, outfits: [{ date: '2026-11-03', items: ['shirt'] }] });
+    fireEvent(screen.getByTestId('weather-scroll'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 700 } } });
+    fireEvent(screen.getByTestId('weather-card'), 'layout', { nativeEvent: { layout: { x: 16, y: 16, width: 358, height: 150 } } });
+    // 自己量到的比例記下來給新增穿搭用
+    expect(useCanvasStore.getState().day).toBeCloseTo((522 - OUTFIT_CARD_FOOTER_HEIGHT) / 390);
+    const canvas = StyleSheet.flatten(screen.getByTestId('outfit-canvas-view').props.style);
+    expect(canvas.width).toBe(390);
+    expect(canvas.height).toBeCloseTo(390);
   });
 
   it('says when a day has no outfit yet', async () => {

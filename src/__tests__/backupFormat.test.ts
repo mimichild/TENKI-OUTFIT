@@ -14,13 +14,13 @@ const item = (id: string, extra: Record<string, unknown> = {}) => ({
   occasions: '[]', seasons: '["summer"]',
   image_uri: `photos/${id}.png`, original_uri: `photos/${id}.jpg`,
   created_at: '2026-11-01T00:00:00.000Z', updated_at: '2026-11-01T00:00:00.000Z',
-  last_used_at: null, deleted_at: null, archived_at: null,
+  last_used_at: null, deleted_at: null, archived_at: null, color: null, style: null,
   ...extra,
 });
 
 const data = (): BackupData => ({
   items: [
-    item('a'),
+    item('a', { color: 'beige', style: 'feminine' }),
     item('b', { deleted_at: '2026-11-02T00:00:00.000Z' }),
     item('c', { archived_at: '2026-11-02T00:00:00.000Z', image_uri: null, original_uri: null }),
   ],
@@ -65,6 +65,18 @@ describe('parseManifest', () => {
     if (!r.ok) return;
     expect(r.manifest.data).toEqual(data());
     expect(r.manifest.settings).toEqual(settings);
+  });
+
+  it('舊備份沒有顏色／風格 → null；不認得的值也當作沒設定', () => {
+    const raw = JSON.parse(text());
+    delete raw.data.items[0].color;
+    delete raw.data.items[0].style;
+    raw.data.items[1].color = 'rainbow';
+    const r = parseManifest(JSON.stringify(raw), { schemaVersion: 2 });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.manifest.data.items[0]).toMatchObject({ color: null, style: null });
+    expect(r.manifest.data.items[1]).toMatchObject({ color: null });
   });
 
   it('不是 JSON 或不是本 App 的備份 → notBackup', () => {

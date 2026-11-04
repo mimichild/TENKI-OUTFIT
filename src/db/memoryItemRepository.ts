@@ -119,7 +119,10 @@ export function createMemoryDatabase(
     async create(input) {
       const now = deps.now();
       const { name, brand, category, price, occasions, seasons, imageUri, originalUri } = input;
-      const item: Item = clone({ name, brand, category, price, occasions, seasons, imageUri, originalUri, id: deps.newId(), createdAt: now, updatedAt: now, lastUsedAt: null, deletedAt: null });
+      const item: Item = clone({
+        name, brand, category, price, occasions, seasons, imageUri, originalUri, color: input.color ?? null, style: input.style ?? null,
+        id: deps.newId(), createdAt: now, updatedAt: now, lastUsedAt: null, deletedAt: null,
+      });
       items.set(item.id, { item, archivedAt: null });
       return clone(item);
     },
@@ -128,7 +131,10 @@ export function createMemoryDatabase(
       if (!existing) return null;
       // 只合併可編輯欄位，避免呼叫端帶進來的舊 id/deletedAt/lastUsedAt 覆蓋現值（與 SQLite 版一致）
       const { name, brand, category, price, occasions, seasons, imageUri, originalUri } = input;
-      const item = clone({ ...existing, name, brand, category, price, occasions, seasons, imageUri, originalUri, updatedAt: deps.now() });
+      // 顏色、風格沒給時保留原值（與 SQLite 版一致）
+      const color = input.color !== undefined ? input.color : (existing.color ?? null);
+      const style = input.style !== undefined ? input.style : (existing.style ?? null);
+      const item = clone({ ...existing, name, brand, category, price, occasions, seasons, imageUri, originalUri, color, style, updatedAt: deps.now() });
       items.get(id)!.item = item;
       return clone(item);
     },

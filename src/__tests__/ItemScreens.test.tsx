@@ -58,6 +58,32 @@ describe('item detail screen', () => {
     expect((await repo.get('id1'))?.name).toBe('藍襯衫');
   });
 
+  it('顏色與風格：沒選時顯示自動判斷，手動選了會存下來，再點一次改回自動', async () => {
+    mockParams = { id: 'id1' };
+    wrap(<ItemScreen />);
+    await screen.findByText('白襯衫');
+    // 白襯衫的場合是上班，看不出風格；沒照片，量不到顏色
+    expect(screen.getByText('不限')).toBeTruthy();
+    await act(async () => mockScreenOptions.headerRight!().props.onPress());
+    expect(screen.getByText('沒選＝不限風格，兩種都能搭')).toBeTruthy();
+    fireEvent.changeText(screen.getByLabelText('名稱'), '蕾絲白襯衫');
+    expect(screen.getByText('依名稱與場合自動判斷為「淑女風」，點選可以更改')).toBeTruthy();
+    expect(screen.getByRole('radio', { name: '淑女風' }).props.accessibilityState).toEqual({ selected: true });
+    fireEvent.press(screen.getByRole('radio', { name: '深藍' }));
+    fireEvent.press(screen.getByRole('radio', { name: '休閒風' }));
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: '儲存' })));
+    expect(await repo.get('id1')).toMatchObject({ color: 'navy', style: 'casual' });
+    expect(screen.getByText('深藍')).toBeTruthy();
+    expect(screen.getByText('休閒風')).toBeTruthy();
+
+    // 再點一次選中的風格 → 改回自動（存 null）
+    await act(async () => mockScreenOptions.headerRight!().props.onPress());
+    fireEvent.press(screen.getByRole('radio', { name: '休閒風' }));
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: '儲存' })));
+    expect(await repo.get('id1')).toMatchObject({ color: 'navy', style: null });
+    expect(screen.getByText('淑女風（自動）')).toBeTruthy();
+  });
+
   it('delete moves the item to trash and goes back', async () => {
     mockParams = { id: 'id1' };
     wrap(<ItemScreen />);

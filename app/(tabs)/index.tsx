@@ -13,6 +13,7 @@ import { wxCategory } from '@/lib/cwaWeather';
 import { addMonths, monthGrid, monthOf, weekOf, weekTitle } from '@/lib/calendar';
 import { addDays, weekdayOf } from '@/lib/weatherDates';
 import { WX_ICONS } from '@/constants/wxIcons';
+import { useCanvasStore, useSharedCanvasRatio } from '@/store/canvasStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme, type Theme } from '@/theme/useTheme';
 import type { WeatherDay } from '@/types/models';
@@ -109,6 +110,14 @@ export default function WeatherScreen() {
   const areaWidth = scrollSize?.width || window.width;
   const measuredHeight = scrollSize && weatherCardHeight ? scrollSize.height - DAY_PADDING_TOP - weatherCardHeight - DAY_GAP : 0;
   const areaHeight = measuredHeight > 200 ? measuredHeight : areaWidth * (4 / 3);
+  // 和新增穿搭的畫布共用同一個比例（兩邊比較小的那個）
+  const ownRatio = measuredHeight > 200 ? (measuredHeight - OUTFIT_CARD_FOOTER_HEIGHT) / areaWidth : null;
+  const reportCanvas = useCanvasStore(s => s.report);
+  useEffect(() => {
+    if (ownRatio !== null) reportCanvas('day', ownRatio);
+  }, [ownRatio, reportCanvas]);
+  const canvasRatio = useSharedCanvasRatio(ownRatio ?? (areaHeight - OUTFIT_CARD_FOOTER_HEIGHT) / areaWidth);
+  const cardHeight = areaWidth * canvasRatio + OUTFIT_CARD_FOOTER_HEIGHT;
 
   /** 日檢視：穿搭畫布滿版（不管這套穿搭原本的比例）；沒有穿搭時空白框一樣滿版 */
   const dayOutfits = (date: string) => {
@@ -122,7 +131,7 @@ export default function WeatherScreen() {
         <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.noOutfit')}</Text>
       </View>
     ) : (
-      list.map(o => <OutfitCard key={o.id} outfit={o} width={areaWidth} height={areaHeight} onPress={() => openOutfit(o.id)} />)
+      list.map(o => <OutfitCard key={o.id} outfit={o} width={areaWidth} height={cardHeight} onPress={() => openOutfit(o.id)} />)
     );
     return (
       <View testID="day-outfits" style={[styles.dayOutfits, { minHeight: areaHeight }]}>

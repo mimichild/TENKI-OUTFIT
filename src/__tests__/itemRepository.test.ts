@@ -98,9 +98,12 @@ describe('sqlite item repository', () => {
     expect(rowToItem(row)).toEqual({
       id: 'x', name: '白襯衫', brand: 'UNIQLO', category: 'top', price: 790,
       occasions: ['work'], seasons: ['spring'], imageUri: 'a', originalUri: 'b',
+      color: null, style: null,
       createdAt: 'c1', updatedAt: 'u1', lastUsedAt: null, deletedAt: null,
     });
     expect(rowToItem({ ...row, occasions: 'oops', category: 'weird' })).toMatchObject({ occasions: [], category: 'other' });
+    expect(rowToItem({ ...row, color: 'navy', style: 'casual' })).toMatchObject({ color: 'navy', style: 'casual' });
+    expect(rowToItem({ ...row, color: 'rainbow', style: 'punk' })).toMatchObject({ color: null, style: null });
   });
 
   it('inserts with serialized arrays', async () => {
@@ -115,7 +118,21 @@ describe('sqlite item repository', () => {
     expect(created.id).toBe('x');
     const [sql, ...params] = db.runAsync.mock.calls[0];
     expect(sql).toMatch(/INSERT INTO items/);
-    expect(params).toEqual(['x', '白襯衫', 'UNIQLO', 'top', 790, '["work"]', '["spring","autumn"]', 'file:///cut.png', 'file:///orig.jpg', 'T', 'T']);
+    expect(params).toEqual(['x', '白襯衫', 'UNIQLO', 'top', 790, '["work"]', '["spring","autumn"]', 'file:///cut.png', 'file:///orig.jpg', null, null, 'T', 'T']);
+  });
+
+  it('更新時沒給顏色／風格就保留原值，給 null 才清掉', async () => {
+    const db = {
+      runAsync: jest.fn().mockResolvedValue({ changes: 1 }),
+      getFirstAsync: jest.fn().mockResolvedValue(row),
+      getAllAsync: jest.fn(),
+      withExclusiveTransactionAsync: jest.fn(),
+    };
+    const repo = createSqliteItemRepository(db as never, { now: () => 'T', newId: () => 'x' });
+    await repo.update('x', input);
+    expect(db.runAsync.mock.calls[0].slice(9, 13)).toEqual([0, null, 0, null]);
+    await repo.update('x', { ...input, color: 'navy', style: null });
+    expect(db.runAsync.mock.calls[1].slice(9, 13)).toEqual([1, 'navy', 1, null]);
   });
 
   function txDb(rows: unknown[] = []) {

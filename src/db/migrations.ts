@@ -72,6 +72,11 @@ export const MIGRATIONS: string[] = [
   `
   ALTER TABLE outfits ADD COLUMN canvas_ratio REAL NOT NULL DEFAULT 1.3333333333333333;
   `,
+  // v4：單品的主色與風格（穿搭建議配色用；NULL = 沒設定，改用自動判斷）
+  `
+  ALTER TABLE items ADD COLUMN color TEXT;
+  ALTER TABLE items ADD COLUMN style TEXT;
+  `,
 ];
 
 export async function migrate(db: MigrationDb): Promise<void> {

@@ -1,16 +1,17 @@
 import { File, Paths } from 'expo-file-system';
 import type { PieceShape } from './outfitLayout';
+import { COLORS } from '@/constants/options';
 import { isMask } from './pieceHit';
 
 /**
  * 照片範圍（PieceShape）的檔案快取：documents/photo-bounds.json
- * `{ version: 2, entries: { "photos/x.png": PieceShape | null } }`
+ * `{ version: 3, entries: { "photos/x.png": PieceShape | null } }`
  * - key 是相對路徑；照片存檔後不會原地改寫（每次存都是新 uuid 檔名），所以不會過期
  * - 讀一次進記憶體；寫入延遲合併。壞掉或讀不到就當作空的（重新量即可）
  * - 不進備份：換手機後重量
  */
-// 2：加入衣服遮罩（mask）。舊版快取整個作廢，照片會重新量一次
-const VERSION = 2;
+// 2：加入衣服遮罩（mask）；3：加入主色（color）。舊版快取整個作廢，照片會重新量一次
+const VERSION = 3;
 const FILE_NAME = 'photo-bounds.json';
 const WRITE_DELAY_MS = 500;
 
@@ -36,8 +37,11 @@ function isShape(v: unknown): v is PieceShape | null {
   if (typeof v !== 'object') return false;
   const s = v as { aspect?: unknown; bounds?: Record<string, unknown> };
   const b = s.bounds;
-  const m = (v as { mask?: unknown }).mask;
-  return isNum(s.aspect) && !!b && typeof b === 'object' && isNum(b.x0) && isNum(b.y0) && isNum(b.x1) && isNum(b.y1) && (m === undefined || isMask(m));
+  const { mask: m, color: c } = v as { mask?: unknown; color?: unknown };
+  return (
+    isNum(s.aspect) && !!b && typeof b === 'object' && isNum(b.x0) && isNum(b.y0) && isNum(b.x1) && isNum(b.y1) &&
+    (m === undefined || isMask(m)) && (c === undefined || (COLORS as unknown[]).includes(c))
+  );
 }
 
 function parse(text: string | null): Map<string, PieceShape | null> {

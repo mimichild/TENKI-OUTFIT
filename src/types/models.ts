@@ -12,6 +12,15 @@ export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
 
 export type Occasion = 'casual' | 'work' | 'formal' | 'sport' | 'date' | 'travel';
 
+/** 單品主色（穿搭建議配色用） */
+export type ColorTag =
+  | 'black' | 'white' | 'gray'
+  | 'beige' | 'khaki' | 'brown'
+  | 'red' | 'pink' | 'orange' | 'yellow' | 'green' | 'blue' | 'navy' | 'purple';
+
+/** 單品風格：淑女風、休閒風；null = 不限（兩種都搭） */
+export type StyleTag = 'feminine' | 'casual';
+
 export interface Item {
   id: string;
   name: string;
@@ -22,6 +31,10 @@ export interface Item {
   seasons: Season[];
   imageUri: string | null;
   originalUri: string | null;
+  /** 主色；null / 沒有 = 沒設定（穿搭建議改用照片自動判斷的顏色） */
+  color?: ColorTag | null;
+  /** 風格；null / 沒有 = 沒設定（穿搭建議改用名稱與場合推測） */
+  style?: StyleTag | null;
   createdAt: string;
   updatedAt: string;
   lastUsedAt: string | null;
