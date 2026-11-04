@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useMemo, useState } from 'react';
-import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CATEGORIES } from '@/constants/options';
 import { useT } from '@/i18n';
@@ -12,6 +12,8 @@ import { Chip } from './Chip';
 
 interface Props {
   visible: boolean;
+  /** 視窗上緣離螢幕頂端的距離（編輯器標題列的下緣）；沒量到時佔畫面 88% */
+  topOffset?: number | null;
   items: Item[];
   selectedIds: ReadonlySet<string>;
   onToggle: (item: Item) => void;
@@ -19,10 +21,13 @@ interface Props {
 }
 
 /** 從服裝挑單品放上畫布；點一下加入，再點一下拿掉 */
-export function ItemPickerSheet({ visible, items, selectedIds, onToggle, onClose }: Props) {
+export function ItemPickerSheet({ visible, topOffset, items, selectedIds, onToggle, onClose }: Props) {
   const t = useT();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const window = useWindowDimensions();
+  // 固定高度（不隨單品數量縮小），從標題列下方蓋到底
+  const top = topOffset != null && topOffset > 0 ? topOffset : window.height * (1 - SHEET_FALLBACK_HEIGHT);
   const [category, setCategory] = useState<Category | 'all'>('all');
   const shown = useMemo(
     () => [...items].filter(i => category === 'all' || i.category === category).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
@@ -30,9 +35,9 @@ export function ItemPickerSheet({ visible, items, selectedIds, onToggle, onClose
   );
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.done')} />
-      <View style={[styles.sheet, { backgroundColor: theme.surface, paddingBottom: insets.bottom + 8 }]}>
+    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
+      <Pressable testID="picker-backdrop" style={[styles.backdrop, { height: top }]} onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.done')} />
+      <View testID="picker-sheet" style={[styles.sheet, { backgroundColor: theme.surface, paddingBottom: insets.bottom + 8 }]}>
         <View style={[styles.header, { borderColor: theme.border }]}>
           <Text style={[styles.title, { color: theme.text }]}>{t('outfit.pickerTitle')}</Text>
           <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button">
@@ -86,14 +91,17 @@ export function ItemPickerSheet({ visible, items, selectedIds, onToggle, onClose
   );
 }
 
+/** 量不到標題列位置時，視窗佔畫面的比例 */
+const SHEET_FALLBACK_HEIGHT = 0.88;
+
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
-  sheet: { borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '80%' },
+  backdrop: { backgroundColor: 'rgba(0,0,0,0.35)' },
+  sheet: { flex: 1, borderTopLeftRadius: 16, borderTopRightRadius: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: StyleSheet.hairlineWidth },
   title: { fontSize: 17, fontWeight: '600' },
   tabsBar: { flexGrow: 0 },
   tabs: { gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
-  list: { paddingHorizontal: 2 },
+  list: { flex: 1, paddingHorizontal: 2 },
   cell: { width: '33.3333%', aspectRatio: ITEM_PHOTO_ASPECT, padding: 2 },
   tile: { flex: 1, backgroundColor: '#FFFFFF' },
   placeholder: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, padding: 4 },

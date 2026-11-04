@@ -51,6 +51,9 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
   /** 拖拉中：none = 沒在拖，drag = 拖拉中，over = 停在垃圾桶上 */
   const [drag, setDrag] = useState<DragState>('none');
   const [pickerOpen, setPickerOpen] = useState(false);
+  // 標題列（取消／新增穿搭／儲存）的下緣：選單品視窗從這裡往下蓋滿
+  const [topBarBottom, setTopBarBottom] = useState<number | null>(null);
+  const topBarRef = useRef<View>(null);
   const [dateOpen, setDateOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<TranslationKey | null>(null);
@@ -124,7 +127,19 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
 
   return (
     <SafeAreaView style={[s.root, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
-      <View style={[s.topBar, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+      <View
+        testID="editor-top-bar"
+        ref={topBarRef}
+        onLayout={e => {
+          const { y, height } = e.nativeEvent.layout;
+          setTopBarBottom(y + height);
+          // iOS 的 modal 頁面不是從螢幕最上面開始，改用在整個視窗裡的位置
+          topBarRef.current?.measureInWindow((_x, wy, _w, wh) => {
+            if (wh > 0) setTopBarBottom(wy + wh);
+          });
+        }}
+        style={[s.topBar, { borderColor: theme.border, backgroundColor: theme.surface }]}
+      >
         <Pressable onPress={onCancel} hitSlop={12} accessibilityRole="button" disabled={busy}>
           <Text style={{ color: theme.textMuted, fontSize: 16 }}>{t('common.cancel')}</Text>
         </Pressable>
@@ -221,7 +236,7 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
         )}
       </View>
 
-      <ItemPickerSheet visible={pickerOpen} items={items} selectedIds={selectedIds} onToggle={toggleItem} onClose={() => setPickerOpen(false)} />
+      <ItemPickerSheet visible={pickerOpen} topOffset={topBarBottom} items={items} selectedIds={selectedIds} onToggle={toggleItem} onClose={() => setPickerOpen(false)} />
       <DatePickerSheet
         visible={dateOpen}
         value={date}

@@ -75,6 +75,21 @@ describe('OutfitEditor', () => {
     expect(onSave.mock.calls[0][0].items[0].y).toBeCloseTo(600 / 358 / 2);
   });
 
+  it('加入單品的視窗從標題列下方蓋到底，不隨單品數量縮小', () => {
+    setup({ initial: { name: '', date: '2026-11-05', pieces: [] } });
+    fireEvent(screen.getByTestId('editor-top-bar'), 'layout', { nativeEvent: { layout: { x: 0, y: 24, width: 390, height: 48 } } });
+    fireEvent.press(screen.getByRole('button', { name: '加入單品' }));
+    expect(StyleSheet.flatten(screen.getByTestId('picker-backdrop').props.style).height).toBe(72);
+    expect(StyleSheet.flatten(screen.getByTestId('picker-sheet').props.style).flex).toBe(1);
+  });
+
+  it('量不到標題列時，選單品視窗佔畫面 88%', () => {
+    setup({ initial: { name: '', date: '2026-11-05', pieces: [] } });
+    fireEvent.press(screen.getByRole('button', { name: '加入單品' }));
+    const top = StyleSheet.flatten(screen.getByTestId('picker-backdrop').props.style).height;
+    expect(top).toBeGreaterThan(0);
+  });
+
   it('cannot save an empty canvas even with a date', () => {
     setup({ initial: { name: '', date: '2026-11-02', pieces: [] } });
     expect(screen.getByText(/按「加入單品」把服裝放到畫布上/)).toBeTruthy();

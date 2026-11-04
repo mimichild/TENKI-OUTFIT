@@ -85,6 +85,9 @@ describe('ClosetScreen', () => {
     fireEvent.press(screen.getByRole('radio', { name: '舊→新' }));
     fireEvent.press(screen.getByRole('checkbox', { name: '夏' }));
     expect(tileNames()).toEqual(['白T', '牛仔褲']);
+    // 點進單品時帶著排序與季節篩選，單品頁左右滑才會照這個結果的順序
+    fireEvent.press(screen.getByLabelText('白T'));
+    expect(mockPush).toHaveBeenLastCalledWith({ pathname: '/item/[id]', params: expect.objectContaining({ sort: 'oldest', seasons: 'summer' }) });
   });
 
   it('opens the item page when a tile is tapped', async () => {

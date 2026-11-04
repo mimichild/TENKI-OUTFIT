@@ -127,6 +127,21 @@ describe('item detail swipe', () => {
     expect(mockReplace).toHaveBeenLastCalledWith({ pathname: '/item/[id]', params: { id: 'a', category: 'top', dir: 'next' } });
   });
 
+  it('沿用服裝頁的季節與場合篩選：不符合的單品會跳過', async () => {
+    // 把中間的褲子改成只適合冬天、上班
+    const pants = (await repo.get('b'))!;
+    await repo.update('b', { ...pants, seasons: ['winter'], occasions: ['work'] });
+    for (const params of [{ seasons: 'summer' }, { occasions: 'date' }]) {
+      mockReplace.mockClear();
+      mockParams = { id: 'c', ...params };
+      const { unmount } = wrap(<ItemScreen />);
+      await screen.findByText('新上衣');
+      swipe(-120);
+      expect(mockReplace).toHaveBeenLastCalledWith({ pathname: '/item/[id]', params: { id: 'a', ...params, dir: 'next' } });
+      unmount();
+    }
+  });
+
   it('沿用服裝頁的排序：最舊排序時由左往右滑是較舊的單品', async () => {
     mockParams = { id: 'b', sort: 'oldest' };
     wrap(<ItemScreen />);
