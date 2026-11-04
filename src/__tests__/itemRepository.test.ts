@@ -104,6 +104,8 @@ describe('sqlite item repository', () => {
     expect(rowToItem({ ...row, occasions: 'oops', category: 'weird' })).toMatchObject({ occasions: [], category: 'other' });
     expect(rowToItem({ ...row, color: 'navy', style: 'casual' })).toMatchObject({ color: 'navy', style: 'casual' });
     expect(rowToItem({ ...row, color: 'rainbow', style: 'punk' })).toMatchObject({ color: null, style: null });
+    // 已拿掉的選項：舊資料的「運動」場合略過、「黃」色改回自動判斷
+    expect(rowToItem({ ...row, occasions: '["sport","work"]', color: 'yellow' })).toMatchObject({ occasions: ['work'], color: null });
   });
 
   it('inserts with serialized arrays', async () => {

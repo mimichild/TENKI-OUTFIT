@@ -254,7 +254,7 @@ function scoreLook(pieces: Item[], colorOf: (item: Item) => ColorTag | null, occ
   // 風格一致加分、淑女混休閒扣分
   score += styles.size === 1 ? 2 : styles.size === 0 ? 1 : 0;
   if (occasion === 'date' || occasion === 'formal') score += look.style === 'feminine' ? 1 : 0;
-  if (occasion === 'casual' || occasion === 'sport' || occasion === 'travel') score += look.style === 'casual' ? 1 : 0;
+  if (occasion === 'casual' || occasion === 'travel') score += look.style === 'casual' ? 1 : 0;
   if ((occasion === 'work' || occasion === 'formal') && (look.scheme === 'mono' || look.scheme === 'earth')) score += 0.5;
   return score;
 }

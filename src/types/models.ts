@@ -10,13 +10,14 @@ export type Category =
 
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
 
-export type Occasion = 'casual' | 'work' | 'formal' | 'sport' | 'date' | 'travel';
+export type Occasion = 'casual' | 'work' | 'formal' | 'dinner' | 'date' | 'travel';
 
 /** 單品主色（穿搭建議配色用） */
 export type ColorTag =
   | 'black' | 'white' | 'gray'
+  /** beige 畫面上叫「杏」 */
   | 'beige' | 'khaki' | 'brown'
-  | 'red' | 'pink' | 'orange' | 'yellow' | 'green' | 'blue' | 'navy' | 'purple';
+  | 'red' | 'pink' | 'orange' | 'green' | 'blue' | 'navy' | 'purple';
 
 /** 單品風格：淑女風、休閒風；null = 不限（兩種都搭） */
 export type StyleTag = 'feminine' | 'casual';

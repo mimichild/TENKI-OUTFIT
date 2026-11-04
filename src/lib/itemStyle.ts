@@ -23,7 +23,7 @@ export function inferStyle(item: Pick<Item, 'name' | 'brand' | 'occasions'>): St
   // 名稱看不出來（或兩種都有）：看場合
   const o = item.occasions;
   const femScore = o.filter(x => x === 'date' || x === 'formal').length;
-  const casScore = o.filter(x => x === 'casual' || x === 'sport' || x === 'travel').length;
+  const casScore = o.filter(x => x === 'casual' || x === 'travel').length;
   if (femScore > casScore) return 'feminine';
   if (casScore > femScore) return 'casual';
   return null;

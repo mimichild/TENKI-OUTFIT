@@ -101,7 +101,7 @@ describe('SuggestScreen', () => {
     await setup({
       items: [
         { name: '襯衫', category: 'top', occasions: ['work'] },
-        { name: '運動上衣', category: 'top', occasions: ['sport'] },
+        { name: '聚餐上衣', category: 'top', occasions: ['dinner'] },
         { name: '西裝褲', category: 'bottom', occasions: ['work'] },
       ],
     });

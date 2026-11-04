@@ -6,19 +6,20 @@ export const CATEGORIES: Category[] = [
 
 export const SEASONS: Season[] = ['spring', 'summer', 'autumn', 'winter'];
 
-export const OCCASIONS: Occasion[] = ['casual', 'work', 'formal', 'sport', 'date', 'travel'];
+// 2026-11-04：拿掉「運動」、新增「聚餐」。舊資料存的 sport 讀取時會被略過
+export const OCCASIONS: Occasion[] = ['casual', 'work', 'formal', 'dinner', 'date', 'travel'];
 
 export const COLORS: ColorTag[] = [
   'black', 'white', 'gray', 'beige', 'khaki', 'brown',
-  'red', 'pink', 'orange', 'yellow', 'green', 'blue', 'navy', 'purple',
+  'red', 'pink', 'orange', 'green', 'blue', 'navy', 'purple',
 ];
 
-/** 顏色選擇器的色塊 */
+/** 顏色選擇器的色塊：多數用低彩度的甜美色系；黑、紅維持原本的深色（使用者指定 2026-11-04） */
 export const COLOR_SWATCHES: Record<ColorTag, string> = {
-  black: '#222222', white: '#FFFFFF', gray: '#9A9A9A',
-  beige: '#E8D9BE', khaki: '#BFA77A', brown: '#7A5235',
-  red: '#C9343B', pink: '#F2A7B8', orange: '#EE8A3C', yellow: '#F2D04B',
-  green: '#5E9B5A', blue: '#5B8FD6', navy: '#1F3157', purple: '#8E6CC0',
+  black: '#222222', white: '#FFFFFF', gray: '#BDB8B8',
+  beige: '#F3D5BD', khaki: '#CDBA9A', brown: '#A88270',
+  red: '#C9343B', pink: '#EAAFB3', orange: '#F5B26B',
+  green: '#B5DDA4', blue: '#9EC3E6', navy: '#6B7A9C', purple: '#BFAEE0',
 };
 
 export const STYLES: StyleTag[] = ['feminine', 'casual'];

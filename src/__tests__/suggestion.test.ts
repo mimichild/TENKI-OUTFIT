@@ -200,7 +200,7 @@ describe('suggestOutfit', () => {
     });
 
     it('says the top is filtered out by occasion', () => {
-      const r = suggestOutfit(base([item('top', { occasions: ['sport'] }), item('bottom')], { occasion: 'work' }), { rng: () => 0 });
+      const r = suggestOutfit(base([item('top', { occasions: ['dinner'] }), item('bottom')], { occasion: 'work' }), { rng: () => 0 });
       expect(r.emptyReason).toEqual({ need: ['top'], filtered: ['top'] });
     });
 
@@ -213,8 +213,8 @@ describe('suggestOutfit', () => {
 
   it('respects the occasion filter', () => {
     const workTop = item('top', { occasions: ['work'] });
-    const sportTop = item('top', { occasions: ['sport'] });
-    const r = suggestOutfit(base([workTop, sportTop, item('bottom')], { occasion: 'work', weather: weather(30, 28) }), { rng: () => 0.99 });
+    const dinnerTop = item('top', { occasions: ['dinner'] });
+    const r = suggestOutfit(base([workTop, dinnerTop, item('bottom')], { occasion: 'work', weather: weather(30, 28) }), { rng: () => 0.99 });
     expect(r.pieces[0].id).toBe(workTop.id);
   });
 

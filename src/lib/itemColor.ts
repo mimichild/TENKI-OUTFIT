@@ -4,15 +4,15 @@ import type { ColorTag } from '@/types/models';
  * 單品顏色：從去背照片判斷主色，以及配色用的色系分組。
  * 色系：
  * - mono：黑白灰（無彩色）
- * - earth：大地色（米、卡其、咖啡）
+ * - earth：大地色（杏、卡其、咖啡）
  * - 其他：有彩色，依色相分組（藍和深藍同一組、紅和粉紅同一組）
  */
-export type ColorGroup = 'mono' | 'earth' | 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple';
+export type ColorGroup = 'mono' | 'earth' | 'red' | 'orange' | 'green' | 'blue' | 'purple';
 
 const GROUP: Record<ColorTag, ColorGroup> = {
   black: 'mono', white: 'mono', gray: 'mono',
   beige: 'earth', khaki: 'earth', brown: 'earth',
-  red: 'red', pink: 'red', orange: 'orange', yellow: 'yellow', green: 'green',
+  red: 'red', pink: 'red', orange: 'orange', green: 'green',
   blue: 'blue', navy: 'blue', purple: 'purple',
 };
 
@@ -55,7 +55,8 @@ export function classifyColor(r: number, g: number, b: number): ColorTag {
   if (h < 12 || h >= 345) return l > 0.72 ? 'pink' : 'red';
   if (h >= 300) return l > 0.6 ? 'pink' : 'purple';
   if (h < 42) return 'orange';
-  if (h < 70) return 'yellow';
+  // 沒有黃色選項：淺黃歸杏色、其他黃（芥末黃等）歸卡其
+  if (h < 70) return l >= 0.65 ? 'beige' : 'khaki';
   if (h < 170) return 'green';
   if (h < 250) return l < 0.3 ? 'navy' : 'blue';
   return 'purple';
