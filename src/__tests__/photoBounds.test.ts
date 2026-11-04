@@ -1,4 +1,5 @@
 import { measurePhoto } from '@/lib/photoBounds';
+import { isMask, MASK_GRID } from '@/lib/pieceHit';
 
 // jest.mock 會被提到 import 之前；工廠裡只在函式內用到 mock 開頭的變數
 const mockDisposed: string[] = [];
@@ -103,7 +104,12 @@ describe('measurePhoto', () => {
   it('measures the visible area and releases every native object', async () => {
     mockFromURI.mockResolvedValue({ dispose: () => mockDisposed.push('data') });
     const shape = await measurePhoto('file:///a.png');
-    expect(shape).toEqual({ aspect: 2, bounds: { x0: 0.5, y0: 0.5, x1: 0.75, y1: 1 } });
+    expect(shape).toEqual({ aspect: 2, bounds: { x0: 0.5, y0: 0.5, x1: 0.75, y1: 1 }, mask: expect.any(String) });
+    // 遮罩只在衣服的範圍（右下那塊）有 1
+    expect(isMask(shape!.mask)).toBe(true);
+    const at = (u: number, v: number) => shape!.mask![Math.floor(v * MASK_GRID) * MASK_GRID + Math.floor(u * MASK_GRID)];
+    expect(at(0.6, 0.7)).toBe('1');
+    expect(at(0.2, 0.2)).toBe('0');
     expect(mockDisposed.sort()).toEqual(['data', 'image', 'paint', 'snapshot', 'surface']);
   });
 

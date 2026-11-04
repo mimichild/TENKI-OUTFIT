@@ -1,4 +1,4 @@
-import { addDays, browsableRange, weekdayOf } from '@/lib/weatherDates';
+import { addDays, weekdayOf } from '@/lib/weatherDates';
 
 describe('weatherDates', () => {
   it('adds days across month and year boundaries', () => {
@@ -11,9 +11,4 @@ describe('weatherDates', () => {
     expect(weekdayOf('2026-11-08')).toBe(0);
   });
 
-  it('spans cached dates and always includes today', () => {
-    expect(browsableRange([], '2026-11-03')).toEqual({ first: '2026-11-03', last: '2026-11-03' });
-    expect(browsableRange(['2026-10-30', '2026-11-09'], '2026-11-03')).toEqual({ first: '2026-10-30', last: '2026-11-09' });
-    expect(browsableRange(['2026-11-05'], '2026-11-03')).toEqual({ first: '2026-11-03', last: '2026-11-05' });
-  });
 });

@@ -11,7 +11,7 @@ import { useWeather } from '@/db/useWeather';
 import { useT, type TranslationKey } from '@/i18n';
 import { wxCategory } from '@/lib/cwaWeather';
 import { addMonths, monthGrid, monthOf, weekOf, weekTitle } from '@/lib/calendar';
-import { addDays, browsableRange, weekdayOf } from '@/lib/weatherDates';
+import { addDays, weekdayOf } from '@/lib/weatherDates';
 import { WX_ICONS } from '@/constants/wxIcons';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme, type Theme } from '@/theme/useTheme';
@@ -46,12 +46,8 @@ export default function WeatherScreen() {
     setMonth(monthOf(today));
   }, [weather.county, today]);
 
-  const range = useMemo(() => browsableRange((days ?? []).map(d => d.date), today), [days, today]);
-  // 往前（過去）不設限，才看得到過去的穿搭；往後只到最後一天預報
-  const canMove = (from: string, n: number) => n < 0 || addDays(from, n) <= range.last;
-  const canPrev = canMove(selected, -1);
-  const canNext = canMove(selected, 1);
-  const move = (n: number) => setSelected(s => (canMove(s, n) ? addDays(s, n) : s));
+  // 前後都不設限：過去看得到以前的穿搭，未來超過預報範圍也能先排穿搭（沒有天氣資料就顯示提示）
+  const move = (n: number) => setSelected(s => addDays(s, n));
 
   // PanResponder 的 handler 只建立一次，用 ref 拿最新的 move
   const moveRef = useRef(move);
@@ -138,7 +134,7 @@ export default function WeatherScreen() {
   const weatherCard = (
     <View {...pan.panHandlers} style={[styles.card, styles.weatherCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
       <View style={styles.cardHeader}>
-        <NavButton icon="chevron-back" label={t('weather.prevDay')} disabled={!canPrev} onPress={() => move(-1)} theme={theme} />
+        <NavButton icon="chevron-back" label={t('weather.prevDay')} disabled={false} onPress={() => move(-1)} theme={theme} />
         {/* 切換日期時讓螢幕閱讀器念出新日期（Android） */}
         <View style={styles.dateBlock} accessibilityLiveRegion="polite">
           <Text style={[styles.date, { color: theme.text }]}>{labelOf(selected)}</Text>
@@ -147,7 +143,7 @@ export default function WeatherScreen() {
             <Text style={[styles.county, { color: theme.textMuted }]}>{weather.county}</Text>
           </View>
         </View>
-        <NavButton icon="chevron-forward" label={t('weather.nextDay')} disabled={!canNext} onPress={() => move(1)} theme={theme} />
+        <NavButton icon="chevron-forward" label={t('weather.nextDay')} disabled={false} onPress={() => move(1)} theme={theme} />
       </View>
 
       {!weather.hasKey ? (

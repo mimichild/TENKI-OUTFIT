@@ -160,7 +160,7 @@ describe('WeatherScreen', () => {
     expect(fab.bottom).toBeGreaterThan(OUTFIT_CARD_FOOTER_HEIGHT);
   });
 
-  it('moves between cached dates; past days have no limit, future stops at the last forecast', async () => {
+  it('moves between dates with no limit in either direction', async () => {
     await setup({ seed: [cached('2026-11-02', 28)], result: { status: 'ok', days: [forecast('2026-11-03', 25), forecast('2026-11-04', 22)] } });
     const prev = screen.getByLabelText('前一天');
     const next = screen.getByLabelText('後一天');
@@ -168,7 +168,14 @@ describe('WeatherScreen', () => {
     fireEvent.press(next);
     expect(screen.getByText('明天')).toBeTruthy();
     expect(screen.getByText('22°')).toBeTruthy();
-    expect(next).toBeDisabled();
+    // 超過預報範圍也能繼續往後（新增未來的穿搭），沒有天氣資料就顯示提示
+    expect(next).not.toBeDisabled();
+    for (let i = 0; i < 30; i++) fireEvent.press(next);
+    expect(screen.getByText('12/4（五）')).toBeTruthy();
+    expect(screen.getByText('這一天沒有天氣資料')).toBeTruthy();
+    fireEvent.press(screen.getByRole('button', { name: '新增穿搭' }));
+    expect(mockPush).toHaveBeenLastCalledWith({ pathname: '/outfit/edit', params: { date: '2026-12-04' } });
+    for (let i = 0; i < 30; i++) fireEvent.press(prev);
 
     fireEvent.press(prev);
     fireEvent.press(prev);
@@ -388,7 +395,7 @@ describe('WeatherScreen outfits', () => {
     expect(screen.getByTestId('month-outfit-2026-10-15')).toBeTruthy();
   });
 
-  it('after picking a day beyond the forecast, the arrows lead back toward it', async () => {
+  it('after picking a day beyond the forecast, the arrows keep moving both ways', async () => {
     await setup({ result: twoDays });
     await press(screen.getByRole('tab', { name: '週' }));
     await press(screen.getByRole('button', { name: '下一週' }));
@@ -396,7 +403,9 @@ describe('WeatherScreen outfits', () => {
     await press(screen.getByRole('button', { name: '查看 11/20（五）' }));
     expect(screen.getByText('11/20（五）')).toBeTruthy();
     expect(screen.getByText('這一天沒有天氣資料')).toBeTruthy();
-    expect(screen.getByLabelText('後一天')).toBeDisabled();
+    await press(screen.getByLabelText('後一天'));
+    expect(screen.getByText('11/21（六）')).toBeTruthy();
+    await press(screen.getByLabelText('前一天'));
     await press(screen.getByLabelText('前一天'));
     expect(screen.getByText('11/19（四）')).toBeTruthy();
     await press(screen.getByRole('button', { name: '新增穿搭' }));

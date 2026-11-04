@@ -5,8 +5,17 @@ import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-han
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { OutfitEditor, type OutfitDraft } from '@/components/OutfitEditor';
 import { CANVAS_HEIGHT_RATIO } from '@/lib/outfitCanvas';
+import type { PieceShape } from '@/lib/outfitLayout';
+import { MASK_GRID } from '@/lib/pieceHit';
 import { DEFAULT_SETTINGS, useSettingsStore } from '@/store/settingsStore';
 import type { Item } from '@/types/models';
+
+// 照片裡衣服的形狀；undefined = 還沒量到（整張照片都算）
+let mockShapes: Map<string, PieceShape | null> | undefined;
+jest.mock('@/lib/usePieceShapes', () => ({ usePieceShapes: () => mockShapes }));
+beforeEach(() => {
+  mockShapes = undefined;
+});
 
 const item = (id: string, name: string, price: number | null, category: Item['category'] = 'top'): Item => ({
   id, name, brand: '', category, price, occasions: [], seasons: [], imageUri: null, originalUri: null,
@@ -28,6 +37,27 @@ function setup({ initial = { name: '', date: null, pieces: [] } as OutfitDraft, 
   );
   return { onSave, onCancel };
 }
+
+/** 畫布 400 × 600：scale 1 的單品是 180px 正方形，中心在 (x × 400, y × 400) */
+const layoutCanvas = () =>
+  fireEvent(screen.getByTestId('canvas-area'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 600 } } });
+/** 手指從 (x, y) 開始拖 dx, dy */
+const drag = (x: number, y: number, dx: number, dy: number) => act(() => {
+  fireGestureHandler(getByGestureTestId('canvas-pan'), [
+    { state: State.BEGAN, x, y, translationX: 0, translationY: 0 },
+    { state: State.ACTIVE, x, y, translationX: 0, translationY: 0 },
+    { state: State.ACTIVE, x: x + dx, y: y + dy, translationX: dx, translationY: dy },
+    { state: State.END, x: x + dx, y: y + dy, translationX: dx, translationY: dy },
+  ]);
+});
+const pinchAt = (x: number, y: number, from: number, to: number) => act(() => {
+  fireGestureHandler(getByGestureTestId('canvas-pinch'), [
+    { state: State.BEGAN, focalX: x, focalY: y, scale: from },
+    { state: State.ACTIVE, focalX: x, focalY: y, scale: from },
+    { state: State.ACTIVE, focalX: x, focalY: y, scale: to },
+    { state: State.END, focalX: x, focalY: y, scale: to },
+  ]);
+});
 
 const saveButton = () => screen.getByRole('button', { name: '儲存' });
 const pick = (name: string) => fireEvent.press(screen.getByRole('checkbox', { name }));
@@ -124,39 +154,66 @@ describe('OutfitEditor', () => {
         ],
       },
     });
+    layoutCanvas();
+    // (260, 260) 只在白襯衫上（牛仔褲的範圍是 30–210）
+    drag(260, 260, 1000, 0);
+    // 拖太遠停在畫布右緣：中心 (400, 200)
+    pinchAt(380, 200, 1, 2);
     act(() => {
-      fireGestureHandler(getByGestureTestId('pan-a'), [
-        { state: State.BEGAN, translationX: 0, translationY: 0 },
-        { state: State.ACTIVE, translationX: 0, translationY: 0 },
-        { state: State.ACTIVE, translationX: 1000, translationY: 0 },
-        { state: State.END, translationX: 1000, translationY: 0 },
-      ]);
-    });
-    act(() => {
-      fireGestureHandler(getByGestureTestId('pinch-a'), [
-        { state: State.BEGAN, scale: 1 },
-        { state: State.ACTIVE, scale: 1 },
-        { state: State.ACTIVE, scale: 2 },
-        { state: State.END, scale: 2 },
-      ]);
-    });
-    act(() => {
-      fireGestureHandler(getByGestureTestId('rotate-a'), [
-        { state: State.BEGAN, rotation: 0 },
-        { state: State.ACTIVE, rotation: 0 },
-        { state: State.ACTIVE, rotation: 0.5 },
-        { state: State.END, rotation: 0.5 },
+      fireGestureHandler(getByGestureTestId('canvas-rotate'), [
+        { state: State.BEGAN, anchorX: 380, anchorY: 200, rotation: 0 },
+        { state: State.ACTIVE, anchorX: 380, anchorY: 200, rotation: 0 },
+        { state: State.ACTIVE, anchorX: 380, anchorY: 200, rotation: 0.5 },
+        { state: State.END, anchorX: 380, anchorY: 200, rotation: 0.5 },
       ]);
     });
     await act(async () => fireEvent.press(saveButton()));
     const saved = onSave.mock.calls[0][0].items;
-    // 拖太遠會停在畫布邊緣；被拖的單品移到最上層
+    // 被拖的單品移到最上層
     expect(saved).toEqual([
       { itemId: 'a', x: 1, y: 0.5, scale: 2, rotation: 0.5, z: 1 },
       { itemId: 'bb', x: 0.3, y: 0.3, scale: 1, rotation: 0, z: 0 },
     ]);
     // 不再有選取虛線框
     expect(StyleSheet.flatten(screen.getByTestId('piece-a').props.style).borderStyle).toBeUndefined();
+  });
+
+  it('手指沒碰到衣服就不會動：畫布空白處、衣服照片的透明部分都不算', async () => {
+    // 白襯衫的照片只有中間一條有衣服（左右都是透明）
+    mockShapes = new Map([['a', {
+      aspect: 1, bounds: { x0: 0.4, y0: 0, x1: 0.6, y1: 1 },
+      mask: Array.from({ length: MASK_GRID * MASK_GRID }, (_, i) => ((i % MASK_GRID) >= 10 && (i % MASK_GRID) <= 13 ? '1' : '0')).join(''),
+    }]]);
+    const { onSave } = setup({ initial: { name: '', date: '2026-11-02', pieces: [{ itemId: 'a', x: 0.5, y: 0.5, scale: 1, rotation: 0, z: 0, item: shirt }] } });
+    layoutCanvas();
+    drag(380, 550, -100, -100); // 空白處
+    drag(270, 200, 50, 0); // 以前的方框裡、但是透明的地方
+    expect(screen.queryByTestId('canvas-trash')).toBeNull();
+    drag(200, 200, 40, 0); // 碰到衣服才會動
+    await act(async () => fireEvent.press(saveButton()));
+    expect(onSave.mock.calls[0][0].items[0]).toMatchObject({ x: 0.6, y: 0.5 });
+  });
+
+  it('疊在上面的衣服透明的地方，可以直接拿到下面那件', async () => {
+    mockShapes = new Map<string, PieceShape | null>([
+      ['a', null],
+      ['bb', { aspect: 1, bounds: { x0: 0.4, y0: 0, x1: 0.6, y1: 1 } }],
+    ]);
+    const { onSave } = setup({
+      initial: {
+        name: '', date: '2026-11-02',
+        pieces: [
+          { itemId: 'a', x: 0.5, y: 0.5, scale: 1, rotation: 0, z: 0, item: shirt },
+          { itemId: 'bb', x: 0.5, y: 0.5, scale: 1, rotation: 0, z: 1, item: jeans },
+        ],
+      },
+    });
+    layoutCanvas();
+    drag(270, 200, 0, 40); // 牛仔褲在上面，但這裡是它透明的部分 → 動到白襯衫
+    await act(async () => fireEvent.press(saveButton()));
+    const byId = Object.fromEntries(onSave.mock.calls[0][0].items.map((i: { itemId: string }) => [i.itemId, i]));
+    expect(byId.a).toMatchObject({ y: 0.6, z: 1 });
+    expect(byId.bb).toMatchObject({ y: 0.5 });
   });
 
   it('把衣服往下拖到垃圾桶放開就從畫布移除', async () => {
@@ -169,14 +226,10 @@ describe('OutfitEditor', () => {
         ],
       },
     });
-    fireEvent(screen.getByTestId('canvas-area'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 600 } } });
+    layoutCanvas();
     expect(screen.queryByTestId('canvas-trash')).toBeNull();
-    act(() => fireGestureHandler(getByGestureTestId('pan-a'), [
-      { state: State.BEGAN, translationX: 0, translationY: 0 },
-      { state: State.ACTIVE, translationX: 0, translationY: 0 },
-      { state: State.ACTIVE, translationX: 0, translationY: 2000 },
-      { state: State.END, translationX: 0, translationY: 2000 },
-    ]));
+    // (260, 260) 只在白襯衫上
+    drag(260, 260, 0, 2000);
     expect(screen.queryByLabelText('白襯衫，在畫布上')).toBeNull();
     expect(screen.queryByTestId('canvas-trash')).toBeNull();
     await act(async () => fireEvent.press(saveButton()));
@@ -185,26 +238,17 @@ describe('OutfitEditor', () => {
 
   it('拖到垃圾桶以外的地方放開不會移除', () => {
     setup({ initial: { name: '', date: '2026-11-02', pieces: [{ itemId: 'a', x: 0.5, y: 0.5, scale: 1, rotation: 0, z: 0, item: shirt }] } });
-    fireEvent(screen.getByTestId('canvas-area'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 600 } } });
-    act(() => fireGestureHandler(getByGestureTestId('pan-a'), [
-      { state: State.BEGAN, translationX: 0, translationY: 0 },
-      { state: State.ACTIVE, translationX: 0, translationY: 0 },
-      { state: State.ACTIVE, translationX: -2000, translationY: 2000 },
-      { state: State.END, translationX: -2000, translationY: 2000 },
-    ]));
+    layoutCanvas();
+    drag(200, 200, -2000, 2000);
     expect(screen.getByLabelText('白襯衫，在畫布上')).toBeTruthy();
     expect(screen.queryByTestId('canvas-trash')).toBeNull();
   });
 
   it('pinching past the limit does not leave a dead zone when pinching back', async () => {
     const { onSave } = setup({ initial: { name: '', date: '2026-11-02', pieces: [{ itemId: 'a', x: 0.5, y: 0.5, scale: 1, rotation: 0, z: 0, item: shirt }] } });
-    const pinch = (from: number, to: number) => act(() => {
-      fireGestureHandler(getByGestureTestId('pinch-a'), [
-        { state: State.BEGAN, scale: from }, { state: State.ACTIVE, scale: from }, { state: State.ACTIVE, scale: to }, { state: State.END, scale: to },
-      ]);
-    });
-    pinch(1, 10); // 停在上限 4 倍
-    pinch(1, 0.5); // 立刻縮到 2 倍，不用先「還掉」超出的部分
+    layoutCanvas();
+    pinchAt(200, 200, 1, 10); // 停在上限 4 倍
+    pinchAt(200, 200, 1, 0.5); // 立刻縮到 2 倍，不用先「還掉」超出的部分
     await act(async () => fireEvent.press(saveButton()));
     expect(onSave.mock.calls[0][0].items[0].scale).toBe(2);
   });

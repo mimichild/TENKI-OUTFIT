@@ -21,6 +21,11 @@ export interface PieceShape {
   /** 照片寬 / 高 */
   aspect: number;
   bounds: Bounds;
+  /**
+   * 衣服在照片裡的粗略分佈：整張照片切成 MASK_GRID × MASK_GRID 格，由上而下、由左而右，
+   * '1' = 這格有衣服。編輯穿搭時用來判斷手指有沒有碰到衣服（舊快取沒有這個欄位時改用 bounds）
+   */
+  mask?: string;
 }
 
 export interface Rect {
@@ -30,7 +35,7 @@ export interface Rect {
   h: number;
 }
 
-const ALPHA_THRESHOLD = 24;
+export const ALPHA_THRESHOLD = 24;
 
 /** RGBA 像素 → 不透明範圍；完全透明回傳 null */
 export function alphaBounds(pixels: Uint8Array, width: number, height: number, threshold = ALPHA_THRESHOLD): Bounds | null {

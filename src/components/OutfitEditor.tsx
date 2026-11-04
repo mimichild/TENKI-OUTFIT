@@ -10,7 +10,10 @@ import {
   addPiece, applyGesture, bringToFront, CANVAS_HEIGHT_RATIO, droppedInTrash, editorCanvasRatio, removePiece, TRASH_BOTTOM, TRASH_SIZE,
   type GestureDelta,
 } from '@/lib/outfitCanvas';
+import type { PieceShape } from '@/lib/outfitLayout';
 import { outfitTotal } from '@/lib/outfitTotals';
+import { pieceAt } from '@/lib/pieceHit';
+import { usePieceShapes } from '@/lib/usePieceShapes';
 import { weekdayOf } from '@/lib/weatherDates';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme, type Theme } from '@/theme/useTheme';
@@ -65,6 +68,9 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
   const canvasRatio = area ? editorCanvasRatio(area, initialRatio) : initialRatio;
   const canvasWidth = area && area.width > 0 ? area.width : window.width;
   const selectedIds = useMemo(() => new Set(pieces.map(p => p.itemId)), [pieces]);
+  // 照片裡衣服的形狀：判斷手指有沒有碰到衣服（透明的部分不算）
+  const pieceItems = useMemo(() => pieces.map(p => p.item), [pieces]);
+  const shapes = usePieceShapes(pieceItems);
   const total = outfitTotal(pieces);
   const canSave = date !== null && pieces.length > 0 && !busy;
   const s = makeStyles(theme);
@@ -90,6 +96,11 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
     setDrag('none');
     setPieces(list => list.map(p => (p.itemId === itemId ? { ...p, x, y, scale, rotation } : p)));
   };
+
+  const { gesture: canvasGesture, live } = useCanvasGestures({
+    pieces, shapes, width: canvasWidth, ratio: canvasRatio,
+    onBegin: raise, onDrag: setDrag, onCommit: commit, onTrash: trash,
+  });
 
   const save = async () => {
     if (!canSave || date === null) return;
@@ -173,43 +184,43 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
             setArea(a => (a && a.width === width && a.height === height ? a : { width, height }));
           }}
         >
-          <View
-            testID="outfit-canvas"
-            accessibilityLabel={t('outfit.canvas')}
-            style={[s.canvas, { width: canvasWidth, height: canvasWidth * canvasRatio, borderColor: theme.border }]}
-          >
-            {pieces.length === 0 && (
-              <View style={s.canvasBackground}>
-                <Text style={s.emptyHint}>{t('outfit.emptyCanvas')}</Text>
-              </View>
-            )}
-            {/* 疊放順序用 zIndex，不重新排列子元件，避免手勢進行中原生畫面被搬動 */}
-            {pieces.map(p => (
-              <CanvasPiece
-                key={p.itemId}
-                piece={p}
-                width={canvasWidth}
-                ratio={canvasRatio}
-                label={t('outfit.pieceLabel', { name: p.item.name || p.item.brand || t('item.untitled') })}
-                removeLabel={t('outfit.removePiece')}
-                onBegin={() => raise(p.itemId)}
-                onDrag={setDrag}
-                onCommit={next => commit(p.itemId, next)}
-                onTrash={() => trash(p.itemId)}
-              />
-            ))}
-            {/* 拖拉單品時才出現：把衣服拖到這裡放開就從畫布移除 */}
-            {drag !== 'none' && (
-              <View
-                testID="canvas-trash"
-                pointerEvents="none"
-                importantForAccessibility="no-hide-descendants"
-                style={[s.trash, drag === 'over' && s.trashOver]}
-              >
-                <Ionicons name="trash-outline" size={drag === 'over' ? 30 : 26} color={drag === 'over' ? '#FFFFFF' : '#5F5F5F'} />
-              </View>
-            )}
-          </View>
+          {/* 手勢掛在整個畫布上：第一根手指落在哪件衣服上就動那件，第二根手指（縮放、旋轉）放在畫布任何地方都可以 */}
+          <GestureDetector gesture={canvasGesture}>
+            <View
+              testID="outfit-canvas"
+              accessibilityLabel={t('outfit.canvas')}
+              style={[s.canvas, { width: canvasWidth, height: canvasWidth * canvasRatio, borderColor: theme.border }]}
+            >
+              {pieces.length === 0 && (
+                <View style={s.canvasBackground}>
+                  <Text style={s.emptyHint}>{t('outfit.emptyCanvas')}</Text>
+                </View>
+              )}
+              {/* 疊放順序用 zIndex，不重新排列子元件，避免手勢進行中原生畫面被搬動 */}
+              {pieces.map(p => (
+                <CanvasPiece
+                  key={p.itemId}
+                  piece={p}
+                  live={live?.itemId === p.itemId ? live.placement : null}
+                  width={canvasWidth}
+                  label={t('outfit.pieceLabel', { name: p.item.name || p.item.brand || t('item.untitled') })}
+                  removeLabel={t('outfit.removePiece')}
+                  onTrash={() => trash(p.itemId)}
+                />
+              ))}
+              {/* 拖拉單品時才出現：把衣服拖到這裡放開就從畫布移除 */}
+              {drag !== 'none' && (
+                <View
+                  testID="canvas-trash"
+                  pointerEvents="none"
+                  importantForAccessibility="no-hide-descendants"
+                  style={[s.trash, drag === 'over' && s.trashOver]}
+                >
+                  <Ionicons name="trash-outline" size={drag === 'over' ? 30 : 26} color={drag === 'over' ? '#FFFFFF' : '#5F5F5F'} />
+                </View>
+              )}
+            </View>
+          </GestureDetector>
         </View>
 
         <View style={s.toolbar}>
@@ -251,39 +262,40 @@ export function OutfitEditor({ title, initial, items, today, onSave, onCancel, o
   );
 }
 
-interface PieceProps {
-  piece: OutfitPiece;
-  width: number;
-  /** 畫布高 / 寬 */
-  ratio: number;
-  label: string;
-  /** 螢幕閱讀器的「移除」動作名稱（無法拖到垃圾桶時用） */
-  removeLabel: string;
-  onBegin: () => void;
-  onDrag: (state: DragState) => void;
-  onCommit: (next: OutfitItemPlacement) => void;
-  onTrash: () => void;
-}
-
 type DragState = 'none' | 'drag' | 'over';
 
 type GestureKind = 'pan' | 'pinch' | 'rotate';
 const NO_CHANGE: GestureDelta = { dx: 0, dy: 0, scale: 1, rotation: 0 };
 
+interface CanvasGestureOptions {
+  pieces: OutfitPiece[];
+  shapes: ReadonlyMap<string, PieceShape | null> | undefined;
+  width: number;
+  /** 畫布高 / 寬 */
+  ratio: number;
+  onBegin: (itemId: string) => void;
+  onDrag: (state: DragState) => void;
+  onCommit: (itemId: string, next: OutfitItemPlacement) => void;
+  onTrash: (itemId: string) => void;
+}
+
 /**
- * 單指拖拉、雙指縮放與旋轉（三種手勢同時辨識）。
- * 手勢進行中只更新這件單品自己的狀態，放開後才回寫到編輯器。
- * 手指放開又按下時各手勢會從頭計算，所以把已結束的部分累加到 done。
+ * 畫布上的單指拖拉、雙指縮放與旋轉（三種手勢同時辨識）。
+ * - 手勢一開始（第一根手指按下）時，找手指底下最上層、而且真的碰到衣服的單品；沒碰到衣服就什麼都不動
+ * - 手勢進行中只更新 live（這件單品暫時的位置），放開後才回寫到編輯器
+ * - 手指放開又按下時各手勢會從頭計算，所以把已結束的部分累加到 done
  */
-function CanvasPiece({ piece, width, ratio, label, removeLabel, onBegin, onDrag, onCommit, onTrash }: PieceProps) {
-  const [live, setLive] = useState<OutfitItemPlacement | null>(null);
+function useCanvasGestures(options: CanvasGestureOptions) {
+  const [live, setLive] = useState<{ itemId: string; placement: OutfitItemPlacement } | null>(null);
   // 手勢的 callback 可能是較早 render 時建立的，一律從 ref 讀最新的值
-  const latest = useRef({ piece, width, ratio, onBegin, onDrag, onCommit, onTrash });
-  latest.current = { piece, width, ratio, onBegin, onDrag, onCommit, onTrash };
+  const latest = useRef(options);
+  latest.current = options;
   const dragState = useRef<DragState>('none');
   /** 已經 onBegin 的手勢；onFinalize 也可能發生在沒有 onBegin 的手勢上，要配對才算 */
   const active = useRef(new Set<GestureKind>());
-  const start = useRef<OutfitItemPlacement>(piece);
+  /** 這次手勢在動的單品；null = 手指沒碰到衣服 */
+  const target = useRef<string | null>(null);
+  const start = useRef<OutfitItemPlacement | null>(null);
   const done = useRef<GestureDelta>(NO_CHANGE);
   const current = useRef<GestureDelta>(NO_CHANGE);
 
@@ -293,27 +305,30 @@ function CanvasPiece({ piece, width, ratio, label, removeLabel, onBegin, onDrag,
     scale: done.current.scale * current.current.scale,
     rotation: done.current.rotation + current.current.rotation,
   });
+  const setDrag = (state: DragState) => {
+    if (state === dragState.current) return;
+    dragState.current = state;
+    latest.current.onDrag(state);
+  };
   const update = (patch: Partial<GestureDelta>) => {
+    if (!target.current || !start.current) return;
     current.current = { ...current.current, ...patch };
     const { width: w, ratio: r } = latest.current;
-    const next = applyGesture(start.current, total(), w, r);
-    setLive(next);
+    const g = total();
+    const next = applyGesture(start.current, g, w, r);
+    setLive({ itemId: target.current, placement: next });
     // 有拖動才顯示垃圾桶；停在垃圾桶上時反白
-    const t = total();
-    const state: DragState = droppedInTrash(next, t, w, r) ? 'over' : Math.hypot(t.dx, t.dy) > 0 ? 'drag' : 'none';
-    if (state !== dragState.current) {
-      dragState.current = state;
-      latest.current.onDrag(state);
-    }
+    setDrag(droppedInTrash(next, g, w, r) ? 'over' : Math.hypot(g.dx, g.dy) > 0 ? 'drag' : 'none');
   };
   /**
    * 某個手勢結束：它的變化併入 done（其他還在進行的手勢留在 current）。
    * 併入時先套用上下限，避免超出的部分要先「還掉」才有反應
    */
   const fold = (ended: Partial<Record<keyof GestureDelta, true>>) => {
-    const width = latest.current.width;
+    if (!start.current) return;
+    const { width, ratio } = latest.current;
     const c = current.current;
-    const clamped = applyGesture(start.current, total(), width, latest.current.ratio);
+    const clamped = applyGesture(start.current, total(), width, ratio);
     // 還在進行的手勢的部分不併入
     const keep = {
       dx: ended.dx ? 0 : c.dx,
@@ -329,66 +344,91 @@ function CanvasPiece({ piece, width, ratio, label, removeLabel, onBegin, onDrag,
     };
     current.current = keep;
   };
-  const begin = (kind: GestureKind) => {
+  /** x, y：手指在畫布上的位置 */
+  const begin = (kind: GestureKind, x: number, y: number) => {
     if (active.current.size === 0) {
-      start.current = latest.current.piece;
+      const { pieces, shapes, width } = latest.current;
+      const id = pieceAt(pieces, shapes, width, x, y);
+      const piece = pieces.find(p => p.itemId === id);
+      target.current = piece ? piece.itemId : null;
+      start.current = piece ?? null;
       done.current = NO_CHANGE;
       current.current = NO_CHANGE;
-      latest.current.onBegin();
+      if (piece) latest.current.onBegin(piece.itemId);
     }
     active.current.add(kind);
   };
   const finalize = (kind: GestureKind) => {
     if (!active.current.delete(kind) || active.current.size > 0) return;
+    const id = target.current;
+    const from = start.current;
+    target.current = null;
+    start.current = null;
+    if (!id || !from) return;
     const { width: w, ratio: r } = latest.current;
-    const t = total();
-    const next = applyGesture(start.current, t, w, r);
+    const g = total();
+    const next = applyGesture(from, g, w, r);
     setLive(null);
     dragState.current = 'none';
-    if (droppedInTrash(next, t, w, r)) latest.current.onTrash();
-    else latest.current.onCommit(next);
+    if (droppedInTrash(next, g, w, r)) latest.current.onTrash(id);
+    else latest.current.onCommit(id, next);
   };
 
   const pan = Gesture.Pan()
-    .withTestId(`pan-${piece.itemId}`)
+    .withTestId('canvas-pan')
     .runOnJS(true)
-    .onBegin(() => begin('pan'))
+    .onBegin(e => begin('pan', e.x, e.y))
     .onUpdate(e => update({ dx: e.translationX, dy: e.translationY }))
     .onEnd(() => fold({ dx: true, dy: true }))
     .onFinalize(() => finalize('pan'));
   const pinch = Gesture.Pinch()
-    .withTestId(`pinch-${piece.itemId}`)
+    .withTestId('canvas-pinch')
     .runOnJS(true)
-    .onBegin(() => begin('pinch'))
+    .onBegin(e => begin('pinch', e.focalX, e.focalY))
     .onUpdate(e => update({ scale: e.scale }))
     .onEnd(() => fold({ scale: true }))
     .onFinalize(() => finalize('pinch'));
   const rotate = Gesture.Rotation()
-    .withTestId(`rotate-${piece.itemId}`)
+    .withTestId('canvas-rotate')
     .runOnJS(true)
-    .onBegin(() => begin('rotate'))
+    .onBegin(e => begin('rotate', e.anchorX, e.anchorY))
     .onUpdate(e => update({ rotation: e.rotation }))
     .onEnd(() => fold({ rotation: true }))
     .onFinalize(() => finalize('rotate'));
 
+  return { gesture: Gesture.Simultaneous(pan, pinch, rotate), live };
+}
+
+interface PieceProps {
+  piece: OutfitPiece;
+  /** 手勢進行中的暫時位置 */
+  live: OutfitItemPlacement | null;
+  width: number;
+  label: string;
+  /** 螢幕閱讀器的「移除」動作名稱（無法拖到垃圾桶時用） */
+  removeLabel: string;
+  onTrash: () => void;
+}
+
+/** 單品本身不接觸控（pointerEvents none），觸控由畫布依衣服形狀判斷 */
+function CanvasPiece({ piece, live, width, label, removeLabel, onTrash }: PieceProps) {
   // 手勢開始時已移到最上層，拖拉中也要用新的 z
   const shown = live ? { ...live, z: piece.z } : piece;
   return (
-    <GestureDetector gesture={Gesture.Simultaneous(pan, pinch, rotate)}>
-      <View
-        testID={`piece-${piece.itemId}`}
-        accessible
-        accessibilityRole="button"
-        accessibilityLabel={label}
-        accessibilityActions={[{ name: 'remove', label: removeLabel }]}
-        onAccessibilityAction={e => {
-          if (e.nativeEvent.actionName === 'remove') latest.current.onTrash();
-        }}
-        style={pieceStyle(shown, width)}
-      >
-        <PieceImage item={piece.item} />
-      </View>
-    </GestureDetector>
+    <View
+      testID={`piece-${piece.itemId}`}
+      pointerEvents="none"
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityActions={[{ name: 'remove', label: removeLabel }]}
+      onAccessibilityAction={e => {
+        if (e.nativeEvent.actionName === 'remove') onTrash();
+      }}
+      style={pieceStyle(shown, width)}
+    >
+      <PieceImage item={piece.item} />
+    </View>
   );
 }
 

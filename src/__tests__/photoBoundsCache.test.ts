@@ -17,7 +17,7 @@ afterEach(() => jest.useRealTimers());
 
 describe('bounds cache file', () => {
   it('reads the file once and returns saved entries', async () => {
-    const { io, api } = memoryIo(JSON.stringify({ version: 1, entries: { 'photos/a.png': shape, 'photos/b.png': null } }));
+    const { io, api } = memoryIo(JSON.stringify({ version: 2, entries: { 'photos/a.png': shape, 'photos/b.png': null } }));
     const cache = createBoundsCache(api);
     expect(await cache.get('photos/a.png')).toEqual(shape);
     expect(await cache.get('photos/b.png')).toBeNull();
@@ -33,7 +33,7 @@ describe('bounds cache file', () => {
     expect(io.writes).toBe(0);
     await jest.advanceTimersByTimeAsync(500);
     expect(io.writes).toBe(1);
-    expect(JSON.parse(io.text!)).toEqual({ version: 1, entries: { 'photos/a.png': shape, 'photos/b.png': null } });
+    expect(JSON.parse(io.text!)).toEqual({ version: 2, entries: { 'photos/a.png': shape, 'photos/b.png': null } });
   });
 
   it.each([
@@ -47,7 +47,7 @@ describe('bounds cache file', () => {
   });
 
   it('skips malformed entries but keeps valid ones', async () => {
-    const { api } = memoryIo(JSON.stringify({ version: 1, entries: { 'photos/a.png': shape, 'photos/x.png': { aspect: 'big' } } }));
+    const { api } = memoryIo(JSON.stringify({ version: 2, entries: { 'photos/a.png': shape, 'photos/x.png': { aspect: 'big' } } }));
     const cache = createBoundsCache(api);
     expect(await cache.get('photos/a.png')).toEqual(shape);
     expect(await cache.get('photos/x.png')).toBeUndefined();
@@ -60,7 +60,7 @@ describe('bounds cache file', () => {
   });
 
   it('removes entries of deleted photos', async () => {
-    const { io, api } = memoryIo(JSON.stringify({ version: 1, entries: { 'photos/a.png': shape, 'photos/b.png': shape } }));
+    const { io, api } = memoryIo(JSON.stringify({ version: 2, entries: { 'photos/a.png': shape, 'photos/b.png': shape } }));
     const cache = createBoundsCache(api);
     await cache.remove(['photos/a.png']);
     expect(await cache.get('photos/a.png')).toBeUndefined();
@@ -69,7 +69,7 @@ describe('bounds cache file', () => {
   });
 
   it('keeps only the given paths', async () => {
-    const { io, api } = memoryIo(JSON.stringify({ version: 1, entries: { 'photos/a.png': shape, 'photos/b.png': shape } }));
+    const { io, api } = memoryIo(JSON.stringify({ version: 2, entries: { 'photos/a.png': shape, 'photos/b.png': shape } }));
     const cache = createBoundsCache(api);
     await cache.retainOnly(['photos/b.png', 'photos/z.png']);
     expect(await cache.get('photos/a.png')).toBeUndefined();
