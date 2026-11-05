@@ -1,6 +1,6 @@
 import {
   candidatesFor,
-  isLongSkirt,
+  isLongBottom,
   isTallBoots,
   lookOf,
   needsOuterwear,
@@ -743,17 +743,20 @@ describe('缺少時用次之的單品補上', () => {
   });
 });
 
-describe('長裙、長洋裝不搭長靴', () => {
+describe('長裙、長洋裝、長褲不搭長靴', () => {
   const seeded = (seed: number) => () => {
     seed = (seed * 1103515245 + 12345) % 2147483648;
     return seed / 2147483648;
   };
 
-  it('isLongSkirt／isTallBoots 依名稱判斷', () => {
-    expect(isLongSkirt(item('bottom', { name: '百褶長裙' }))).toBe(true);
-    expect(isLongSkirt(item('onepiece', { name: '碎花長洋裝' }))).toBe(true);
-    expect(isLongSkirt(item('bottom', { name: '中長裙' }))).toBe(false);
-    expect(isLongSkirt(item('bottom', { name: '短裙' }))).toBe(false);
+  it('isLongBottom／isTallBoots 依名稱判斷', () => {
+    expect(isLongBottom(item('bottom', { name: '百褶長裙' }))).toBe(true);
+    expect(isLongBottom(item('onepiece', { name: '碎花長洋裝' }))).toBe(true);
+    expect(isLongBottom(item('bottom', { name: '中長裙' }))).toBe(false);
+    expect(isLongBottom(item('bottom', { name: '短裙' }))).toBe(false);
+    expect(isLongBottom(item('bottom', { name: '黑色寬褲' }))).toBe(true);
+    expect(isLongBottom(item('bottom', { name: '卡其長褲' }))).toBe(true);
+    expect(isLongBottom(item('bottom', { name: '短褲' }))).toBe(false);
     expect(isTallBoots(item('shoes', { name: '黑色長靴' }))).toBe(true);
     expect(isTallBoots(item('shoes', { name: '過膝靴' }))).toBe(true);
     expect(isTallBoots(item('shoes', { name: '短靴' }))).toBe(false);
@@ -764,12 +767,13 @@ describe('長裙、長洋裝不搭長靴', () => {
     const ankle = item('shoes', { name: '短靴' });
     const longSkirt = item('bottom', { name: '長裙' });
     const longDress = item('onepiece', { name: '長洋裝' });
+    const pants = item('bottom', { name: '長褲' });
     const mini = item('bottom', { name: '短裙' });
     let miniWithBoots = 0;
     for (let seed = 1; seed <= 30; seed++) {
-      const r = suggestOutfit({ items: [item('top', { name: '上衣' }), longSkirt, longDress, mini, boots, ankle], weather: weather(16, 12), occasion: null }, { rng: seeded(seed) });
+      const r = suggestOutfit({ items: [item('top', { name: '上衣' }), longSkirt, longDress, pants, mini, boots, ankle], weather: weather(16, 12), occasion: null }, { rng: seeded(seed) });
       const ids = r.pieces.map(p => p.id);
-      if (ids.includes(longSkirt.id) || ids.includes(longDress.id)) expect(ids).toContain(ankle.id);
+      if ([longSkirt, longDress, pants].some(x => ids.includes(x.id))) expect(ids).toContain(ankle.id);
       if (ids.includes(mini.id) && ids.includes(boots.id)) miniWithBoots++;
     }
     expect(miniWithBoots).toBeGreaterThan(0);

@@ -15,7 +15,7 @@ import { layoutOutfit, type PieceShape } from './outfitLayout';
  * - 缺少符合天氣／場合的單品時，用次之的單品湊成一套，並在說明裡註明是系統補上的（2026-11-05）：
  *   先找場合符合的、其次天氣符合的、最後任何一件；只補上衣、下著、連身、內著（湊不出基本一套時）、
  *   一定要穿的外套、鞋子
- * - 長裙、長洋裝不搭長靴（短靴、一般鞋子可以）（2026-11-05）
+ * - 長裙、長洋裝、長褲不搭長靴（短靴、一般鞋子可以）（2026-11-05）
  * - 按「更新」時盡量用不同的單品：最近幾套出現過的單品扣分（衣服扣比較多）（2026-11-05）
  * - 配色與風格（2026-11-04）：隨機產生多組候選，依配色（同色系、黑白灰、大地色、一點亮色；撞色扣分）
  *   與風格（淑女風、休閒風是否一致、是否符合場合）評分，從接近最高分的候選中挑一組，按「更新」才有變化
@@ -198,7 +198,7 @@ export function candidatesFor(
 type Slot = 'outerwear' | 'top' | 'overlay' | 'bottom' | 'onepiece' | 'shoes' | 'bag' | 'accessory';
 const SLOT_ORDER: Slot[] = ['outerwear', 'top', 'overlay', 'bottom', 'onepiece', 'shoes', 'bag', 'accessory'];
 type Picks = Partial<Record<Slot, Item>>;
-/** shoesAlt：符合的鞋子都是長靴、又穿長裙時，改用的次之鞋子（不是長靴） */
+/** shoesAlt：符合的鞋子都是長靴、又穿長裙或長褲時，改用的次之鞋子（不是長靴） */
 type Pool = Record<Slot | 'inner' | 'shoesAlt', Item[]>;
 
 const STRAPPY_WORDS = ['細肩帶', '吊帶', '肩帶', 'camisole', 'cami', 'spaghetti', 'キャミ'];
@@ -227,15 +227,18 @@ const needsOuter = (p: Picks) => (!!p.top && needsOuterwear(p.top)) || (!!p.onep
 
 /** 內著、細肩帶一定有外套；外搭一定疊在一般上衣外面 */
 const LONG_WORDS = ['長裙', '長洋裝', '長版洋裝', '長版裙', '長紗裙', 'maxi', 'long skirt', 'long dress', 'ロングスカート', 'ロングワンピース'];
+const LONG_PANTS_WORDS = ['長褲', '寬褲', '寬管褲', '闊腿褲', '喇叭褲', '直筒褲', '西裝褲', 'trousers', 'wide-leg', 'wide leg', 'ロングパンツ', 'ワイドパンツ'];
 const TALL_BOOT_WORDS = ['長靴', '長筒靴', '高筒靴', '過膝靴', '膝上靴', 'long boots', 'knee boots', 'knee-high', 'over-the-knee', 'ロングブーツ', 'ニーハイ'];
 const nameHas = (item: Item, words: string[]) => {
   const name = item.name.toLowerCase();
   return words.some(w => name.includes(w.toLowerCase()));
 };
 
-/** 長裙、長洋裝（名稱判斷；「中長裙」不算） */
-export function isLongSkirt(item: Item): boolean {
-  return (item.category === 'bottom' || item.category === 'onepiece') && nameHas(item, LONG_WORDS) && !item.name.includes('中長');
+/** 不搭長靴的長下身：長裙、長洋裝（「中長裙」不算）、長褲（名稱判斷） */
+export function isLongBottom(item: Item): boolean {
+  if (item.category !== 'bottom' && item.category !== 'onepiece') return false;
+  if (nameHas(item, LONG_WORDS) && !item.name.includes('中長')) return true;
+  return item.category === 'bottom' && nameHas(item, LONG_PANTS_WORDS);
 }
 
 /** 長靴（短靴、一般鞋子不算） */
@@ -243,11 +246,11 @@ export function isTallBoots(item: Item): boolean {
   return item.category === 'shoes' && nameHas(item, TALL_BOOT_WORDS);
 }
 
-/** 這套可以穿的鞋子：長裙、長洋裝不搭長靴（短靴、一般鞋子可以） */
+/** 這套可以穿的鞋子：長裙、長洋裝、長褲不搭長靴（短靴、一般鞋子可以） */
 const shoeChoices = (p: Picks, shoes: Item[]) =>
-  [p.bottom, p.onepiece].some(i => i && isLongSkirt(i)) ? shoes.filter(s => !isTallBoots(s)) : shoes;
+  [p.bottom, p.onepiece].some(i => i && isLongBottom(i)) ? shoes.filter(s => !isTallBoots(s)) : shoes;
 
-/** 內著、細肩帶一定有外套；外搭一定疊在一般上衣外面；長裙不搭長靴 */
+/** 內著、細肩帶一定有外套；外搭一定疊在一般上衣外面；長裙、長褲不搭長靴 */
 const isValid = (p: Picks) =>
   (!needsOuter(p) || !!p.outerwear) && (!p.overlay || p.top?.category === 'top') && (!p.shoes || shoeChoices(p, [p.shoes]).length > 0);
 
@@ -412,7 +415,7 @@ export function suggestOutfit(input: SuggestionInput, options: SuggestionOptions
   if (rule === 'required') fill('outerwear');
   fill('shoes');
   if (!canDress()) for (const c of ['top', 'bottom', 'onepiece', 'inner'] as const) fill(c);
-  // 長裙不搭長靴：符合的鞋子都是長靴時，準備次之的其他鞋子
+  // 長裙、長褲不搭長靴：符合的鞋子都是長靴時，準備次之的其他鞋子
   if (pool.shoes.length > 0 && pool.shoes.every(isTallBoots)) {
     pool.shoesAlt = fallbackFor(input.items.filter(i => !isTallBoots(i)), 'shoes', filter);
     for (const i of pool.shoesAlt) filledIds.add(i.id);
