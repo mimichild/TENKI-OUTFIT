@@ -852,16 +852,33 @@ describe('風格只搭同風格、包包和鞋子同色系', () => {
     const dress = item('onepiece', { name: '洋裝A', style: 'both' });
     const blackShoes = item('shoes', { name: '鞋A', color: 'black', style: 'both' });
     const brownShoes = item('shoes', { name: '鞋B', color: 'brown', style: 'both' });
-    const grayBag = item('bag', { name: '包A', color: 'gray', style: 'both' });
-    const beigeBag = item('bag', { name: '包B', color: 'beige', style: 'both' });
+    const blackBag = item('bag', { name: '包A', color: 'black', style: 'both' });
+    const brownBag = item('bag', { name: '包B', color: 'brown', style: 'both' });
     const redBag = item('bag', { name: '包C', color: 'red', style: 'both' });
-    const group = (i: Item) => ({ black: 'mono', gray: 'mono', brown: 'earth', beige: 'earth', red: 'red' })[i.color as string];
     for (let seed = 1; seed <= 30; seed++) {
-      const r = suggestOutfit({ items: [dress, blackShoes, brownShoes, grayBag, beigeBag, redBag], weather: null, occasion: null }, { rng: seeded(seed) });
+      const r = suggestOutfit({ items: [dress, blackShoes, brownShoes, blackBag, brownBag, redBag], weather: null, occasion: null }, { rng: seeded(seed) });
       const shoes = r.pieces.find(p => p.category === 'shoes')!;
       const bag = r.pieces.find(p => p.category === 'bag')!;
       expect(bag).toBeDefined();
-      expect(group(bag)).toBe(group(shoes));
+      expect(bag.color).toBe(shoes.color);
+    }
+  });
+
+  it('黑、白、灰不算同色系：黑包配黑鞋，不配白鞋（藍和深藍算同色系）', () => {
+    const tee = item('top', { name: 'T恤', color: 'gray' });
+    const skirt = item('bottom', { name: '傘裙', color: 'navy', style: 'casual' });
+    const whiteSneakers = item('shoes', { name: '白球鞋', color: 'white' });
+    const blackSneakers = item('shoes', { name: '黑球鞋', color: 'black' });
+    const blackTote = item('bag', { name: '托特包', color: 'black', style: 'casual' });
+    for (let seed = 1; seed <= 30; seed++) {
+      const r = suggestOutfit({ items: [tee, skirt, whiteSneakers, blackSneakers, blackTote], weather: weather(32, 27), occasion: null }, { rng: seeded(seed) });
+      expect(r.pieces.map(p => p.id)).toEqual([tee.id, skirt.id, blackSneakers.id, blackTote.id]);
+    }
+    // 沒有黑鞋：鞋子改成和下著同色系（深藍裙 → 藍鞋，不選白鞋）
+    const blueShoes = item('shoes', { name: '藍球鞋', color: 'blue' });
+    for (let seed = 1; seed <= 30; seed++) {
+      const r = suggestOutfit({ items: [tee, skirt, whiteSneakers, blueShoes, blackTote], weather: weather(32, 27), occasion: null }, { rng: seeded(seed) });
+      expect(r.pieces.find(p => p.category === 'shoes')!.id).toBe(blueShoes.id);
     }
   });
 

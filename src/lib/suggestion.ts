@@ -16,7 +16,8 @@ import { layoutOutfit, type PieceShape } from './outfitLayout';
  *   風格沒手動設定時先用名稱推測，名稱看不出來再用場合推測
  * - 包包（2026-11-05）：先挑同風格的；沒有同風格的包包，改挑場合相近的（選了場合 = 那個場合；
  *   不限場合 = 和這套衣服的場合相同）
- * - 包包和鞋子同色系（2026-11-05）：有同色系的鞋子＋包包就配同色系；配不出同色系時，鞋子改成和下著（連身）同色系
+ * - 包包和鞋子同色系（2026-11-05）：有同色系的鞋子＋包包就配同色系；配不出同色系時，鞋子改成和下著（連身）同色系。
+ *   這裡的「同色系」比衣服配色細：黑、白、灰各自一組（黑包不配白鞋），只有藍／深藍、紅／粉紅、杏／卡其算同色系
  * - 缺少符合天氣／場合的單品時，用次之的單品湊成一套，並在說明裡註明是系統補上的（2026-11-05）：
  *   先找場合符合的、其次天氣符合的、最後任何一件；只補上衣、下著、連身、內著（湊不出基本一套時）、
  *   一定要穿的外套、鞋子
@@ -263,15 +264,21 @@ const pick = (list: Item[], rng: () => number) => list[Math.min(list.length - 1,
 
 type ColorOf = (item: Item) => ColorTag | null;
 
-const groupOf = (i: Item, colorOf: ColorOf): ColorGroup | null => {
-  const c = colorOf(i);
-  return c ? colorGroup(c) : null;
+/**
+ * 鞋子、包包、下著比顏色用的色調：比衣服配色的色系細，黑、白、灰各自一組；
+ * 藍／深藍、紅／粉紅、杏／卡其看起來相近算同一組
+ */
+const TONE: Record<ColorTag, string> = {
+  black: 'black', white: 'white', gray: 'gray',
+  beige: 'beige', khaki: 'beige', brown: 'brown',
+  red: 'red', pink: 'red', orange: 'orange', green: 'green',
+  blue: 'blue', navy: 'blue', purple: 'purple',
 };
 
 /** 同色系；不知道顏色的看不出來，當作可以搭 */
 const sameGroup = (a: Item, b: Item, colorOf: ColorOf) => {
-  const [x, y] = [groupOf(a, colorOf), groupOf(b, colorOf)];
-  return x === null || y === null || x === y;
+  const [x, y] = [colorOf(a), colorOf(b)];
+  return x === null || y === null || TONE[x] === TONE[y];
 };
 
 /** 包包和鞋子是不同色系 */
@@ -476,8 +483,7 @@ function scoreLook(pieces: Item[], colorOf: (item: Item) => ColorTag | null, occ
   // 包包和鞋子同色系
   const bag = pieces.find(p => p.category === 'bag');
   const shoes = pieces.find(p => p.category === 'shoes');
-  const bagGroup = bag && colorOf(bag) ? colorGroup(colorOf(bag)!) : null;
-  if (bagGroup && shoes && colorOf(shoes) && colorGroup(colorOf(shoes)!) === bagGroup) score += 1;
+  if (bag && shoes && colorOf(bag) && colorOf(shoes) && sameGroup(bag, shoes, colorOf)) score += 1;
   return score;
 }
 
