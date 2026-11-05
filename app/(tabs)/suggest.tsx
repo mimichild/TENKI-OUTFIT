@@ -34,6 +34,8 @@ interface Picked {
   suggestion: Suggestion;
   /** 最近幾套的單品 id（最新的在前面），按「更新」時避開 */
   recent: string[][];
+  /** 第幾次抽的建議；說明的形容詞依這個輪著用，每次更新都換說法 */
+  variant: number;
 }
 
 export default function SuggestScreen() {
@@ -65,9 +67,11 @@ export default function SuggestScreen() {
   // 改了分類、改到不符合目前的季節／場合 → 也重抽。
   // 在 render 時就換掉（React 允許依目前輸入調整 state），不經過 effect，卡片才不會中間閃一幀空白
   if (ready && probe) {
+    const wasFilled = (p: Item) => picked?.suggestion.filled.some(f => f.itemId === p.id) ?? false;
     const stillFits = (p: Item) => {
       const cur = byId.get(p.id);
-      return !!cur && cur.category === p.category && candidatesFor([cur], cur.category, { band: probe.band, occasion }).length > 0;
+      // 系統補上的單品本來就不完全符合，只要還在、分類沒變就好
+      return !!cur && cur.category === p.category && (wasFilled(p) || candidatesFor([cur], cur.category, { band: probe.band, occasion }).length > 0);
     };
     // 原本缺的分類（外套、鞋子）現在有可用的單品了
     const missingNowAvailable = (c: Category) => candidatesFor(input.items, c, { band: probe.band, occasion }).length > 0;
@@ -77,10 +81,12 @@ export default function SuggestScreen() {
       (picked.input !== input &&
         (picked.suggestion.status === 'empty' ||
           !picked.suggestion.pieces.every(stillFits) ||
-          picked.suggestion.missing.some(missingNowAvailable)));
+          picked.suggestion.missing.some(missingNowAvailable) ||
+          // 系統補上的分類，現在有完全符合的單品了
+          picked.suggestion.filled.some(f => missingNowAvailable(f.category))));
     if (stale) {
       const suggestion = suggestOutfit(input);
-      setPicked({ key, input, suggestion, recent: [suggestion.pieces.map(p => p.id)] });
+      setPicked({ key, input, suggestion, recent: [suggestion.pieces.map(p => p.id)], variant: (picked?.variant ?? -1) + 1 });
     }
   }
 
@@ -88,7 +94,7 @@ export default function SuggestScreen() {
     if (!picked) return;
     // 盡量不要用到最近幾套出現過的單品
     const next = suggestOutfit(input, { previous: picked.suggestion.pieces.map(p => p.id), recent: picked.recent });
-    setPicked({ key, input, suggestion: next, recent: [next.pieces.map(p => p.id), ...picked.recent].slice(0, RECENT_KEEP) });
+    setPicked({ key, input, suggestion: next, recent: [next.pieces.map(p => p.id), ...picked.recent].slice(0, RECENT_KEEP), variant: picked.variant + 1 });
     // accessibilityLiveRegion 只有 Android 有效，iOS 另外念
     if (next.noAlternative) AccessibilityInfo.announceForAccessibility(t('suggest.noAlternative'));
   };
@@ -106,7 +112,7 @@ export default function SuggestScreen() {
   if (canvasPieces) lastCanvas.current = canvasPieces;
   const shown: Suggestion | null =
     current && probe ? { ...current, pieces, basis: probe.basis, rainy: probe.rainy, pop: probe.pop } : null;
-  const lines = shown ? describeSuggestion(shown, { language, day, occasion }) : [];
+  const lines = shown ? describeSuggestion(shown, { language, day, occasion, variant: picked?.variant }) : [];
   const canvasWidth = Math.min(window.width - 64, 360);
   const total = outfitTotal(pieces.map(item => ({ item })));
   const pieceNames = pieces.map(i => i.name.trim() || t(`suggest.piece.${i.category}` as TranslationKey)).join(t('suggest.listSep'));
@@ -179,9 +185,7 @@ export default function SuggestScreen() {
         <Message
           icon="search-outline"
           text={t('suggest.noMatch')}
-          hints={(shown.emptyReason?.need ?? []).map(c =>
-            t(shown.emptyReason!.filtered.includes(c) ? `suggest.filtered.${c}` : `suggest.need.${c}`),
-          )}
+          hints={(shown.emptyReason?.need ?? []).map(c => t(`suggest.need.${c}`))}
           color={theme.textMuted}
         />
       ) : (
@@ -208,6 +212,14 @@ export default function SuggestScreen() {
               {t('suggest.missing', { list: shown.missing.map(c => t(`category.${c}`)).join(t('suggest.listSep')) })}
             </Text>
           )}
+          {shown.filled.map(f => (
+            <Text key={f.itemId} style={[styles.note, { color: theme.textMuted }]}>
+              {t(`suggest.filled.${occasion ? f.reason : 'weather'}`, {
+                category: language === 'en' ? t(`category.${f.category}`).toLowerCase() : t(`category.${f.category}`),
+                occasion: occasion ? t(`occasion.${occasion}`) : '',
+              })}
+            </Text>
+          ))}
           {shown.noAlternative && (
             <Text style={[styles.note, { color: theme.textMuted }]} accessibilityLiveRegion="polite">{t('suggest.noAlternative')}</Text>
           )}

@@ -10,7 +10,8 @@ import {
   weatherBasis,
   type SuggestionInput,
 } from '@/lib/suggestion';
-import { describeSuggestion } from '@/lib/suggestionText';
+import { describeSuggestion, isBigSwing } from '@/lib/suggestionText';
+import { translate } from '@/i18n';
 import { CANVAS_HEIGHT_RATIO } from '@/lib/outfitCanvas';
 import type { Category, ColorTag, Item, Occasion, Season, StyleTag } from '@/types/models';
 
@@ -182,27 +183,32 @@ describe('suggestOutfit', () => {
     it('needs a bottom when there are only tops', () => {
       const r = suggestOutfit(base([item('top'), item('shoes')]), { rng: () => 0 });
       expect(r.status).toBe('empty');
-      expect(r.emptyReason).toEqual({ need: ['bottom'], filtered: [] });
+      expect(r.emptyReason).toEqual({ need: ['bottom'] });
     });
 
     it('needs a top when there are only bottoms', () => {
       const r = suggestOutfit(base([item('bottom')]), { rng: () => 0 });
-      expect(r.emptyReason).toEqual({ need: ['top'], filtered: [] });
+      expect(r.emptyReason).toEqual({ need: ['top'] });
     });
 
     it('needs both when there are only shoes', () => {
       const r = suggestOutfit(base([item('shoes')]), { rng: () => 0 });
-      expect(r.emptyReason).toEqual({ need: ['top', 'bottom'], filtered: [] });
+      expect(r.emptyReason).toEqual({ need: ['top', 'bottom'] });
     });
 
-    it('says the bottom is filtered out when it only fits winter on a warm day', () => {
-      const r = suggestOutfit(base([item('top'), item('bottom', { seasons: ['winter'] })], { weather: weather(30, 28) }), { rng: () => 0 });
-      expect(r.emptyReason).toEqual({ need: ['bottom'], filtered: ['bottom'] });
+    it('uses the closest bottom when none fits the weather, and marks it as filled in', () => {
+      const pants = item('bottom', { seasons: ['winter'] });
+      const r = suggestOutfit(base([item('top'), pants], { weather: weather(30, 28) }), { rng: () => 0 });
+      expect(r.status).toBe('ok');
+      expect(r.emptyReason).toBeNull();
+      expect(r.filled).toEqual([{ itemId: pants.id, category: 'bottom', reason: 'weather' }]);
     });
 
-    it('says the top is filtered out by occasion', () => {
-      const r = suggestOutfit(base([item('top', { occasions: ['dinner'] }), item('bottom')], { occasion: 'work' }), { rng: () => 0 });
-      expect(r.emptyReason).toEqual({ need: ['top'], filtered: ['top'] });
+    it('uses the closest top when none fits the occasion', () => {
+      const top = item('top', { occasions: ['dinner'] });
+      const r = suggestOutfit(base([top, item('bottom')], { occasion: 'work' }), { rng: () => 0 });
+      expect(r.status).toBe('ok');
+      expect(r.filled).toEqual([{ itemId: top.id, category: 'top', reason: 'occasion' }]);
     });
 
     it('is null when an outfit is found', () => {
@@ -301,35 +307,59 @@ describe('describeSuggestion', () => {
   const jacket = item('outerwear', { name: '' });
   const shoes = item('shoes');
 
-  const vibeOf = (line: string, prefix: string) => line.slice(prefix.length, -1);
+  const vibeOf = (line: string) => line.slice(0, -1);
 
-  it('第一句寫穿搭和風格，第二句體感與降雨，第三句溫度和穿搭合不合適', () => {
+  it('第一句只寫配色和風格（不寫單品名稱），第二句體感與降雨，第三句溫度和穿搭合不合適，溫差大再加一句', () => {
     const r = suggestOutfit(
       { items: [top, bottom, jacket, shoes], weather: weather(29, 19, { pop: 70 }), occasion: 'travel' },
       { rng: () => 0 },
     );
     const lines = describeSuggestion(r, { language: 'zh-TW', day: 'today', occasion: 'travel' });
-    expect(lines).toHaveLength(3);
-    const [line1, line2, line3] = lines;
-    // 外套（沒填名稱用分類名）內搭上衣，配上下著；牛仔褲看得出是休閒風
-    expect(line1.startsWith('外套內搭白色短袖，配上牛仔褲，')).toBe(true);
-    expect(['休閒風，輕鬆自在', '休閒風，隨性有型', '休閒風，清爽好活動']).toContain(vibeOf(line1, '外套內搭白色短袖，配上牛仔褲，'));
+    expect(lines).toHaveLength(4);
+    const [line1, line2, line3, line4] = lines;
+    // 牛仔褲看得出是休閒風；不寫單品名稱
+    expect(vibeOf(line1)).toMatch(/^休閒風，/);
     expect(line2).toBe('今天體感 19–29°，降雨機率 70%。');
-    expect(line3).toBe('早晚偏涼、中午偏暖，這套有外套方便穿脫。容易下雨，記得帶傘。');
+    // 溫差大另外一句，第三句就不重複說早晚偏涼
+    expect(line3).toBe('溫度舒適，外套熱了可以脫下拿著。容易下雨，記得帶傘。');
+    expect(line4).toBe('今日溫差大，早晚請加外套喔！');
+  });
+
+  it('溫差大於 7 度、或大於 5 度且低溫低於 24 度才提醒；明天的說明寫「明日」', () => {
+    expect([isBigSwing(20, 28), isBigSwing(25, 32), isBigSwing(23, 29), isBigSwing(24, 30), isBigSwing(18, 23)]).toEqual([
+      true, false, true, false, false,
+    ]);
+    // 高低溫都低於 24 度：天氣本來就冷，不提醒
+    expect([isBigSwing(10, 23), isBigSwing(15, 23.5), isBigSwing(16, 24)]).toEqual([false, false, true]);
+    const small = suggestOutfit({ items: [top, bottom, jacket], weather: weather(30, 25), occasion: null }, { rng: () => 0 });
+    expect(describeSuggestion(small, { language: 'zh-TW', day: 'today', occasion: null })).toHaveLength(3);
+    const big = suggestOutfit({ items: [top, bottom, jacket], weather: weather(26, 20), occasion: null }, { rng: () => 0 });
+    expect(describeSuggestion(big, { language: 'zh-TW', day: 'tomorrow', occasion: null })[3]).toBe('明日溫差大，早晚請加外套喔！');
+  });
+
+  it('每按一次「更新」，形容詞輪著換，不會一直重複', () => {
+    const r = suggestOutfit({ items: [top, bottom], weather: weather(25, 21), occasion: null }, { rng: () => 0 });
+    const lines = [0, 1, 2, 3, 4].map(variant => describeSuggestion(r, { language: 'zh-TW', day: 'today', occasion: null, variant })[0]);
+    expect(new Set(lines).size).toBe(5);
+    for (const line of lines) expect(line).toMatch(/^休閒風，/);
+    // 每個詞庫都至少有 8 個說法
+    for (const key of ['suggest.styleVibes.feminine', 'suggest.styleVibes.casual', 'suggest.look.earth', 'suggest.look.mono', 'suggest.look.mix.neutral', 'suggest.vibes.any'] as const) {
+      expect(translate('zh-TW', key).split('|').length).toBeGreaterThanOrEqual(8);
+    }
   });
 
   it('同一套穿搭每次的風格形容都一樣', () => {
     const r = suggestOutfit({ items: [top, bottom], weather: weather(25, 21), occasion: null }, { rng: () => 0 });
     const a = describeSuggestion(r, { language: 'zh-TW', day: 'today', occasion: null })[0];
     expect(describeSuggestion(r, { language: 'zh-TW', day: 'today', occasion: null })[0]).toBe(a);
-    expect(['休閒風，輕鬆自在', '休閒風，隨性有型', '休閒風，清爽好活動']).toContain(vibeOf(a, '白色短袖搭配牛仔褲，'));
+    expect(vibeOf(a)).toMatch(/^休閒風，/);
   });
 
   it('看不出配色和風格時，用場合的形容', () => {
     const plain = [item('top', { name: '上衣' }), item('bottom', { name: '褲子' })];
     const r = suggestOutfit({ items: plain, weather: weather(25, 21), occasion: null }, { rng: () => 0 });
     const line1 = describeSuggestion(r, { language: 'zh-TW', day: 'today', occasion: null })[0];
-    expect(['知性溫柔', '簡約大方', '清爽自在', '溫柔有氣質', '俐落有型']).toContain(vibeOf(line1, '上衣搭配褲子，'));
+    expect(translate('zh-TW', 'suggest.vibes.any').split('|')).toContain(vibeOf(line1));
   });
 
   it('說明配色與風格', () => {
@@ -338,9 +368,9 @@ describe('describeSuggestion', () => {
     const r = suggestOutfit({ items: [blouse, skirt], weather: weather(25, 21), occasion: null }, { rng: () => 0 });
     const line1 = describeSuggestion(r, { language: 'zh-TW', day: 'today', occasion: null })[0];
     // 白＋卡其不是同一個色系，寫出兩個顏色
-    expect(line1).toMatch(/^白襯衫搭配卡其長裙，白色＋卡其色，簡約低調；淑女風，.+。$/);
+    expect(line1).toMatch(/^白色＋卡其色，[^；]+；淑女風，.+。$/);
     const en = describeSuggestion(r, { language: 'en', day: 'today', occasion: null })[0];
-    expect(en).toContain('white + khaki, simple and understated');
+    expect(en).toMatch(/^White \+ khaki, [^;]+; feminine and .+\.$/);
   });
 
   it('同色系、點綴色會說出顏色', () => {
@@ -350,11 +380,11 @@ describe('describeSuggestion', () => {
         { language: 'zh-TW', day: 'today', occasion: null },
       )[0];
     expect(r('navy', 'blue')).toContain('深藍色系同色搭配');
-    expect(r('red', 'white')).toContain('紅色＋白色，用紅色點亮整體');
+    expect(r('red', 'white')).toMatch(/^紅色＋白色，.*紅色/);
     expect(r('black', 'gray')).toContain('黑白灰色系');
     expect(r('beige', 'brown')).toContain('大地色系');
     // 上下身不同色系：不寫大地色系，寫「某色＋某色」
-    expect(r('gray', 'beige')).toContain('灰色＋杏色，簡約低調');
+    expect(r('gray', 'beige')).toMatch(/^灰色＋杏色，/);
     expect(r('gray', 'beige')).not.toContain('色系');
   });
 
@@ -372,7 +402,7 @@ describe('describeSuggestion', () => {
     const dress = item('onepiece', { name: '洋裝' });
     const r = suggestOutfit({ items: [dress], weather: weather(33, 28), occasion: null }, { rng: () => 0 });
     const [line1, line2, line3] = describeSuggestion(r, { language: 'zh-TW', day: 'tomorrow', occasion: null });
-    expect(line1).toMatch(/^洋裝一件完成造型，.+。$/);
+    expect(line1).not.toContain('洋裝');
     expect(line2).toBe('明天體感 28–33°，降雨機率未知。');
     expect(line3).toBe('天氣炎熱，這套輕薄透氣，穿起來清爽。');
   });
@@ -555,14 +585,6 @@ describe('內著與外搭', () => {
     }
   });
 
-  it('說明寫成「上衣外搭背心」', () => {
-    const r = suggestOutfit(
-      { items: [item('top', { name: '白T' }), item('overlay', { name: '針織背心' }), item('bottom', { name: '長裙' })], weather: weather(25, 21), occasion: null },
-      { rng: () => 0 },
-    );
-    expect(describeSuggestion(r, { language: 'zh-TW', day: 'today', occasion: null })[0]).toMatch(/^白T外搭針織背心搭配長裙，/);
-  });
-
   it('排版時外搭放在外套的位置，不跟上衣疊在一起', () => {
     const top = item('top');
     const vest = item('overlay');
@@ -675,6 +697,46 @@ describe('「更新」盡量換不同單品', () => {
         recent = [ids, ...recent];
       }
       expect(used.size).toBe(6);
+    }
+  });
+});
+
+describe('缺少時用次之的單品補上', () => {
+  it('沒有符合場合的鞋子：先找場合符合的，其次天氣符合的', () => {
+    const top = item('top');
+    const bottom = item('bottom');
+    const winterWork = item('shoes', { occasions: ['work'], seasons: ['winter'] });
+    const summerDate = item('shoes', { occasions: ['date'], seasons: ['summer'] });
+    const r = suggestOutfit({ items: [top, bottom, winterWork, summerDate], weather: weather(33, 28), occasion: 'work' }, { rng: () => 0 });
+    // 上班的鞋子只有冬天的：場合符合優先
+    expect(r.pieces.find(p => p.category === 'shoes')!.id).toBe(winterWork.id);
+    expect(r.filled).toEqual([{ itemId: winterWork.id, category: 'shoes', reason: 'weather' }]);
+    expect(r.missing).toEqual([]);
+
+    const formal = suggestOutfit({ items: [top, bottom, winterWork, summerDate], weather: weather(33, 28), occasion: 'formal' }, { rng: () => 0 });
+    expect(formal.filled).toEqual([{ itemId: summerDate.id, category: 'shoes', reason: 'occasion' }]);
+  });
+
+  it('天氣冷一定要外套卻沒有符合的：補上次之的外套', () => {
+    const coat = item('outerwear', { seasons: ['summer'], occasions: ['date'] });
+    const r = suggestOutfit({ items: [item('top'), item('bottom'), coat], weather: weather(14, 10), occasion: 'work' }, { rng: () => 0 });
+    expect(r.pieces.map(p => p.id)).toContain(coat.id);
+    expect(r.filled).toEqual([{ itemId: coat.id, category: 'outerwear', reason: 'both' }]);
+    // 衣櫃裡完全沒有鞋子：還是列為缺少
+    expect(r.missing).toEqual(['shoes']);
+  });
+
+  it('有完全符合的就不補；衣櫃裡完全沒有的才列「缺少」', () => {
+    const r = suggestOutfit({ items: [item('top'), item('bottom'), item('shoes')], weather: weather(14, 10), occasion: null }, { rng: () => 0 });
+    expect(r.filled).toEqual([]);
+    expect(r.missing).toEqual(['outerwear']);
+  });
+
+  it('天氣不需要外套時，不會為了補而加外套', () => {
+    const coat = item('outerwear', { seasons: ['winter'] });
+    for (let seed = 0; seed < 5; seed++) {
+      const r = suggestOutfit({ items: [item('top'), item('bottom'), coat], weather: weather(33, 28), occasion: null }, { rng: () => seed / 5 });
+      expect(r.pieces.map(p => p.id)).not.toContain(coat.id);
     }
   });
 });

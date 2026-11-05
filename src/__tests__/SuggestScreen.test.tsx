@@ -76,6 +76,9 @@ beforeEach(() => {
   mockCanvasMounts = 0;
 });
 
+/** 建議的單品（畫布的無障礙標籤列出單品名稱；下方說明不寫名稱） */
+const shownPieces = () => screen.getByLabelText(/^建議穿搭：/).props.accessibilityLabel as string;
+
 describe('SuggestScreen', () => {
   it('上方顯示氣溫與天氣；下方說明穿搭風格、體感與降雨、溫度適配；不列出單品名稱', async () => {
     await setup();
@@ -83,16 +86,19 @@ describe('SuggestScreen', () => {
     expect(screen.getByText('氣溫 19°–29°')).toBeTruthy();
     expect(screen.getByText('晴天')).toBeTruthy();
     expect(screen.queryByText('體感 19°–29°')).toBeNull();
-    expect(screen.getByText(/^薄外套內搭白色短袖，配上牛仔褲，.+。$/)).toBeTruthy();
+    expect(shownPieces()).toBe('建議穿搭：薄外套、白色短袖、牛仔褲、白球鞋');
+    // 第一句只寫配色與風格，不寫單品名稱
+    expect(screen.queryByText(/搭配|內搭|配上/)).toBeNull();
     expect(screen.getByText('今天體感 19–29°，降雨機率 70%。')).toBeTruthy();
-    expect(screen.getByText('早晚偏涼、中午偏暖，這套有外套方便穿脫。容易下雨，記得帶傘。')).toBeTruthy();
-    expect(screen.queryByText(/白色短袖、牛仔褲/)).toBeNull();
+    // 溫差 10° 以上：另外一行提醒
+    expect(screen.getByText('今日溫差大，早晚請加外套喔！')).toBeTruthy();
   });
 
   it('switches to tomorrow', async () => {
     await setup();
     fireEvent.press(screen.getByRole('tab', { name: '明日' }));
-    expect(screen.getByText(/^白色短袖搭配牛仔褲，.+。$/)).toBeTruthy();
+    expect(shownPieces()).toBe('建議穿搭：白色短袖、牛仔褲、白球鞋');
+    expect(screen.queryByText(/溫差大/)).toBeNull();
     expect(screen.getByText('明天體感 28–33°，降雨機率 10%。')).toBeTruthy();
     expect(screen.getByText('天氣炎熱，這套輕薄透氣，穿起來清爽。')).toBeTruthy();
   });
@@ -106,18 +112,19 @@ describe('SuggestScreen', () => {
       ],
     });
     fireEvent.press(screen.getByRole('radio', { name: '上班' }));
-    expect(screen.getByText(/^襯衫搭配西裝褲/)).toBeTruthy();
+    expect(shownPieces()).toBe('建議穿搭：襯衫、西裝褲');
+    // 沒有正式場合的單品：用相近的補上，並註明
     fireEvent.press(screen.getByRole('radio', { name: '正式' }));
-    expect(screen.getByText('還湊不成一套')).toBeTruthy();
-    expect(screen.getByText('有上衣，但季節或場合不符合今天')).toBeTruthy();
-    expect(screen.getByText('有下著，但季節或場合不符合今天')).toBeTruthy();
+    expect(screen.queryByText('還湊不成一套')).toBeNull();
+    expect(screen.getByText('衣櫃裡沒有適合「正式」的上衣，先用相近的單品補上。')).toBeTruthy();
+    expect(screen.getByText('衣櫃裡沒有適合「正式」的下著，先用相近的單品補上。')).toBeTruthy();
   });
 
   it('shuffles to another outfit', async () => {
     await setup({ items: [{ name: 'A 上衣', category: 'top' }, { name: 'B 上衣', category: 'top' }, { name: '褲子', category: 'bottom' }] });
-    const first = screen.getByText(/搭配褲子/).props.children as string;
+    const first = shownPieces();
     fireEvent.press(screen.getByRole('button', { name: '更新' }));
-    const second = screen.getByText(/搭配褲子/).props.children as string;
+    const second = shownPieces();
     expect(second).not.toBe(first);
     expect(screen.queryByText('沒有其他組合了')).toBeNull();
   });
@@ -182,9 +189,10 @@ describe('SuggestScreen', () => {
     expect(screen.queryByText('可以換個場合，或確認單品的季節、場合設定')).toBeNull();
   });
 
-  it('says the bottom does not fit today when it is filtered out', async () => {
+  it('fills in a bottom that does not fit the weather and says so', async () => {
     await setup({ items: [{ name: '白T', category: 'top' }, { name: '毛褲', category: 'bottom', seasons: ['winter'] }] });
-    expect(screen.getByText('有下著，但季節或場合不符合今天')).toBeTruthy();
+    expect(shownPieces()).toBe('建議穿搭：白T、毛褲');
+    expect(screen.getByText('衣櫃裡沒有適合這種天氣的下著，先用相近的單品補上。')).toBeTruthy();
   });
 
   it('keeps the card on screen while switching day or occasion (no blank frame)', async () => {
@@ -223,14 +231,14 @@ describe('SuggestScreen', () => {
 
   it('keeps the same outfit when items change but re-picks when a suggested item disappears', async () => {
     const { ids, db } = await setup({ items: [{ name: 'A 上衣', category: 'top' }, { name: 'B 上衣', category: 'top' }, { name: '褲子', category: 'bottom' }] });
-    const first = screen.getByText(/搭配褲子/).props.children as string;
-    const shown = first.startsWith('A') ? 'A 上衣' : 'B 上衣';
+    const first = shownPieces();
+    const shown = first.includes('A 上衣') ? 'A 上衣' : 'B 上衣';
     await act(async () => {
       await db.items.moveToTrash(ids[shown]);
     });
     // 暫存區的單品不會被建議；畫面要重新讀取（實際 App 由 bumpItemsVersion 通知）
     await act(async () => useItemsVersion.getState().bump());
-    expect(screen.getByText(/搭配褲子/).props.children).not.toBe(first);
+    expect(shownPieces()).not.toBe(first);
   });
 
   it('re-picks when a suggested item is edited so it no longer fits', async () => {
@@ -254,7 +262,7 @@ describe('SuggestScreen', () => {
     }) as typeof AppState.addEventListener;
     try {
       const { weatherRepo } = await setup();
-      const first = screen.getByText(/內搭白色短袖，配上牛仔褲/).props.children;
+      const first = shownPieces();
       await weatherRepo.upsert(
         '臺北市',
         [{ date: '2026-11-03', maxT: 28, minT: 18, maxAT: 28, minAT: 18, pop: 70, wxCode: '01', wxText: '晴天', hasDaytime: true }],
@@ -263,7 +271,7 @@ describe('SuggestScreen', () => {
       await act(async () => { handlers.forEach(h => h('active')); });
       expect(screen.getByText('氣溫 18°–28°')).toBeTruthy();
       expect(screen.getByText(/^今天體感 18–28°/)).toBeTruthy();
-      expect(screen.getByText(/內搭白色短袖，配上牛仔褲/).props.children).toBe(first);
+      expect(shownPieces()).toBe(first);
     } finally {
       AppState.addEventListener = original;
     }

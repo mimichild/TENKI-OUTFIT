@@ -12,6 +12,9 @@ import { layoutOutfit, type PieceShape } from './outfitLayout';
  *   外搭（例如小背心）只會疊在一般上衣外面，不單穿（2026-11-04）
  * - 細肩帶／吊帶的上衣、洋裝和內著一樣一定要搭外套（夏天搭短袖外套也可以）（2026-11-05）
  * - 淑女風和休閒風的單品不混搭（2026-11-05）
+ * - 缺少符合天氣／場合的單品時，用次之的單品湊成一套，並在說明裡註明是系統補上的（2026-11-05）：
+ *   先找場合符合的、其次天氣符合的、最後任何一件；只補上衣、下著、連身、內著（湊不出基本一套時）、
+ *   一定要穿的外套、鞋子
  * - 按「更新」時盡量用不同的單品：最近幾套出現過的單品扣分（衣服扣比較多）（2026-11-05）
  * - 配色與風格（2026-11-04）：隨機產生多組候選，依配色（同色系、黑白灰、大地色、一點亮色；撞色扣分）
  *   與風格（淑女風、休閒風是否一致、是否符合場合）評分，從接近最高分的候選中挑一組，按「更新」才有變化
@@ -97,6 +100,8 @@ export interface Suggestion {
   emptyReason: EmptyReason | null;
   /** 配色與風格（說明文字用） */
   look: Look;
+  /** 沒有完全符合天氣／場合、由系統補上的單品 */
+  filled: FilledPiece[];
 }
 
 export type BaseCategory = 'top' | 'bottom';
@@ -104,8 +109,6 @@ export type BaseCategory = 'top' | 'bottom';
 export interface EmptyReason {
   /** 還差的分類（上衣、下著；有連身的話兩個都不缺） */
   need: BaseCategory[];
-  /** need 之中，衣櫃裡其實有、但季節或場合不符合的分類 */
-  filtered: BaseCategory[];
 }
 
 export const RAIN_POP_THRESHOLD = 60;
@@ -153,6 +156,27 @@ export function outerwearRule(basis: WeatherBasis | null): OuterwearRule {
   const band = tempBand(basis.avg);
   if (band === 'cool' || band === 'cold' || basis.min < OUTERWEAR_LOW) return 'required';
   return band === 'hot' ? 'none' : 'optional';
+}
+
+const fitsSeason = (i: Item, band: TempBand | null) =>
+  !band || i.seasons.length === 0 || i.seasons.some(s => BAND_SEASONS[band].includes(s));
+const fitsOccasion = (i: Item, occasion: Occasion | null) => !occasion || i.occasions.length === 0 || i.occasions.includes(occasion);
+
+/** 系統補上的單品：哪一件、不符合什麼 */
+export interface FilledPiece {
+  itemId: string;
+  category: Category;
+  /** occasion：場合不符合；weather：季節（天氣）不符合；both：都不符合 */
+  reason: 'occasion' | 'weather' | 'both';
+}
+
+/** 沒有完全符合的單品時，次之的候選：場合符合 → 天氣符合 → 任何一件 */
+function fallbackFor(items: Item[], category: Category, filter: { band: TempBand | null; occasion: Occasion | null }): Item[] {
+  const all = items.filter(i => i.category === category);
+  const byOccasion = all.filter(i => fitsOccasion(i, filter.occasion));
+  if (byOccasion.length > 0) return byOccasion;
+  const bySeason = all.filter(i => fitsSeason(i, filter.band));
+  return bySeason.length > 0 ? bySeason : all;
 }
 
 export function candidatesFor(
@@ -349,11 +373,22 @@ export function suggestOutfit(input: SuggestionInput, options: SuggestionOptions
   const pop = input.weather?.pop ?? null;
   const filter = { band, occasion: input.occasion };
   const pool = Object.fromEntries([...SLOT_ORDER, 'inner' as const].map(s => [s, candidatesFor(input.items, s, filter)])) as Pool;
+  // 缺少完全符合的單品：用次之的補上（記下來，說明裡要註明）
+  const filledIds = new Set<string>();
+  const fill = (c: Slot | 'inner') => {
+    if (pool[c].length > 0) return;
+    pool[c] = fallbackFor(input.items, c, filter);
+    for (const i of pool[c]) filledIds.add(i.id);
+  };
+  const canDress = () => (topChoices(pool, rule).length > 0 && pool.bottom.length > 0) || onepieceChoices(pool).length > 0;
+  if (rule === 'required') fill('outerwear');
+  fill('shoes');
+  if (!canDress()) for (const c of ['top', 'bottom', 'onepiece', 'inner'] as const) fill(c);
   const colorOf = input.colorOf ?? ((item: Item) => item.color ?? null);
 
   const emptyReason = (): EmptyReason => {
     const need = (['top', 'bottom'] as const).filter(c => (c === 'top' ? topChoices(pool, rule) : pool[c]).length === 0);
-    return { need, filtered: need.filter(c => input.items.some(i => i.category === c)) };
+    return { need };
   };
 
   const result = (picks: Picks | null, noAlternative = false): Suggestion => {
@@ -375,6 +410,13 @@ export function suggestOutfit(input: SuggestionInput, options: SuggestionOptions
       noAlternative,
       emptyReason: picks ? null : emptyReason(),
       look: lookOf(pieces, colorOf),
+      filled: pieces
+        .filter(p => filledIds.has(p.id))
+        .map(p => {
+          const occ = !fitsOccasion(p, input.occasion);
+          const season = !fitsSeason(p, band);
+          return { itemId: p.id, category: p.category, reason: occ && season ? 'both' : occ ? 'occasion' : 'weather' };
+        }),
     };
   };
 
