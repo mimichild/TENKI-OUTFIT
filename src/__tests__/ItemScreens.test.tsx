@@ -65,7 +65,7 @@ describe('item detail screen', () => {
     // 白襯衫的場合是上班，看不出風格；沒照片，量不到顏色
     expect(screen.getByText('不限')).toBeTruthy();
     await act(async () => mockScreenOptions.headerRight!().props.onPress());
-    expect(screen.getByText('沒選＝不限風格，兩種都能搭')).toBeTruthy();
+    expect(screen.queryByText(/不限風格/)).toBeNull();
     fireEvent.changeText(screen.getByLabelText('名稱'), '蕾絲白襯衫');
     expect(screen.getByText('依名稱與場合自動判斷為「淑女風」，點選可以更改')).toBeTruthy();
     expect(screen.getByRole('radio', { name: '淑女風' }).props.accessibilityState).toEqual({ selected: true });

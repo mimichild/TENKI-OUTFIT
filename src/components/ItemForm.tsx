@@ -230,7 +230,7 @@ export function ItemForm({ initial, onPickPhoto, onRemoveBackground, onSubmit, o
         <Field
           theme={theme}
           label={t('item.style')}
-          hint={form.style ? t('item.styleManual') : autoStyle ? t('item.styleAuto', { style: t(`style.${autoStyle}`) }) : t('item.styleAutoNone')}
+          hint={form.style ? t('item.styleManual') : autoStyle ? t('item.styleAuto', { style: t(`style.${autoStyle}`) }) : undefined}
         >
           <View style={s.chipRow}>
             {STYLES.map(x => (
