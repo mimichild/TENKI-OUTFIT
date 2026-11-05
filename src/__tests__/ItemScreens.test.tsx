@@ -62,8 +62,9 @@ describe('item detail screen', () => {
     mockParams = { id: 'id1' };
     wrap(<ItemScreen />);
     await screen.findByText('白襯衫');
-    // 白襯衫的場合是上班，看不出風格；沒照片，量不到顏色
-    expect(screen.getByText('不限')).toBeTruthy();
+    // 白襯衫的場合是上班，看不出風格 → 可休閒可淑女；沒照片，量不到顏色
+    expect(screen.getByText('可休閒可淑女')).toBeTruthy();
+    expect(screen.queryByText('不限')).toBeNull();
     await act(async () => mockScreenOptions.headerRight!().props.onPress());
     expect(screen.queryByText(/不限風格/)).toBeNull();
     fireEvent.changeText(screen.getByLabelText('名稱'), '蕾絲白襯衫');

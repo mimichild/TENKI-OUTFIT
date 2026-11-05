@@ -549,7 +549,7 @@ export function suggestOutfit(input: SuggestionInput, options: SuggestionOptions
   const recent = options.recent ?? (previous.length > 0 ? [previous] : []);
 
   // 衣櫃裡有顏色或風格資料、或按了「更新」：產生多組候選評分（配色、風格，扣掉和最近幾套重複的）
-  const informative = SLOT_ORDER.some(s => pool[s].some(i => colorOf(i) !== null || (i.style ?? inferStyle(i)) !== null));
+  const informative = SLOT_ORDER.some(s => pool[s].some(i => colorOf(i) !== null || i.style != null || inferStyle(i) !== 'both'));
   if (informative || recent.length > 0) {
     if (!canDress()) return result(null);
     const candidates: { picks: Picks; score: number; mixed: boolean }[] = [];
