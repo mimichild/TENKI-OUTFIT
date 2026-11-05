@@ -1,9 +1,10 @@
 import type { Category, ColorTag, Item, OutfitItemPlacement } from '@/types/models';
-import { MAX_SCALE, MIN_SCALE, PIECE_BASE_SIZE } from './outfitCanvas';
+import { CANVAS_HEIGHT_RATIO, MAX_SCALE, MIN_SCALE, PIECE_BASE_SIZE } from './outfitCanvas';
 
 /**
  * 穿搭建議的自動排版（使用者指定 2026-11-03）：每個分類一個固定格子——
- * 上衣左上、下著左下（比上衣長、格子比較大）、外套右上、包包右中、配件在包包左邊、鞋子右下；連身佔整個左半邊。
+ * 上衣左上、下著左下（比上衣長、格子比較大）、外套右上、包包在鞋子正上方、鞋子右下；連身佔整個左半邊。
+ * 配件不預留位置，放在畫布正中央、疊在最上面（可以壓到其他單品）（2026-11-05）。
  *
  * 去背照片四周常有透明留白，每張都不一樣，所以以「照片裡真正有衣服的範圍」（PieceShape）
  * 等比放大塞滿格子並置中；量不到時退回整張照片。所有長度以畫布寬度為單位，畫布高 = CANVAS_HEIGHT_RATIO。
@@ -104,8 +105,10 @@ const SPOTS: Record<Category, Rect> = {
   bottom: { x: 0.04, y: 0.5, w: 0.44, h: 0.79 },
   onepiece: { x: 0.04, y: 0.04, w: 0.44, h: 1.25 },
   outerwear: { x: 0.52, y: 0.04, w: 0.44, h: 0.46 },
-  accessory: { x: 0.5, y: 0.6, w: 0.2, h: 0.22 },
-  bag: { x: 0.7, y: 0.54, w: 0.26, h: 0.34 },
+  // 配件放畫布正中央
+  accessory: { x: 0.38, y: CANVAS_HEIGHT_RATIO / 2 - 0.12, w: 0.24, h: 0.24 },
+  // 包包在鞋子正上方（同一欄、一樣寬）
+  bag: { x: 0.56, y: 0.52, w: 0.4, h: 0.38 },
   shoes: { x: 0.56, y: 0.92, w: 0.4, h: 0.37 },
   other: { x: 0.3, y: 0.47, w: 0.4, h: 0.4 },
 };

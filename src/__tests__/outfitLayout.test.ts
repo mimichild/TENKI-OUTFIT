@@ -68,7 +68,7 @@ describe('layoutOutfit — fixed spots', () => {
   const cx = (r: Rect) => r.x + r.w / 2;
   const cy = (r: Rect) => r.y + r.h / 2;
 
-  it('top left-upper, bottom left-lower, outerwear right-upper, bag right-middle, shoes right-lower, accessory left of the bag', () => {
+  it('top left-upper, bottom left-lower, outerwear right-upper, bag right above the shoes, shoes right-lower, accessory in the center', () => {
     const r = rects(all, {});
     expect(cx(r.top)).toBeLessThan(0.5);
     expect(cy(r.top)).toBeLessThan(mid);
@@ -76,12 +76,17 @@ describe('layoutOutfit — fixed spots', () => {
     expect(cy(r.bottom)).toBeGreaterThan(mid);
     expect(cx(r.outerwear)).toBeGreaterThan(0.5);
     expect(cy(r.outerwear)).toBeLessThan(mid);
-    expect(cx(r.bag)).toBeGreaterThan(0.6);
-    expect(Math.abs(cy(r.bag) - mid)).toBeLessThan(0.2);
     expect(cx(r.shoes)).toBeGreaterThan(0.5);
-    expect(cy(r.shoes)).toBeGreaterThan(cy(r.bag));
-    expect(r.accessory.x + r.accessory.w).toBeLessThanOrEqual(r.bag.x + 1e-9);
-    expect(Math.abs(cy(r.accessory) - cy(r.bag))).toBeLessThan(0.1);
+    // 包包在鞋子正上方、比以前大
+    expect(cx(r.bag)).toBeCloseTo(cx(r.shoes));
+    expect(r.bag.y + r.bag.h).toBeLessThanOrEqual(r.shoes.y + 1e-9);
+    expect(r.bag.y).toBeGreaterThanOrEqual(r.outerwear.y + r.outerwear.h - 1e-9);
+    expect(Math.max(r.bag.w, r.bag.h)).toBeGreaterThan(0.36);
+    // 配件在畫布正中央、疊在最上面
+    expect(cx(r.accessory)).toBeCloseTo(0.5);
+    expect(cy(r.accessory)).toBeCloseTo(mid);
+    const z = Object.fromEntries(layoutOutfit(all, new Map()).map((p, i) => [all[i].category, p.z]));
+    expect(z.accessory).toBe(all.length - 1);
   });
 
   it('gives the bottom a longer, bigger spot than the top', () => {
@@ -102,11 +107,11 @@ describe('layoutOutfit — fixed spots', () => {
     }
   });
 
-  it('keeps everything inside the canvas without overlapping between spots', () => {
+  it('keeps everything inside the canvas without overlapping between spots (except the accessory in the center)', () => {
     const shapes = { [top.id]: wide, [bottom.id]: tall, [outerwear.id]: tall, [shoes.id]: wide, [bag.id]: padded, [accessory.id]: tall };
     const r = rects(all, shapes);
-    const keys = Object.keys(r);
-    for (const k of keys) {
+    const keys = Object.keys(r).filter(k => k !== 'accessory');
+    for (const k of Object.keys(r)) {
       expect(r[k].x).toBeGreaterThanOrEqual(-1e-9);
       expect(r[k].y).toBeGreaterThanOrEqual(-1e-9);
       expect(r[k].x + r[k].w).toBeLessThanOrEqual(1 + 1e-9);
@@ -124,8 +129,8 @@ describe('layoutOutfit — fixed spots', () => {
   it('keeps a very thin piece (e.g. a necklace) inside its spot even when the zoom limit kicks in', () => {
     const thin: PieceShape = { aspect: 1, bounds: { x0: 0.49, y0: 0.45, x1: 0.51, y1: 0.55 } };
     const r = rects([accessory, bag], { [accessory.id]: thin });
-    expect(r.accessory.x).toBeGreaterThanOrEqual(0);
-    expect(r.accessory.x + r.accessory.w).toBeLessThanOrEqual(r.bag.x + 1e-9);
+    expect(r.accessory.x).toBeGreaterThanOrEqual(0.38 - 1e-9);
+    expect(r.accessory.x + r.accessory.w).toBeLessThanOrEqual(0.62 + 1e-9);
     expect(r.accessory.y + r.accessory.h).toBeLessThanOrEqual(CANVAS_HEIGHT_RATIO);
   });
 
