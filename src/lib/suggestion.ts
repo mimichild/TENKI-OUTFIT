@@ -7,11 +7,13 @@ import { layoutOutfit, type PieceShape } from './outfitLayout';
  * 穿搭建議引擎（純邏輯）。
  * - 溫度：最高／最低體感的平均分段；缺體感時改用氣溫
  * - 單品沒有厚薄資料，用季節代表厚薄；沒填季節 = 四季、沒填場合 = 全場合
- * - 組合：上衣＋下著 或 連身 ＋ 外套（依溫度）＋ 鞋子；包包、配件有就各配一件；「其他」不推薦
+ * - 組合：上衣＋下著 或 連身 ＋ 外套（依溫度）＋ 鞋子；包包有就配一件；配件、「其他」不推薦（2026-11-05 起不放配件）
  * - 內著（內搭）可以當上衣，但一定要搭外套（炎熱時有一般上衣就不用內著）；
  *   外搭（例如小背心）只會疊在一般上衣外面，不單穿（2026-11-04）
  * - 細肩帶／吊帶的上衣、洋裝和內著一樣一定要搭外套（夏天搭短袖外套也可以）（2026-11-05）
- * - 淑女風和休閒風的單品不混搭（2026-11-05）
+ * - 淑女風和休閒風的單品不混搭（2026-11-05）：一件件挑的時候就只挑同風格或「可休閒可淑女」的單品（包包也算），
+ *   不只是評分扣分；真的湊不出一套才退而求其次
+ * - 包包和鞋子同色系（2026-11-05）：知道顏色時只配同色系的包包；沒有同色系的就不配包包
  * - 缺少符合天氣／場合的單品時，用次之的單品湊成一套，並在說明裡註明是系統補上的（2026-11-05）：
  *   先找場合符合的、其次天氣符合的、最後任何一件；只補上衣、下著、連身、內著（湊不出基本一套時）、
  *   一定要穿的外套、鞋子
@@ -86,7 +88,7 @@ export interface SuggestionOptions {
 
 export interface Suggestion {
   status: 'ok' | 'empty';
-  /** 由下而上：外套、上衣、下著／連身、鞋子、包包、配件 */
+  /** 由下而上：外套、上衣、下著／連身、鞋子、包包 */
   pieces: Item[];
   /** 該有卻挑不到的分類（必要的外套、鞋子） */
   missing: Category[];
@@ -195,8 +197,8 @@ export function candidatesFor(
 }
 
 /** top 這一格可能放上衣或內著 */
-type Slot = 'outerwear' | 'top' | 'overlay' | 'bottom' | 'onepiece' | 'shoes' | 'bag' | 'accessory';
-const SLOT_ORDER: Slot[] = ['outerwear', 'top', 'overlay', 'bottom', 'onepiece', 'shoes', 'bag', 'accessory'];
+type Slot = 'outerwear' | 'top' | 'overlay' | 'bottom' | 'onepiece' | 'shoes' | 'bag';
+const SLOT_ORDER: Slot[] = ['outerwear', 'top', 'overlay', 'bottom', 'onepiece', 'shoes', 'bag'];
 type Picks = Partial<Record<Slot, Item>>;
 /** shoesAlt：符合的鞋子都是長靴、又穿長裙或長褲時，改用的次之鞋子（不是長靴） */
 type Pool = Record<Slot | 'inner' | 'shoesAlt', Item[]>;
@@ -256,29 +258,71 @@ const isValid = (p: Picks) =>
 
 const pick = (list: Item[], rng: () => number) => list[Math.min(list.length - 1, Math.floor(rng() * list.length))];
 
-function randomPicks(pool: Pool, rule: OuterwearRule, rng: () => number): Picks | null {
+type ColorOf = (item: Item) => ColorTag | null;
+
+const groupOf = (i: Item, colorOf: ColorOf): ColorGroup | null => {
+  const c = colorOf(i);
+  return c ? colorGroup(c) : null;
+};
+
+/** 可以配這雙鞋的包包：同色系的；沒有同色系的，只用不知道顏色的（不配不同色系的） */
+function bagChoices(bags: Item[], shoes: Item | undefined, colorOf: ColorOf): Item[] {
+  const g = shoes ? groupOf(shoes, colorOf) : null;
+  if (!g) return bags;
+  const same = bags.filter(b => groupOf(b, colorOf) === g);
+  return same.length > 0 ? same : bags.filter(b => groupOf(b, colorOf) === null);
+}
+
+/** 包包和鞋子是不同色系 */
+const bagClash = (p: Picks, colorOf: ColorOf) => {
+  if (!p.bag || !p.shoes) return false;
+  const [b, s] = [groupOf(p.bag, colorOf), groupOf(p.shoes, colorOf)];
+  return b !== null && s !== null && b !== s;
+};
+
+/**
+ * 隨機湊一套。strict：一件件挑的時候只挑和已選單品同風格（或「可休閒可淑女」）的，
+ * 必要的單品挑不到同風格的就回傳 null（重抽）；不 strict 時不管風格（湊不出風格一致的才用）
+ */
+function randomPicks(pool: Pool, rule: OuterwearRule, rng: () => number, colorOf: ColorOf, strict = false): Picks | null {
   const tops = topChoices(pool, rule);
   const separates = tops.length > 0 && pool.bottom.length > 0;
   const onepieces = onepieceChoices(pool);
   const onepiece = onepieces.length > 0;
   if (!separates && !onepiece) return null;
+  let style: OneStyle | null = null;
+  const fit = (list: Item[]) => (strict && style ? list.filter(i => { const s = styleOf(i); return s === null || s === style; }) : list);
+  const take = (list: Item[]) => {
+    const it = pick(list, rng);
+    style ??= styleOf(it);
+    return it;
+  };
   const useSeparates = separates && onepiece ? rng() < 0.5 : separates;
   const picks: Picks = {};
   if (useSeparates) {
-    picks.top = pick(tops, rng);
-    picks.bottom = pick(pool.bottom, rng);
+    picks.top = take(tops);
+    const bottoms = fit(pool.bottom);
+    if (bottoms.length === 0) return null;
+    picks.bottom = take(bottoms);
   } else {
-    picks.onepiece = pick(onepieces, rng);
+    picks.onepiece = take(onepieces);
   }
   if (pool.outerwear.length > 0 && (needsOuter(picks) || rule === 'required' || (rule === 'optional' && rng() < 0.5))) {
-    picks.outerwear = pick(pool.outerwear, rng);
+    const outers = fit(pool.outerwear);
+    if (outers.length > 0) picks.outerwear = take(outers);
+    else if (needsOuter(picks) || rule === 'required') return null;
   }
-  if (picks.top?.category === 'top' && pool.overlay.length > 0 && rng() < 0.5) picks.overlay = pick(pool.overlay, rng);
-  const shoes = shoeChoices(picks, pool.shoes);
-  if (shoes.length > 0) picks.shoes = pick(shoes, rng);
-  else if (pool.shoes.length > 0 && pool.shoesAlt.length > 0) picks.shoes = pick(pool.shoesAlt, rng);
-  if (pool.bag.length > 0) picks.bag = pick(pool.bag, rng);
-  if (pool.accessory.length > 0) picks.accessory = pick(pool.accessory, rng);
+  if (picks.top?.category === 'top' && pool.overlay.length > 0 && rng() < 0.5) {
+    const overlays = fit(pool.overlay);
+    if (overlays.length > 0) picks.overlay = take(overlays);
+  }
+  const shoes = fit(shoeChoices(picks, pool.shoes));
+  const shoesAlt = fit(pool.shoesAlt);
+  if (shoes.length > 0) picks.shoes = take(shoes);
+  else if (pool.shoes.length > 0 && shoesAlt.length > 0 && shoeChoices(picks, pool.shoes).length === 0) picks.shoes = take(shoesAlt);
+  else if (strict && pool.shoes.length > 0) return null;
+  const bags = bagChoices(fit(pool.bag), picks.shoes, colorOf);
+  if (bags.length > 0) picks.bag = take(bags);
   return picks;
 }
 
@@ -286,7 +330,7 @@ const idsOf = (picks: Picks) => SLOT_ORDER.flatMap(s => (picks[s] ? [picks[s].id
 const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every(id => b.includes(id));
 
 /** 隨機抽不到不同的組合時，逐一換掉某一格，找第一個不同的組合 */
-function alternativePicks(base: Picks, pool: Pool, rule: OuterwearRule, previous: string[]): Picks | null {
+function alternativePicks(base: Picks, pool: Pool, rule: OuterwearRule, previous: string[], colorOf: ColorOf): Picks | null {
   const variants: Picks[] = [];
   const tops = topChoices(pool, rule);
   for (const slot of SLOT_ORDER) {
@@ -302,18 +346,16 @@ function alternativePicks(base: Picks, pool: Pool, rule: OuterwearRule, previous
     if (base.overlay) variants.push({ ...base, overlay: undefined });
     else for (const o of pool.overlay) variants.push({ ...base, overlay: o });
   }
-  const rest = { outerwear: base.outerwear ?? pool.outerwear[0], shoes: base.shoes, bag: base.bag, accessory: base.accessory };
+  const rest = { outerwear: base.outerwear ?? pool.outerwear[0], shoes: base.shoes, bag: base.bag };
   if (base.onepiece && tops.length > 0 && pool.bottom.length > 0) {
     for (const top of tops) for (const bottom of pool.bottom) variants.push({ ...rest, outerwear: needsOuterwear(top) ? rest.outerwear : base.outerwear, top, bottom });
   } else if (!base.onepiece) {
     for (const onepiece of onepieceChoices(pool)) variants.push({ ...rest, outerwear: needsOuterwear(onepiece) ? rest.outerwear : base.outerwear, onepiece });
   }
   const fresh = variants.filter(v => isValid(v) && !sameSet(idsOf(v), previous));
-  return fresh.find(v => !mixedStyle(picked(v))) ?? fresh[0] ?? null;
+  return fresh.find(v => !mixedStyle(picked(v)) && !bagClash(v, colorOf)) ?? fresh.find(v => !mixedStyle(picked(v))) ?? fresh[0] ?? null;
 }
 
-/** 候選全都是淑女混休閒時，最多再多抽幾組找風格一致的 */
-const EXTRA_TRIES = 60;
 /** 有顏色／風格資料時，一次產生幾組候選來評分 */
 const CANDIDATES = 40;
 /** 和最高分差距小於這個值的候選都可能被選中（讓「更新」有變化；差一個等級就不選） */
@@ -347,16 +389,19 @@ const mixedStyle = (pieces: Item[]) => styleSet(pieces).size >= 2;
 
 type OneStyle = Exclude<StyleTag, 'both'>;
 
-/**
- * 風格看衣服和鞋子（包包、配件不算）；沒手動設定的用名稱與場合推測。
- * 「可休閒可淑女」的單品不算進去，跟哪種風格都能搭
- */
+/** 單品的風格：手動設定的優先，沒設定的用名稱與場合推測；「可休閒可淑女」、看不出來 = null（都能搭） */
+function styleOf(item: Item): OneStyle | null {
+  const s = item.style ?? inferStyle(item);
+  return s === 'both' ? null : s;
+}
+
+/** 風格看衣服、鞋子和包包（配件不算） */
 function styleSet(pieces: Item[]): Set<OneStyle> {
   return new Set(
     pieces
-      .filter(p => p.category !== 'bag' && p.category !== 'accessory')
-      .map(p => p.style ?? inferStyle(p))
-      .filter((x): x is OneStyle => x !== null && x !== 'both'),
+      .filter(p => p.category !== 'accessory' && p.category !== 'other')
+      .map(styleOf)
+      .filter((x): x is OneStyle => x !== null),
   );
 }
 
@@ -390,6 +435,11 @@ function scoreLook(pieces: Item[], colorOf: (item: Item) => ColorTag | null, occ
   if (occasion === 'date' || occasion === 'formal') score += look.style === 'feminine' ? 1 : 0;
   if (occasion === 'casual' || occasion === 'travel') score += look.style === 'casual' ? 1 : 0;
   if ((occasion === 'work' || occasion === 'formal') && (look.scheme === 'mono' || look.scheme === 'earth')) score += 0.5;
+  // 包包和鞋子同色系
+  const bag = pieces.find(p => p.category === 'bag');
+  const shoes = pieces.find(p => p.category === 'shoes');
+  const bagGroup = bag && colorOf(bag) ? colorGroup(colorOf(bag)!) : null;
+  if (bagGroup && shoes && colorOf(shoes) && colorGroup(colorOf(shoes)!) === bagGroup) score += 1;
   return score;
 }
 
@@ -404,6 +454,7 @@ export function suggestOutfit(input: SuggestionInput, options: SuggestionOptions
   const filter = { band, occasion: input.occasion };
   const pool = Object.fromEntries([...SLOT_ORDER, 'inner' as const].map(s => [s, candidatesFor(input.items, s, filter)])) as Pool;
   pool.shoesAlt = [];
+  const colorOf: ColorOf = input.colorOf ?? ((item: Item) => item.color ?? null);
   // 缺少完全符合的單品：用次之的補上（記下來，說明裡要註明）
   const filledIds = new Set<string>();
   const fill = (c: Slot | 'inner') => {
@@ -420,7 +471,6 @@ export function suggestOutfit(input: SuggestionInput, options: SuggestionOptions
     pool.shoesAlt = fallbackFor(input.items.filter(i => !isTallBoots(i)), 'shoes', filter);
     for (const i of pool.shoesAlt) filledIds.add(i.id);
   }
-  const colorOf = input.colorOf ?? ((item: Item) => item.color ?? null);
 
   const emptyReason = (): EmptyReason => {
     const need = (['top', 'bottom'] as const).filter(c => (c === 'top' ? topChoices(pool, rule) : pool[c]).length === 0);
@@ -463,30 +513,39 @@ export function suggestOutfit(input: SuggestionInput, options: SuggestionOptions
   // 衣櫃裡有顏色或風格資料、或按了「更新」：產生多組候選評分（配色、風格，扣掉和最近幾套重複的）
   const informative = SLOT_ORDER.some(s => pool[s].some(i => colorOf(i) !== null || (i.style ?? inferStyle(i)) !== null));
   if (informative || recent.length > 0) {
+    if (!canDress()) return result(null);
     const candidates: { picks: Picks; score: number; mixed: boolean }[] = [];
     let first: Picks | null = null;
-    const unmixed = () => candidates.some(c => !c.mixed);
-    for (let i = 0; i < CANDIDATES || (i < CANDIDATES + EXTRA_TRIES && !unmixed()); i++) {
-      const p = randomPicks(pool, rule, rng);
-      if (!p) return result(null);
-      first ??= p;
-      if (isPrevious(p) || candidates.some(c => sameSet(idsOf(c.picks), idsOf(p)))) continue;
-      const look = informative ? scoreLook(picked(p), colorOf, input.occasion) : 0;
-      candidates.push({ picks: p, score: look - repeatPenalty(picked(p), recent), mixed: mixedStyle(picked(p)) });
+    const gather = (strict: boolean) => {
+      for (let i = 0; i < CANDIDATES; i++) {
+        const p = randomPicks(pool, rule, rng, colorOf, strict);
+        if (!p) continue;
+        first ??= p;
+        if (isPrevious(p) || candidates.some(c => sameSet(idsOf(c.picks), idsOf(p)))) continue;
+        const look = informative ? scoreLook(picked(p), colorOf, input.occasion) : 0;
+        candidates.push({ picks: p, score: look - repeatPenalty(picked(p), recent), mixed: mixedStyle(picked(p)) });
+      }
+    };
+    // 淑女風和休閒風不混搭：先只挑風格一致的；湊不出（或都和上一套一樣）再找別的
+    gather(true);
+    if (candidates.length === 0 && first) {
+      const alt = alternativePicks(first, pool, rule, previous, colorOf);
+      if (alt && !mixedStyle(picked(alt))) return result(alt);
     }
-    // 淑女風和休閒風不混搭（真的湊不出風格一致的才用混搭的）
-    const choices = unmixed() ? candidates.filter(c => !c.mixed) : candidates;
+    if (candidates.length === 0) gather(false);
+    const unmixed = candidates.some(c => !c.mixed);
+    const choices = unmixed ? candidates.filter(c => !c.mixed) : candidates;
     if (choices.length > 0) {
       const best = Math.max(...choices.map(c => c.score));
       const near = choices.filter(c => c.score > best - NEAR_BEST);
       return result(near[Math.min(near.length - 1, Math.floor(rng() * near.length))].picks);
     }
-    const alt = first && alternativePicks(first, pool, rule, previous);
+    const alt = first && alternativePicks(first, pool, rule, previous, colorOf);
     return alt ? result(alt) : result(first, true);
   }
 
   // 沒有任何顏色、風格資料，也不是「更新」：隨機挑
-  return result(randomPicks(pool, rule, rng));
+  return result(randomPicks(pool, rule, rng, colorOf));
 }
 
 /** 自動排版（「穿在身上」的疊法，見 outfitLayout.ts）；shapes 是量到的照片範圍，沒量到就用整張照片 */
