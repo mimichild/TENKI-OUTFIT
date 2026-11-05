@@ -84,21 +84,86 @@ export function zoomRect(fit: FitRect, view: ZoomView): FitRect {
 }
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+/** 雙指往內捏到低於這個倍數就回到原位（1 倍附近的小抖動不會把平移歸零） */
+const RESET_BELOW = 0.85;
 
 /**
- * 雙指手勢：以手勢開始時的狀態 start、雙指中心 focal0 為基準，
- * 依目前的雙指中心 focal 與縮放比例 scale 算出新的畫面狀態（中心點下的內容跟著手指走）。
- * 倍數限制在 1 ~ ZOOM_MAX；平移不會讓圖露出畫面外；縮回 1 倍時回到原位。
+ * 雙指手勢：以基準狀態 start、基準雙指中心 focal0 為準，
+ * 依目前的雙指中心 focal 與縮放比例 scale 算出新的畫面狀態（手指下的內容跟著手指走）。
+ * - 倍數 1 ~ ZOOM_MAX；1 倍時也可以拖曳
+ * - 圖片上任何一點都能拉到畫面正中央（衣服在邊邊也拉得過來），但整張圖不會被拉出畫面
+ * - 往內捏到比原本小很多時回到原位
+ * fit 是沒縮放時圖片在畫面上的位置
  */
-export function pinchView(start: ZoomView, focal0: Point, focal: Point, scale: number, box: Size): ZoomView {
-  const zoom = clamp(start.zoom * scale, 1, ZOOM_MAX);
-  if (zoom <= 1) return NO_ZOOM;
+export function pinchView(start: ZoomView, focal0: Point, focal: Point, scale: number, box: Size, fit: FitRect): ZoomView {
+  const raw = start.zoom * scale;
+  if (raw < RESET_BELOW) return NO_ZOOM;
+  const zoom = clamp(raw, 1, ZOOM_MAX);
   const k = zoom / start.zoom;
   const x = focal.x - k * (focal0.x - start.x);
   const y = focal.y - k * (focal0.y - start.y);
+  const cx = box.width / 2;
+  const cy = box.height / 2;
   return {
     zoom,
-    x: clamp(x, box.width * (1 - zoom), 0),
-    y: clamp(y, box.height * (1 - zoom), 0),
+    x: clamp(x, cx - zoom * (fit.x + fit.width), cx - zoom * fit.x),
+    y: clamp(y, cy - zoom * (fit.y + fit.height), cy - zoom * fit.y),
   };
+}
+
+/** 畫面上的一根手指（相對於畫布） */
+export interface TouchPoint {
+  id: number;
+  x: number;
+  y: number;
+}
+
+/**
+ * 自己追蹤手指（不用系統的 Pinch）：
+ * - 一根手指：塗抹
+ * - 兩根手指：拖曳＋縮放；放下第二指時取消剛開始的那一筆，手指全部放開前都不再畫線
+ * - 手指數量改變（放開或再放下一指）時重新取基準，畫面不會跳
+ */
+export interface TouchState {
+  mode: 'idle' | 'draw' | 'pinch';
+  /** 雙指的基準：哪兩根手指、當時的畫面狀態、中心與距離 */
+  base: { ids: [number, number]; view: ZoomView; focal: Point; dist: number } | null;
+}
+
+export const TOUCH_IDLE: TouchState = { mode: 'idle', base: null };
+
+export type TouchAction =
+  | { type: 'none' }
+  | { type: 'strokeStart'; point: Point }
+  | { type: 'strokeMove'; point: Point }
+  | { type: 'strokeCommit' }
+  | { type: 'strokeCancel' }
+  | { type: 'view'; view: ZoomView };
+
+/** 目前畫面上的手指 → 下一個狀態與要做的事 */
+export function nextTouch(
+  state: TouchState,
+  touches: TouchPoint[],
+  view: ZoomView,
+  box: Size,
+  fit: FitRect,
+): { state: TouchState; action: TouchAction } {
+  if (touches.length === 0) {
+    return { state: TOUCH_IDLE, action: state.mode === 'draw' ? { type: 'strokeCommit' } : { type: 'none' } };
+  }
+  if (touches.length === 1) {
+    const point = { x: touches[0].x, y: touches[0].y };
+    if (state.mode === 'pinch') return { state: { mode: 'pinch', base: null }, action: { type: 'none' } };
+    if (state.mode === 'idle') return { state: { mode: 'draw', base: null }, action: { type: 'strokeStart', point } };
+    return { state, action: { type: 'strokeMove', point } };
+  }
+  const [a, b] = touches;
+  const focal = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  const dist = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+  const cancel: TouchAction = state.mode === 'draw' ? { type: 'strokeCancel' } : { type: 'none' };
+  const base = state.base;
+  if (!base || base.ids[0] !== a.id || base.ids[1] !== b.id) {
+    return { state: { mode: 'pinch', base: { ids: [a.id, b.id], view, focal, dist } }, action: cancel };
+  }
+  return { state, action: { type: 'view', view: pinchView(base.view, base.focal, focal, dist / base.dist, box, fit) } };
 }

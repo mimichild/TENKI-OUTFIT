@@ -81,7 +81,8 @@ describe('item detail screen', () => {
     fireEvent.press(screen.getByRole('radio', { name: '休閒風' }));
     await act(async () => fireEvent.press(screen.getByRole('button', { name: '儲存' })));
     expect(await repo.get('id1')).toMatchObject({ color: 'navy', style: null });
-    expect(screen.getByText('淑女風（自動）')).toBeTruthy();
+    expect(screen.getByText('淑女風')).toBeTruthy();
+    expect(screen.queryByText(/（自動）/)).toBeNull();
 
     // 可休閒可淑女
     await act(async () => mockScreenOptions.headerRight!().props.onPress());

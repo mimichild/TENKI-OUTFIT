@@ -116,8 +116,8 @@ export default function ItemScreen() {
   const color = item.color ?? autoColor;
   const style = item.style ?? inferStyle(item);
   rows.push(
-    [t('item.color'), color ? t(`color.${color}`) + (item.color ? '' : t('item.autoSuffix')) : '—'],
-    [t('item.style'), style ? t(`style.${style}`) + (item.style ? '' : t('item.autoSuffix')) : t('item.anyStyle')],
+    [t('item.color'), color ? t(`color.${color}`) : '—'],
+    [t('item.style'), style ? t(`style.${style}`) : t('item.anyStyle')],
   );
 
   return (

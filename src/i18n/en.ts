@@ -133,7 +133,6 @@ export const en: Record<keyof typeof zhTW, string> = {
   'item.colorAutoNone': 'Leave blank to detect from the photo',
   'item.colorManual': 'Tap the selected color again to go back to automatic',
   'item.style': 'Style',
-  'item.autoSuffix': ' (auto)',
   'item.anyStyle': 'Any',
   'item.styleAuto': 'Guessed from the name and occasions as “{style}” — tap to change',
   'item.styleAutoNone': 'Leave blank for any style',

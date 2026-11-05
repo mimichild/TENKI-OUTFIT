@@ -131,7 +131,6 @@ export const zhTW = {
   'item.colorAutoNone': '沒選＝依照片自動判斷',
   'item.colorManual': '再點一次選中的顏色，改回自動判斷',
   'item.style': '風格',
-  'item.autoSuffix': '（自動）',
   'item.anyStyle': '不限',
   'item.styleAuto': '依名稱與場合自動判斷為「{style}」，點選可以更改',
   'item.styleAutoNone': '沒選＝不限風格，兩種都能搭',

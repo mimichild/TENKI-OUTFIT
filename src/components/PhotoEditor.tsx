@@ -21,10 +21,11 @@ import { useT } from '@/i18n';
 import {
   BRUSH_DEFAULT,
   NO_ZOOM,
+  TOUCH_IDLE,
   addPoint,
   containRect,
+  nextTouch,
   outputSize,
-  pinchView,
   startStroke,
   undoStroke,
   zoomRect,
@@ -32,6 +33,8 @@ import {
   type Point,
   type Size,
   type Stroke,
+  type TouchPoint,
+  type TouchState,
   type ZoomView,
 } from '@/lib/maskEditing';
 import { useTheme, type Theme } from '@/theme/useTheme';
@@ -123,9 +126,8 @@ export function PhotoEditor({ imageUri, originalUri, onDone, onCancel }: Props) 
   /** 雙指縮放；手勢回呼以 ref 為準 */
   const [view, setViewState] = useState<ZoomView>(NO_ZOOM);
   const viewRef = useRef<ZoomView>(NO_ZOOM);
-  const pinchStart = useRef<{ view: ZoomView; focal: Point } | null>(null);
-  /** 這次觸碰出現過雙指：手指全部放開前都不畫線 */
-  const pinchingRef = useRef(false);
+  /** 手指追蹤狀態（一指塗抹、兩指拖曳縮放；見 nextTouch） */
+  const touchRef = useRef<TouchState>(TOUCH_IDLE);
 
   const size = base ? { width: base.width(), height: base.height() } : null;
   const baseFit = size && box ? containRect(size, box) : null;
@@ -150,45 +152,56 @@ export function PhotoEditor({ imageUri, originalUri, onDone, onCancel }: Props) 
     setViewState(next);
   };
 
-  // 一指：塗抹
-  const draw = Gesture.Pan()
-    .runOnJS(true)
-    .minDistance(0)
-    .enabled(ready && !saving)
-    .onBegin(e => {
-      pinchingRef.current = false;
-      if (fit) setStroke(startStroke(mode, brush, e, fit));
-    })
-    .onUpdate(e => {
-      if (!pinchingRef.current && fit && currentRef.current) setStroke(addPoint(currentRef.current, e, fit));
-    })
-    .onFinalize(() => {
-      if (pinchingRef.current) {
-        pinchingRef.current = false;
+  /** 依目前畫面上的手指更新：一指塗抹、兩指拖曳＋縮放 */
+  const onTouches = (touches: TouchPoint[]) => {
+    if (!box || !baseFit || !fit) return;
+    const { state, action } = nextTouch(touchRef.current, touches, viewRef.current, box, baseFit);
+    touchRef.current = state;
+    switch (action.type) {
+      case 'strokeStart':
+        setStroke(startStroke(mode, brush, action.point, fit));
+        break;
+      case 'strokeMove':
+        if (currentRef.current) setStroke(addPoint(currentRef.current, action.point, fit));
+        break;
+      case 'strokeCommit':
+        commit();
+        break;
+      case 'strokeCancel':
         setStroke(null);
-        return;
-      }
-      commit();
-    });
+        break;
+      case 'view':
+        setView(action.view);
+        break;
+    }
+  };
+  const points = (list: { id: number; x: number; y: number }[]) => list.map(t => ({ id: t.id, x: t.x, y: t.y }));
 
-  // 兩指：放大縮小、拖曳畫面（放下第二指時取消剛開始的那一筆）
-  const pinch = Gesture.Pinch()
+  // 自己追蹤每根手指（系統的 Pinch 要兩指距離變了才啟動，單純兩指拖曳沒反應，放開一指時也會跳）
+  const gesture = Gesture.Manual()
     .runOnJS(true)
     .enabled(ready && !saving)
-    .onStart(e => {
-      pinchingRef.current = true;
-      setStroke(null);
-      pinchStart.current = { view: viewRef.current, focal: { x: e.focalX, y: e.focalY } };
+    .onTouchesDown((e, manager) => {
+      manager.activate();
+      onTouches(points(e.allTouches));
     })
-    .onUpdate(e => {
-      const start = pinchStart.current;
-      if (start && box) setView(pinchView(start.view, start.focal, { x: e.focalX, y: e.focalY }, e.scale, box));
+    .onTouchesMove(e => onTouches(points(e.allTouches)))
+    .onTouchesUp((e, manager) => {
+      const lifted = new Set(e.changedTouches.map(t => t.id));
+      const rest = points(e.allTouches.filter(t => !lifted.has(t.id)));
+      onTouches(rest);
+      if (rest.length === 0) manager.end();
+    })
+    .onTouchesCancelled((_e, manager) => {
+      touchRef.current = TOUCH_IDLE;
+      setStroke(null);
+      manager.end();
     })
     .onFinalize(() => {
-      pinchStart.current = null;
+      // 手勢被系統中斷時，把進行中的那一筆收掉
+      if (touchRef.current.mode === 'draw') commit();
+      touchRef.current = TOUCH_IDLE;
     });
-
-  const gesture = Gesture.Simultaneous(draw, pinch);
 
   const save = async () => {
     if (!base || !original || saving) return;

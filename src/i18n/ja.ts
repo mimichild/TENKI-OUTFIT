@@ -133,7 +133,6 @@ export const ja: Record<keyof typeof zhTW, string> = {
   'item.colorAutoNone': '未選択＝写真から自動判定',
   'item.colorManual': '選んだ色をもう一度タップすると自動判定に戻ります',
   'item.style': 'テイスト',
-  'item.autoSuffix': '（自動）',
   'item.anyStyle': '指定なし',
   'item.styleAuto': '名前とシーンから「{style}」と判定しました。タップで変更できます',
   'item.styleAutoNone': '未選択＝テイストを問わない',
