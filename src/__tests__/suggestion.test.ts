@@ -1,5 +1,7 @@
 import {
   candidatesFor,
+  isLongSkirt,
+  isTallBoots,
   lookOf,
   needsOuterwear,
   outerwearRule,
@@ -738,5 +740,47 @@ describe('缺少時用次之的單品補上', () => {
       const r = suggestOutfit({ items: [item('top'), item('bottom'), coat], weather: weather(33, 28), occasion: null }, { rng: () => seed / 5 });
       expect(r.pieces.map(p => p.id)).not.toContain(coat.id);
     }
+  });
+});
+
+describe('長裙、長洋裝不搭長靴', () => {
+  const seeded = (seed: number) => () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648;
+  };
+
+  it('isLongSkirt／isTallBoots 依名稱判斷', () => {
+    expect(isLongSkirt(item('bottom', { name: '百褶長裙' }))).toBe(true);
+    expect(isLongSkirt(item('onepiece', { name: '碎花長洋裝' }))).toBe(true);
+    expect(isLongSkirt(item('bottom', { name: '中長裙' }))).toBe(false);
+    expect(isLongSkirt(item('bottom', { name: '短裙' }))).toBe(false);
+    expect(isTallBoots(item('shoes', { name: '黑色長靴' }))).toBe(true);
+    expect(isTallBoots(item('shoes', { name: '過膝靴' }))).toBe(true);
+    expect(isTallBoots(item('shoes', { name: '短靴' }))).toBe(false);
+  });
+
+  it('長裙、長洋裝配短靴或鞋子，不配長靴；短裙可以配長靴', () => {
+    const boots = item('shoes', { name: '長靴' });
+    const ankle = item('shoes', { name: '短靴' });
+    const longSkirt = item('bottom', { name: '長裙' });
+    const longDress = item('onepiece', { name: '長洋裝' });
+    const mini = item('bottom', { name: '短裙' });
+    let miniWithBoots = 0;
+    for (let seed = 1; seed <= 30; seed++) {
+      const r = suggestOutfit({ items: [item('top', { name: '上衣' }), longSkirt, longDress, mini, boots, ankle], weather: weather(16, 12), occasion: null }, { rng: seeded(seed) });
+      const ids = r.pieces.map(p => p.id);
+      if (ids.includes(longSkirt.id) || ids.includes(longDress.id)) expect(ids).toContain(ankle.id);
+      if (ids.includes(mini.id) && ids.includes(boots.id)) miniWithBoots++;
+    }
+    expect(miniWithBoots).toBeGreaterThan(0);
+  });
+
+  it('符合天氣的鞋子只有長靴時，長裙改配次之的鞋子並註明', () => {
+    const boots = item('shoes', { name: '長靴', seasons: ['winter'] });
+    const sneakers = item('shoes', { name: '球鞋', seasons: ['summer'] });
+    const longSkirt = item('bottom', { name: '長裙' });
+    const r = suggestOutfit({ items: [item('top', { name: '上衣' }), longSkirt, boots, sneakers], weather: weather(14, 10), occasion: null }, { rng: () => 0 });
+    expect(r.pieces.map(p => p.id)).toEqual(expect.arrayContaining([longSkirt.id, sneakers.id]));
+    expect(r.filled).toEqual([{ itemId: sneakers.id, category: 'shoes', reason: 'weather' }]);
   });
 });
