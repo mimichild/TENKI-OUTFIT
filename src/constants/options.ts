@@ -22,7 +22,7 @@ export const COLOR_SWATCHES: Record<ColorTag, string> = {
   green: '#B5DDA4', blue: '#9EC3E6', navy: '#6B7A9C', purple: '#BFAEE0',
 };
 
-export const STYLES: StyleTag[] = ['feminine', 'casual'];
+export const STYLES: StyleTag[] = ['feminine', 'casual', 'both'];
 
 export const COUNTIES = [
   '臺北市', '新北市', '基隆市', '桃園市', '新竹市', '新竹縣', '苗栗縣', '臺中市',

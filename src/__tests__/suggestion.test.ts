@@ -1,6 +1,7 @@
 import {
   candidatesFor,
   lookOf,
+  needsOuterwear,
   outerwearRule,
   suggestOutfit,
   presetPieces,
@@ -336,9 +337,10 @@ describe('describeSuggestion', () => {
     const skirt = item('bottom', { name: '卡其長裙', color: 'khaki', style: 'feminine' });
     const r = suggestOutfit({ items: [blouse, skirt], weather: weather(25, 21), occasion: null }, { rng: () => 0 });
     const line1 = describeSuggestion(r, { language: 'zh-TW', day: 'today', occasion: null })[0];
-    expect(line1).toMatch(/^白襯衫搭配卡其長裙，大地色系，溫柔低調；淑女風，.+。$/);
+    // 白＋卡其不是同一個色系，寫出兩個顏色
+    expect(line1).toMatch(/^白襯衫搭配卡其長裙，白色＋卡其色，簡約低調；淑女風，.+。$/);
     const en = describeSuggestion(r, { language: 'en', day: 'today', occasion: null })[0];
-    expect(en).toContain('earthy neutrals');
+    expect(en).toContain('white + khaki, simple and understated');
   });
 
   it('同色系、點綴色會說出顏色', () => {
@@ -348,8 +350,22 @@ describe('describeSuggestion', () => {
         { language: 'zh-TW', day: 'today', occasion: null },
       )[0];
     expect(r('navy', 'blue')).toContain('深藍色系同色搭配');
-    expect(r('red', 'white')).toContain('用紅色點亮整體');
-    expect(r('black', 'gray')).toContain('黑白灰配色');
+    expect(r('red', 'white')).toContain('紅色＋白色，用紅色點亮整體');
+    expect(r('black', 'gray')).toContain('黑白灰色系');
+    expect(r('beige', 'brown')).toContain('大地色系');
+    // 上下身不同色系：不寫大地色系，寫「某色＋某色」
+    expect(r('gray', 'beige')).toContain('灰色＋杏色，簡約低調');
+    expect(r('gray', 'beige')).not.toContain('色系');
+  });
+
+  it('有一件衣服不知道顏色時，不說全身同色系', () => {
+    const r = suggestOutfit(
+      { items: [item('top', { name: 'A', color: 'beige' }), item('bottom', { name: 'B' }), item('outerwear', { name: 'C', color: 'brown' })], weather: weather(16, 14), occasion: null },
+      { rng: () => 0 },
+    );
+    const line1 = describeSuggestion(r, { language: 'zh-TW', day: 'today', occasion: null })[0];
+    expect(line1).toContain('咖啡色＋杏色');
+    expect(line1).not.toContain('大地色系');
   });
 
   it('describes a one-piece and hot weather', () => {
@@ -552,5 +568,67 @@ describe('內著與外搭', () => {
     const vest = item('overlay');
     const [t, v] = suggestionLayout([top, vest]);
     expect(v.z).toBeGreaterThan(t.z);
+  });
+});
+
+describe('細肩帶與風格混搭', () => {
+  const seeded = (seed: number) => () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648;
+  };
+  const cats = (r: { pieces: Item[] }) => r.pieces.map(p => p.category);
+
+  it('needsOuterwear：內著和細肩帶、吊帶的上衣／洋裝', () => {
+    expect(needsOuterwear(item('inner'))).toBe(true);
+    expect(needsOuterwear(item('onepiece', { name: '細肩帶洋裝' }))).toBe(true);
+    expect(needsOuterwear(item('top', { name: '吊帶上衣' }))).toBe(true);
+    expect(needsOuterwear(item('onepiece', { name: '短袖洋裝' }))).toBe(false);
+    expect(needsOuterwear(item('bottom', { name: '吊帶褲' }))).toBe(false);
+  });
+
+  it('細肩帶洋裝一定搭外套，夏天也一樣（短袖外套可以）', () => {
+    const items = [item('onepiece', { name: '細肩帶洋裝' }), item('outerwear', { name: '短袖外套', seasons: ['summer'] })];
+    for (const w of [weather(33, 28), weather(25, 21), null]) {
+      for (let seed = 1; seed <= 10; seed++) {
+        expect(cats(suggestOutfit({ items, weather: w, occasion: null }, { rng: seeded(seed) }))).toEqual(['outerwear', 'onepiece']);
+      }
+    }
+  });
+
+  it('沒有外套時不推薦細肩帶洋裝', () => {
+    const plain = item('onepiece', { name: '短袖洋裝' });
+    const strappy = item('onepiece', { name: '細肩帶洋裝' });
+    for (let seed = 1; seed <= 10; seed++) {
+      expect(suggestOutfit({ items: [plain, strappy], weather: weather(33, 28), occasion: null }, { rng: seeded(seed) }).pieces.map(p => p.id)).toEqual([plain.id]);
+    }
+    expect(suggestOutfit({ items: [strappy], weather: weather(33, 28), occasion: null }).status).toBe('empty');
+  });
+
+  it('淑女風和休閒風不混搭，即使配色比較好', () => {
+    const tee = item('top', { name: 'T恤', color: 'white' });
+    // 蕾絲＋紅裙撞色、T恤＋紅裙配色較好，但 T恤配裙子是休閒混淑女
+    const lace = item('top', { name: '蕾絲上衣', color: 'green' });
+    const skirt = item('bottom', { name: '長裙', color: 'red' });
+    for (let seed = 1; seed <= 20; seed++) {
+      const r = suggestOutfit({ items: [tee, lace, skirt], weather: null, occasion: null }, { rng: seeded(seed) });
+      expect(r.pieces.map(p => p.id)).toEqual([lace.id, skirt.id]);
+    }
+  });
+
+  it('「可休閒可淑女」的單品兩種風格都能搭', () => {
+    const cardigan = item('outerwear', { name: '開襟外套', style: 'both' });
+    const dress = item('onepiece', { name: '碎花洋裝' });
+    const tee = item('top', { name: 'T恤' });
+    const jeans = item('bottom', { name: '牛仔褲' });
+    // 天氣涼一定要外套，只有這件「可休閒可淑女」的外套：配洋裝、配T恤牛仔褲都算風格一致
+    for (let seed = 1; seed <= 10; seed++) {
+      const look = (o: Occasion) => {
+        const r = suggestOutfit({ items: [cardigan, dress, tee, jeans], weather: weather(16, 14), occasion: o }, { rng: seeded(seed) });
+        expect(r.pieces[0].id).toBe(cardigan.id);
+        return r.look.style;
+      };
+      expect(look('date')).toBe('feminine');
+      expect(look('casual')).toBe('casual');
+    }
   });
 });

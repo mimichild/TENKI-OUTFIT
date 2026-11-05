@@ -1,5 +1,5 @@
 import { translate, type Language, type TranslationKey } from '@/i18n';
-import type { Item, Occasion } from '@/types/models';
+import type { ColorTag, Item, Occasion } from '@/types/models';
 import type { Suggestion } from './suggestion';
 
 export interface DescribeOptions {
@@ -17,7 +17,7 @@ function pickVibe(list: string[], pieces: Item[]): string {
 
 /**
  * 建議下方的說明（固定句型）：
- * 1. 穿搭組合、配色與風格，例如「米色針織外套內搭白襯衫，配上卡其長裙，大地色系溫柔低調，淑女風優雅溫柔。」
+ * 1. 穿搭組合、配色與風格，例如「杏色針織外套內搭白襯衫，配上卡其長裙，白色＋杏色＋卡其色，簡約低調；淑女風，優雅溫柔。」
  * 2. 體感溫度與降雨機率
  * 3. 溫度和這套穿搭合不合適（有沒有外套）＋下雨帶傘
  * 沒有天氣資料時，第 2 句改成提示，沒有第 3 句
@@ -29,12 +29,20 @@ export function describeSuggestion(s: Suggestion, opts: DescribeOptions): string
   const find = (category: Item['category']) => s.pieces.find(p => p.category === category);
 
   // 配色＋風格的形容；兩個都看不出來時用場合的形容
-  const { scheme, schemeColor, style } = s.look;
-  let colorLabel = schemeColor ? t(`color.${schemeColor}` as TranslationKey) : '';
-  if (opts.language === 'en') colorLabel = colorLabel.toLowerCase();
-  const schemePart = scheme === 'tonal' || scheme === 'mono' || scheme === 'earth' || scheme === 'accent'
-    ? t(`suggest.look.${scheme}` as TranslationKey, { color: colorLabel })
-    : '';
+  // 全身同色系才寫「大地色系／黑白灰色系／粉紅色系」；不是的話寫「灰色＋杏色」
+  const { scheme, schemeColor, style, colors, family } = s.look;
+  const colorLabel = (c: ColorTag) => {
+    const l = t(`color.${c}` as TranslationKey);
+    return opts.language === 'en' ? l.toLowerCase() : l;
+  };
+  let schemePart = '';
+  if (family === 'mono' || family === 'earth') schemePart = t(`suggest.look.${family}`);
+  else if (family) schemePart = t('suggest.look.tonal', { color: colorLabel(colors[0]) });
+  else if (colors.length >= 2) {
+    const list = colors.slice(0, 3).map(c => t('suggest.colorName', { color: colorLabel(c) })).join(t('suggest.colorJoin'));
+    const mood = scheme === 'accent' || scheme === 'tonal' || scheme === 'clash' ? scheme : 'neutral';
+    schemePart = t(`suggest.look.mix.${mood}`, { colors: list, color: schemeColor ? colorLabel(schemeColor) : '' });
+  }
   const stylePart = style ? pickVibe(t(`suggest.styleVibes.${style}` as TranslationKey).split('|'), s.pieces) : '';
   const vibe = schemePart || stylePart
     ? [schemePart, stylePart].filter(Boolean).join(t('suggest.lookSep'))

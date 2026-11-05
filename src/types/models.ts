@@ -24,7 +24,8 @@ export type ColorTag =
   | 'red' | 'pink' | 'orange' | 'green' | 'blue' | 'navy' | 'purple';
 
 /** 單品風格：淑女風、休閒風；null = 不限（兩種都搭） */
-export type StyleTag = 'feminine' | 'casual';
+/** both = 可休閒可淑女（建議穿搭時兩種風格都能搭） */
+export type StyleTag = 'feminine' | 'casual' | 'both';
 
 export interface Item {
   id: string;

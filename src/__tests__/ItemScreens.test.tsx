@@ -82,6 +82,13 @@ describe('item detail screen', () => {
     await act(async () => fireEvent.press(screen.getByRole('button', { name: '儲存' })));
     expect(await repo.get('id1')).toMatchObject({ color: 'navy', style: null });
     expect(screen.getByText('淑女風（自動）')).toBeTruthy();
+
+    // 可休閒可淑女
+    await act(async () => mockScreenOptions.headerRight!().props.onPress());
+    fireEvent.press(screen.getByRole('radio', { name: '可休閒可淑女' }));
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: '儲存' })));
+    expect(await repo.get('id1')).toMatchObject({ style: 'both' });
+    expect(screen.getByText('可休閒可淑女')).toBeTruthy();
   });
 
   it('delete moves the item to trash and goes back', async () => {
