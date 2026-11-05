@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import { State } from 'react-native-gesture-handler';
 import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 import ItemScreen from '../../app/item/[id]';
@@ -69,6 +70,16 @@ describe('item detail screen', () => {
     expect(screen.getByText('依名稱與場合判斷不出風格，目前為「不限」，點選可以更改')).toBeTruthy();
     fireEvent.changeText(screen.getByLabelText('名稱'), '蕾絲白襯衫');
     expect(screen.getByText('依名稱與場合自動判斷為「淑女風」，點選可以更改')).toBeTruthy();
+    expect(screen.getByRole('radio', { name: '淑女風' }).props.accessibilityState).toEqual({ selected: true });
+    // 系統判斷：虛線框、標注「（系統判斷）」；點一下變成手動（實心），字樣消失
+    const chipStyle = () => StyleSheet.flatten(screen.getByRole('radio', { name: '淑女風' }).props.style);
+    expect(screen.getByText('淑女風（系統判斷）')).toBeTruthy();
+    expect(chipStyle().borderStyle).toBe('dashed');
+    fireEvent.press(screen.getByRole('radio', { name: '淑女風' }));
+    expect(screen.queryByText('淑女風（系統判斷）')).toBeNull();
+    expect(screen.getByText('淑女風')).toBeTruthy();
+    expect(chipStyle().borderStyle).toBeUndefined();
+    expect(chipStyle().borderWidth).toBe(2);
     expect(screen.getByRole('radio', { name: '淑女風' }).props.accessibilityState).toEqual({ selected: true });
     fireEvent.press(screen.getByRole('radio', { name: '深藍' }));
     fireEvent.press(screen.getByRole('radio', { name: '休閒風' }));

@@ -221,6 +221,8 @@ export function ItemForm({ initial, onPickPhoto, onRemoveBackground, onSubmit, o
                 swatch={COLOR_SWATCHES[c]}
                 label={t(`color.${c}`)}
                 selected={shownColor === c}
+                auto={!form.color}
+                autoNote={t('item.autoNote')}
                 // 再點一次手動選的顏色 = 改回自動判斷
                 onPress={() => update({ color: form.color === c ? null : c })}
               />
@@ -234,7 +236,15 @@ export function ItemForm({ initial, onPickPhoto, onRemoveBackground, onSubmit, o
         >
           <View style={s.chipRow}>
             {STYLES.map(x => (
-              <Chip key={x} role="radio" label={t(`style.${x}`)} selected={shownStyle === x} onPress={() => update({ style: form.style === x ? null : x })} />
+              <Chip
+                key={x}
+                role="radio"
+                label={t(`style.${x}`)}
+                selected={shownStyle === x}
+                auto={!form.style}
+                autoNote={t('item.autoNote')}
+                onPress={() => update({ style: form.style === x ? null : x })}
+              />
             ))}
           </View>
         </Field>

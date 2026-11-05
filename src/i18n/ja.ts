@@ -136,6 +136,7 @@ export const ja: Record<keyof typeof zhTW, string> = {
   'item.anyStyle': '指定なし',
   'item.styleAuto': '名前とシーンから「{style}」と判定しました。タップで変更できます',
   'item.styleNone': '名前とシーンからテイストを判定できなかったため「指定なし」です。タップで変更できます',
+  'item.autoNote': '（自動判定）',
   'item.autoTag': '{value}（自動判定）',
   'item.styleManual': '選んだテイストをもう一度タップすると自動判定に戻ります',
   'color.black': '黒',
