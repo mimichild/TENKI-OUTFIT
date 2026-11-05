@@ -133,6 +133,8 @@ export const zhTW = {
   'item.style': '風格',
   'item.anyStyle': '不限',
   'item.styleAuto': '依名稱與場合自動判斷為「{style}」，點選可以更改',
+  'item.styleNone': '依名稱與場合判斷不出風格，目前為「不限」，點選可以更改',
+  'item.autoTag': '{value}（系統判斷）',
   'item.styleManual': '再點一次選中的風格，改回自動判斷',
   'color.black': '黑',
   'color.white': '白',

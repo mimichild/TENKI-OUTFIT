@@ -62,11 +62,11 @@ describe('item detail screen', () => {
     mockParams = { id: 'id1' };
     wrap(<ItemScreen />);
     await screen.findByText('白襯衫');
-    // 白襯衫的場合是上班，看不出風格 → 可休閒可淑女；沒照片，量不到顏色
-    expect(screen.getByText('可休閒可淑女')).toBeTruthy();
-    expect(screen.queryByText('不限')).toBeNull();
+    // 白襯衫的場合是上班，看不出風格 → 不限（系統判斷）；沒照片，量不到顏色
+    expect(screen.getByText('不限（系統判斷）')).toBeTruthy();
     await act(async () => mockScreenOptions.headerRight!().props.onPress());
     expect(screen.queryByText(/不限風格/)).toBeNull();
+    expect(screen.getByText('依名稱與場合判斷不出風格，目前為「不限」，點選可以更改')).toBeTruthy();
     fireEvent.changeText(screen.getByLabelText('名稱'), '蕾絲白襯衫');
     expect(screen.getByText('依名稱與場合自動判斷為「淑女風」，點選可以更改')).toBeTruthy();
     expect(screen.getByRole('radio', { name: '淑女風' }).props.accessibilityState).toEqual({ selected: true });
@@ -82,15 +82,16 @@ describe('item detail screen', () => {
     fireEvent.press(screen.getByRole('radio', { name: '休閒風' }));
     await act(async () => fireEvent.press(screen.getByRole('button', { name: '儲存' })));
     expect(await repo.get('id1')).toMatchObject({ color: 'navy', style: null });
-    expect(screen.getByText('淑女風')).toBeTruthy();
-    expect(screen.queryByText(/（自動）/)).toBeNull();
+    expect(screen.getByText('淑女風（系統判斷）')).toBeTruthy();
 
     // 可休閒可淑女
     await act(async () => mockScreenOptions.headerRight!().props.onPress());
     fireEvent.press(screen.getByRole('radio', { name: '可休閒可淑女' }));
     await act(async () => fireEvent.press(screen.getByRole('button', { name: '儲存' })));
     expect(await repo.get('id1')).toMatchObject({ style: 'both' });
+    // 手動選的不加「系統判斷」
     expect(screen.getByText('可休閒可淑女')).toBeTruthy();
+    expect(screen.queryByText(/系統判斷/)).toBeNull();
   });
 
   it('delete moves the item to trash and goes back', async () => {

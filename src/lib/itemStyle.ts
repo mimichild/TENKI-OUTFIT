@@ -2,7 +2,7 @@ import type { Item, StyleTag } from '@/types/models';
 
 /**
  * 從名稱和場合推測單品風格（使用者沒有手動選的時候用）：
- * 名稱裡的關鍵字優先，其次看場合；都看不出來就是「可休閒可淑女」
+ * 名稱裡的關鍵字優先，其次看場合；都看不出來就是 null（不限，兩種風格都搭）
  */
 const FEMININE_WORDS = [
   '洋裝', '連身裙', '裙', '蕾絲', '雪紡', '針織', '碎花', '荷葉', '泡泡袖', '蝴蝶結', '緞面', '珍珠', '高跟', '跟鞋', '瑪莉珍', '娃娃',
@@ -15,7 +15,7 @@ const CASUAL_WORDS = [
 
 const includesAny = (text: string, words: string[]) => words.some(w => text.includes(w.toLowerCase()));
 
-export function inferStyle(item: Pick<Item, 'name' | 'brand' | 'occasions'>): StyleTag {
+export function inferStyle(item: Pick<Item, 'name' | 'brand' | 'occasions'>): StyleTag | null {
   const text = `${item.name} ${item.brand}`.toLowerCase();
   const feminine = includesAny(text, FEMININE_WORDS);
   const casual = includesAny(text, CASUAL_WORDS);
@@ -26,6 +26,5 @@ export function inferStyle(item: Pick<Item, 'name' | 'brand' | 'occasions'>): St
   const casScore = o.filter(x => x === 'casual' || x === 'travel').length;
   if (femScore > casScore) return 'feminine';
   if (casScore > femScore) return 'casual';
-  // 完全猜不出來：可休閒可淑女（2026-11-05）
-  return 'both';
+  return null;
 }

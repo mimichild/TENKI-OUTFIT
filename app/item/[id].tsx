@@ -112,12 +112,15 @@ export default function ItemScreen() {
     [t('item.occasions'), item.occasions.length ? item.occasions.map(o => t(`occasion.${o}`)).join(t('common.listSeparator')) : t('item.allOccasions')],
     [t('item.seasons'), item.seasons.length ? item.seasons.map(s => t(`season.${s}`)).join(t('common.listSeparator')) : t('item.allSeasons')],
   ];
-  // 沒手動設定時顯示自動判斷的結果（加註「自動」）
+  // 沒手動設定時顯示自動判斷的結果；風格加註「系統判斷」（猜不出來 = 不限（系統判斷））
   const color = item.color ?? autoColor;
-  const style = item.style ?? inferStyle(item);
+  const autoStyle = inferStyle(item);
+  const styleText = item.style
+    ? t(`style.${item.style}`)
+    : t('item.autoTag', { value: autoStyle ? t(`style.${autoStyle}`) : t('item.anyStyle') });
   rows.push(
     [t('item.color'), color ? t(`color.${color}`) : '—'],
-    [t('item.style'), style ? t(`style.${style}`) : t('item.anyStyle')],
+    [t('item.style'), styleText],
   );
 
   return (

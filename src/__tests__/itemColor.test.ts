@@ -50,10 +50,10 @@ describe('inferStyle', () => {
     expect(it2('白色T恤')).toBe('casual');
     expect(it2('牛仔褲')).toBe('casual');
   });
-  it('falls back to occasions, then to both styles', () => {
+  it('falls back to occasions, then to no style', () => {
     expect(it2('上衣', ['date'])).toBe('feminine');
     expect(it2('上衣', ['casual', 'travel'])).toBe('casual');
-    expect(it2('上衣', ['work'])).toBe('both');
-    expect(it2('上衣')).toBe('both');
+    expect(it2('上衣', ['work'])).toBeNull();
+    expect(it2('上衣')).toBeNull();
   });
 });

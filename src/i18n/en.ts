@@ -135,6 +135,8 @@ export const en: Record<keyof typeof zhTW, string> = {
   'item.style': 'Style',
   'item.anyStyle': 'Any',
   'item.styleAuto': 'Guessed from the name and occasions as “{style}” — tap to change',
+  'item.styleNone': 'Couldn’t guess a style from the name and occasions, so it’s “Any” — tap to change',
+  'item.autoTag': '{value} (auto)',
   'item.styleManual': 'Tap the selected style again to go back to automatic',
   'color.black': 'Black',
   'color.white': 'White',
