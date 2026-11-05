@@ -23,12 +23,17 @@ import type { Category, Item, Occasion, OutfitPiece } from '@/types/models';
 
 type Day = 'today' | 'tomorrow';
 
+/** 按「更新」時記住最近幾套，盡量不重複用到同一件 */
+const RECENT_KEEP = 3;
+
 interface Picked {
   /** 日期＋場合＋天氣條件；變了就重抽 */
   key: string;
   /** 抽籤時的輸入；衣櫃或條件變了才需要檢查要不要重抽 */
   input: SuggestionInput;
   suggestion: Suggestion;
+  /** 最近幾套的單品 id（最新的在前面），按「更新」時避開 */
+  recent: string[][];
 }
 
 export default function SuggestScreen() {
@@ -73,13 +78,17 @@ export default function SuggestScreen() {
         (picked.suggestion.status === 'empty' ||
           !picked.suggestion.pieces.every(stillFits) ||
           picked.suggestion.missing.some(missingNowAvailable)));
-    if (stale) setPicked({ key, input, suggestion: suggestOutfit(input) });
+    if (stale) {
+      const suggestion = suggestOutfit(input);
+      setPicked({ key, input, suggestion, recent: [suggestion.pieces.map(p => p.id)] });
+    }
   }
 
   const shuffle = () => {
     if (!picked) return;
-    const next = suggestOutfit(input, { previous: picked.suggestion.pieces.map(p => p.id) });
-    setPicked({ key, input, suggestion: next });
+    // 盡量不要用到最近幾套出現過的單品
+    const next = suggestOutfit(input, { previous: picked.suggestion.pieces.map(p => p.id), recent: picked.recent });
+    setPicked({ key, input, suggestion: next, recent: [next.pieces.map(p => p.id), ...picked.recent].slice(0, RECENT_KEEP) });
     // accessibilityLiveRegion 只有 Android 有效，iOS 另外念
     if (next.noAlternative) AccessibilityInfo.announceForAccessibility(t('suggest.noAlternative'));
   };

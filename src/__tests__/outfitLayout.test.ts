@@ -107,6 +107,22 @@ describe('layoutOutfit — fixed spots', () => {
     }
   });
 
+  it('puts an overlay (vest) in the outerwear spot; with both, outerwear above overlay above bag, nothing overlapping', () => {
+    const overlay = item('overlay');
+    const alone = rects([top, overlay, bottom], { [top.id]: wide, [overlay.id]: wide });
+    expect(cx(alone.overlay)).toBeGreaterThan(0.5);
+    expect(cy(alone.overlay)).toBeLessThan(mid);
+    const list = [outerwear, top, overlay, bottom, shoes, bag];
+    const r = rects(list, { [top.id]: wide, [overlay.id]: tall, [outerwear.id]: tall, [bottom.id]: tall, [shoes.id]: wide, [bag.id]: padded });
+    expect(r.outerwear.y + r.outerwear.h).toBeLessThanOrEqual(r.overlay.y + 1e-9);
+    expect(r.overlay.y + r.overlay.h).toBeLessThanOrEqual(r.bag.y + 1e-9);
+    expect(r.bag.y + r.bag.h).toBeLessThanOrEqual(r.shoes.y + 1e-9);
+    const keys = Object.keys(r);
+    const overlap = (a: Rect, b: Rect) =>
+      Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+    for (let i = 0; i < keys.length; i++) for (let j = i + 1; j < keys.length; j++) expect([keys[i], keys[j], overlap(r[keys[i]], r[keys[j]]) < 0.01]).toEqual([keys[i], keys[j], true]);
+  });
+
   it('keeps everything inside the canvas without overlapping between spots (except the accessory in the center)', () => {
     const shapes = { [top.id]: wide, [bottom.id]: tall, [outerwear.id]: tall, [shoes.id]: wide, [bag.id]: padded, [accessory.id]: tall };
     const r = rects(all, shapes);

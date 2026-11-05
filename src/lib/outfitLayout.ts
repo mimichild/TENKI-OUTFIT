@@ -5,6 +5,7 @@ import { CANVAS_HEIGHT_RATIO, MAX_SCALE, MIN_SCALE, PIECE_BASE_SIZE } from './ou
  * 穿搭建議的自動排版（使用者指定 2026-11-03）：每個分類一個固定格子——
  * 上衣左上、下著左下（比上衣長、格子比較大）、外套右上、包包在鞋子正上方、鞋子右下；連身佔整個左半邊。
  * 配件不預留位置，放在畫布正中央、疊在最上面（可以壓到其他單品）（2026-11-05）。
+ * 外搭不疊在上衣上（看不清楚），放在外套的位置；外套和外搭都有時，右欄由上而下排外套、外搭、包包（2026-11-05）。
  *
  * 去背照片四周常有透明留白，每張都不一樣，所以以「照片裡真正有衣服的範圍」（PieceShape）
  * 等比放大塞滿格子並置中；量不到時退回整張照片。所有長度以畫布寬度為單位，畫布高 = CANVAS_HEIGHT_RATIO。
@@ -99,9 +100,9 @@ function placementFor(rect: Rect, shape: PieceShape | null): Pick<OutfitItemPlac
 /** 每個分類的格子（畫布寬度為單位；畫布 1 × 4/3） */
 const SPOTS: Record<Category, Rect> = {
   top: { x: 0.04, y: 0.04, w: 0.44, h: 0.44 },
-  // 內搭放在上衣的位置；外搭疊在上衣上面（稍微小一點，看得到裡面的上衣）
+  // 內搭放在上衣的位置；外搭放在外套的位置
   inner: { x: 0.04, y: 0.04, w: 0.44, h: 0.44 },
-  overlay: { x: 0.08, y: 0.08, w: 0.36, h: 0.4 },
+  overlay: { x: 0.52, y: 0.04, w: 0.44, h: 0.46 },
   bottom: { x: 0.04, y: 0.5, w: 0.44, h: 0.79 },
   onepiece: { x: 0.04, y: 0.04, w: 0.44, h: 1.25 },
   outerwear: { x: 0.52, y: 0.04, w: 0.44, h: 0.46 },
@@ -111,6 +112,13 @@ const SPOTS: Record<Category, Rect> = {
   bag: { x: 0.56, y: 0.52, w: 0.4, h: 0.38 },
   shoes: { x: 0.56, y: 0.92, w: 0.4, h: 0.37 },
   other: { x: 0.3, y: 0.47, w: 0.4, h: 0.4 },
+};
+
+/** 外套和外搭都有時，右欄上半部讓兩件上下排，包包往下縮一點（鞋子不動） */
+const WITH_BOTH: Partial<Record<Category, Rect>> = {
+  outerwear: { x: 0.52, y: 0.04, w: 0.44, h: 0.3 },
+  overlay: { x: 0.52, y: 0.36, w: 0.44, h: 0.24 },
+  bag: { x: 0.56, y: 0.62, w: 0.4, h: 0.28 },
 };
 
 /** 疊放順序：外套最後面，包包、配件最前面 */
@@ -138,13 +146,15 @@ function fitInSpot(spot: Rect, shape: PieceShape | null): Rect {
 
 export function layoutOutfit(items: Item[], shapes: ReadonlyMap<string, PieceShape | null>): OutfitItemPlacement[] {
   const shapeOf = (i: Item) => shapes.get(i.id) ?? null;
+  const both = items.some(i => i.category === 'outerwear') && items.some(i => i.category === 'overlay');
+  const spotOf = (c: Category) => (both ? WITH_BOTH[c] : undefined) ?? SPOTS[c];
   const order = items
     .map((i, idx) => ({ id: i.id, rank: Z_RANK[i.category], idx }))
     .sort((a, b) => a.rank - b.rank || a.idx - b.idx)
     .map(o => o.id);
   return items.map(i => ({
     itemId: i.id,
-    ...placementFor(fitInSpot(SPOTS[i.category], shapeOf(i)), shapeOf(i)),
+    ...placementFor(fitInSpot(spotOf(i.category), shapeOf(i)), shapeOf(i)),
     rotation: 0,
     z: order.indexOf(i.id),
   }));

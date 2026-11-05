@@ -12,6 +12,7 @@ import { layoutOutfit, type PieceShape } from './outfitLayout';
  *   外搭（例如小背心）只會疊在一般上衣外面，不單穿（2026-11-04）
  * - 細肩帶／吊帶的上衣、洋裝和內著一樣一定要搭外套（夏天搭短袖外套也可以）（2026-11-05）
  * - 淑女風和休閒風的單品不混搭（2026-11-05）
+ * - 按「更新」時盡量用不同的單品：最近幾套出現過的單品扣分（衣服扣比較多）（2026-11-05）
  * - 配色與風格（2026-11-04）：隨機產生多組候選，依配色（同色系、黑白灰、大地色、一點亮色；撞色扣分）
  *   與風格（淑女風、休閒風是否一致、是否符合場合）評分，從接近最高分的候選中挑一組，按「更新」才有變化
  */
@@ -72,6 +73,11 @@ export interface SuggestionOptions {
   rng?: () => number;
   /** 上一套的單品 id，盡量不要重複 */
   previous?: string[];
+  /**
+   * 最近幾套建議的單品 id（最新的在前面，通常第一套就是 previous）。
+   * 按「更新」時盡量換不同的單品：最近用過的單品扣分，越近扣越多
+   */
+  recent?: string[][];
 }
 
 export interface Suggestion {
@@ -252,11 +258,10 @@ function alternativePicks(base: Picks, pool: Pool, rule: OuterwearRule, previous
   return fresh.find(v => !mixedStyle(picked(v))) ?? fresh[0] ?? null;
 }
 
-const RANDOM_TRIES = 20;
 /** 候選全都是淑女混休閒時，最多再多抽幾組找風格一致的 */
 const EXTRA_TRIES = 60;
 /** 有顏色／風格資料時，一次產生幾組候選來評分 */
-const CANDIDATES = 24;
+const CANDIDATES = 40;
 /** 和最高分差距小於這個值的候選都可能被選中（讓「更新」有變化；差一個等級就不選） */
 const NEAR_BEST = 0.5;
 
@@ -299,6 +304,24 @@ function styleSet(pieces: Item[]): Set<OneStyle> {
       .map(p => p.style ?? inferStyle(p))
       .filter((x): x is OneStyle => x !== null && x !== 'both'),
   );
+}
+
+/** 最近第 1、2、3 套出現過的單品，每件扣多少（再乘上分類的權重） */
+const REPEAT_WEIGHTS = [1, 0.6, 0.3];
+/** 衣服重複扣比較多；鞋子、包包、配件通常件數少，重複難免，扣少一點 */
+const REPEAT_CLOTHES = 1.5;
+const REPEAT_OTHER = 0.5;
+
+/** 和最近幾套重複的程度（越大越重複） */
+function repeatPenalty(pieces: Item[], recent: string[][]): number {
+  let total = 0;
+  for (const p of pieces) {
+    const w = (CLOTHES as string[]).includes(p.category) ? REPEAT_CLOTHES : REPEAT_OTHER;
+    recent.slice(0, REPEAT_WEIGHTS.length).forEach((ids, i) => {
+      if (ids.includes(p.id)) total += w * REPEAT_WEIGHTS[i];
+    });
+  }
+  return total;
 }
 
 const SCHEME_SCORE: Record<ColorScheme, number> = { tonal: 3, mono: 3, earth: 3, accent: 2.5, unknown: 1.5, clash: 0 };
@@ -357,10 +380,11 @@ export function suggestOutfit(input: SuggestionInput, options: SuggestionOptions
 
   const previous = options.previous ?? [];
   const isPrevious = (p: Picks) => previous.length > 0 && sameSet(idsOf(p), previous);
+  const recent = options.recent ?? (previous.length > 0 ? [previous] : []);
 
-  // 衣櫃裡有顏色或風格資料：產生多組候選評分
+  // 衣櫃裡有顏色或風格資料、或按了「更新」：產生多組候選評分（配色、風格，扣掉和最近幾套重複的）
   const informative = SLOT_ORDER.some(s => pool[s].some(i => colorOf(i) !== null || (i.style ?? inferStyle(i)) !== null));
-  if (informative) {
+  if (informative || recent.length > 0) {
     const candidates: { picks: Picks; score: number; mixed: boolean }[] = [];
     let first: Picks | null = null;
     const unmixed = () => candidates.some(c => !c.mixed);
@@ -369,7 +393,8 @@ export function suggestOutfit(input: SuggestionInput, options: SuggestionOptions
       if (!p) return result(null);
       first ??= p;
       if (isPrevious(p) || candidates.some(c => sameSet(idsOf(c.picks), idsOf(p)))) continue;
-      candidates.push({ picks: p, score: scoreLook(picked(p), colorOf, input.occasion), mixed: mixedStyle(picked(p)) });
+      const look = informative ? scoreLook(picked(p), colorOf, input.occasion) : 0;
+      candidates.push({ picks: p, score: look - repeatPenalty(picked(p), recent), mixed: mixedStyle(picked(p)) });
     }
     // 淑女風和休閒風不混搭（真的湊不出風格一致的才用混搭的）
     const choices = unmixed() ? candidates.filter(c => !c.mixed) : candidates;
@@ -382,16 +407,8 @@ export function suggestOutfit(input: SuggestionInput, options: SuggestionOptions
     return alt ? result(alt) : result(first, true);
   }
 
-  // 沒有任何顏色、風格資料：照舊隨機挑
-  let picks = randomPicks(pool, rule, rng);
-  if (!picks || !isPrevious(picks)) return result(picks);
-  for (let i = 0; i < RANDOM_TRIES; i++) {
-    const next = randomPicks(pool, rule, rng);
-    if (next && !sameSet(idsOf(next), previous)) return result(next);
-  }
-  const alt = alternativePicks(picks, pool, rule, previous);
-  if (alt) return result(alt);
-  return result(picks, true);
+  // 沒有任何顏色、風格資料，也不是「更新」：隨機挑
+  return result(randomPicks(pool, rule, rng));
 }
 
 /** 自動排版（「穿在身上」的疊法，見 outfitLayout.ts）；shapes 是量到的照片範圍，沒量到就用整張照片 */

@@ -563,11 +563,17 @@ describe('內著與外搭', () => {
     expect(describeSuggestion(r, { language: 'zh-TW', day: 'today', occasion: null })[0]).toMatch(/^白T外搭針織背心搭配長裙，/);
   });
 
-  it('排版時外搭疊在上衣上面', () => {
+  it('排版時外搭放在外套的位置，不跟上衣疊在一起', () => {
     const top = item('top');
     const vest = item('overlay');
     const [t, v] = suggestionLayout([top, vest]);
-    expect(v.z).toBeGreaterThan(t.z);
+    expect(v.x).toBeGreaterThan(t.x);
+    expect(Math.abs(v.x - t.x)).toBeGreaterThan(0.3);
+    const jacket = item('outerwear');
+    const [, , j] = suggestionLayout([top, vest, jacket]);
+    // 外套和外搭都有：同一欄，外套在上、外搭在下
+    expect(v.x).toBeCloseTo(suggestionLayout([top, jacket])[1].x, 1);
+    expect(suggestionLayout([top, vest, jacket])[1].y).toBeGreaterThan(j.y);
   });
 });
 
@@ -629,6 +635,46 @@ describe('細肩帶與風格混搭', () => {
       };
       expect(look('date')).toBe('feminine');
       expect(look('casual')).toBe('casual');
+    }
+  });
+});
+
+describe('「更新」盡量換不同單品', () => {
+  const seeded = (seed: number) => () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648;
+  };
+
+  it('上一套用過的衣服（例如背心）有別的可選時不會再出現', () => {
+    const [a, b] = [item('top', { name: 'A' }), item('top', { name: 'B' })];
+    const [c, d] = [item('bottom', { name: 'C' }), item('bottom', { name: 'D' })];
+    const [v1, v2] = [item('overlay', { name: '背心1' }), item('overlay', { name: '背心2' })];
+    const items = [a, b, c, d, v1, v2];
+    for (let seed = 1; seed <= 20; seed++) {
+      const previous = [a.id, c.id, v1.id];
+      const r = suggestOutfit({ items, weather: weather(22, 18), occasion: null }, { rng: seeded(seed), previous });
+      for (const id of previous) expect(r.pieces.map(p => p.id)).not.toContain(id);
+    }
+  });
+
+  it('連按幾次「更新」會輪流用到不同的衣服', () => {
+    const tops = [1, 2, 3].map(n => item('top', { name: `上衣${n}` }));
+    const bottoms = [1, 2, 3].map(n => item('bottom', { name: `下著${n}` }));
+    const input = { items: [...tops, ...bottoms], weather: weather(25, 21), occasion: null };
+    for (let seed = 1; seed <= 10; seed++) {
+      const rng = seeded(seed);
+      let recent: string[][] = [];
+      const used = new Set<string>();
+      for (let n = 0; n < 3; n++) {
+        const r = suggestOutfit(input, { rng, previous: recent[0], recent });
+        const ids = r.pieces.map(p => p.id);
+        for (const id of ids) {
+          expect(used.has(id)).toBe(false);
+          used.add(id);
+        }
+        recent = [ids, ...recent];
+      }
+      expect(used.size).toBe(6);
     }
   });
 });
