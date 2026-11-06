@@ -762,6 +762,29 @@ describe('長裙、長洋裝、長褲不搭長靴', () => {
     expect(isTallBoots(item('shoes', { name: '短靴' }))).toBe(false);
   });
 
+  it('長洋裝、長靴的其他常見名稱也認得（2026-11-06）', () => {
+    for (const name of ['碎花長洋', '長版連身裙', '長款洋裝', '及踝洋裝', '雪紡連身長裙', 'ロングワンピース']) {
+      expect(isLongBottom(item('onepiece', { name }))).toBe(true);
+    }
+    expect(isLongBottom(item('onepiece', { name: '長袖洋裝' }))).toBe(false);
+    expect(isLongBottom(item('onepiece', { name: '中長洋裝' }))).toBe(false);
+    for (const name of ['黑色馬靴', '長筒馬靴', '高筒靴', '膝下靴', '騎士靴']) {
+      expect(isTallBoots(item('shoes', { name }))).toBe(true);
+    }
+    expect(isTallBoots(item('shoes', { name: '短馬靴' }))).toBe(false);
+    expect(isTallBoots(item('shoes', { name: '踝靴' }))).toBe(false);
+  });
+
+  it('長洋裝不配馬靴', () => {
+    const boots = item('shoes', { name: '黑色馬靴' });
+    const flats = item('shoes', { name: '平底鞋' });
+    const dress = item('onepiece', { name: '碎花長洋' });
+    for (let seed = 1; seed <= 20; seed++) {
+      const r = suggestOutfit({ items: [dress, boots, flats], weather: weather(16, 12), occasion: null }, { rng: seeded(seed) });
+      expect(r.pieces.map(p => p.id)).not.toContain(boots.id);
+    }
+  });
+
   it('長裙、長洋裝配短靴或鞋子，不配長靴；短裙可以配長靴', () => {
     const boots = item('shoes', { name: '長靴' });
     const ankle = item('shoes', { name: '短靴' });
@@ -786,6 +809,48 @@ describe('長裙、長洋裝、長褲不搭長靴', () => {
     const r = suggestOutfit({ items: [item('top', { name: '上衣' }), longSkirt, boots, sneakers], weather: weather(14, 10), occasion: null }, { rng: () => 0 });
     expect(r.pieces.map(p => p.id)).toEqual(expect.arrayContaining([longSkirt.id, sneakers.id]));
     expect(r.filled).toEqual([{ itemId: sneakers.id, category: 'shoes', reason: 'weather' }]);
+  });
+});
+
+describe('夏天的外套不搭在春秋冬的上衣、洋裝外面（2026-11-06）', () => {
+  const seeded = (seed: number) => () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648;
+  };
+
+  it('只標夏天的外套，不配沒標夏天的上衣或洋裝', () => {
+    const summerCoat = item('outerwear', { name: '薄罩衫', seasons: ['summer'] });
+    const coat = item('outerwear', { name: '針織外套', seasons: ['spring', 'autumn'] });
+    const autumnTop = item('top', { name: '毛衣', seasons: ['autumn'] });
+    const springDress = item('onepiece', { name: '洋裝', seasons: ['spring'] });
+    const items = [summerCoat, coat, autumnTop, springDress, item('bottom'), item('shoes')];
+    let used = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const r = suggestOutfit({ items, weather: weather(25, 17), occasion: null }, { rng: seeded(seed) });
+      const ids = r.pieces.map(p => p.id);
+      expect(ids).toContain(coat.id);
+      if (ids.includes(autumnTop.id) || ids.includes(springDress.id)) used++;
+    }
+    expect(used).toBeGreaterThan(0);
+  });
+
+  it('有標夏天（或沒標季節）的上衣可以配夏天的外套', () => {
+    const summerCoat = item('outerwear', { name: '薄罩衫', seasons: ['summer'] });
+    const tops = [item('top', { name: '短袖', seasons: ['spring', 'summer'] }), item('top', { name: 'T恤' })];
+    for (const top of tops) {
+      const r = suggestOutfit({ items: [summerCoat, top, item('bottom'), item('shoes')], weather: weather(25, 17), occasion: null }, { rng: () => 0 });
+      expect(r.pieces.map(p => p.id)).toEqual(expect.arrayContaining([summerCoat.id, top.id]));
+    }
+  });
+
+  it('細肩帶洋裝（春秋）只有夏天的外套可搭時，不推薦這件洋裝', () => {
+    const summerCoat = item('outerwear', { name: '薄罩衫', seasons: ['summer'] });
+    const dress = item('onepiece', { name: '細肩帶洋裝', seasons: ['spring', 'autumn'] });
+    const top = item('top', { name: 'T恤', seasons: ['summer'] });
+    for (let seed = 1; seed <= 20; seed++) {
+      const r = suggestOutfit({ items: [summerCoat, dress, top, item('bottom'), item('shoes')], weather: weather(25, 17), occasion: null }, { rng: seeded(seed) });
+      expect(r.pieces.map(p => p.id)).not.toContain(dress.id);
+    }
   });
 });
 
