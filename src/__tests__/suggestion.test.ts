@@ -15,6 +15,7 @@ import {
 import { describeSuggestion, isBigSwing } from '@/lib/suggestionText';
 import { translate } from '@/i18n';
 import { CANVAS_HEIGHT_RATIO } from '@/lib/outfitCanvas';
+import { visibleRect } from '@/lib/outfitLayout';
 import type { Category, ColorTag, Item, Occasion, Season, StyleTag } from '@/types/models';
 
 let seq = 0;
@@ -447,6 +448,12 @@ describe('presetPieces', () => {
     // 外套在最後面
     expect(pieces.map(p => p.z)).toEqual([1, 2, 0]);
     expect(pieces.map(p => p.y)).toEqual(suggestionLayout([top, shoes, jacket]).map(p => p.y));
+  });
+  it('依畫布比例排版：畫布比 4:3 矮時鞋子、下著不會超出畫布底部（2026-11-06）', () => {
+    const items = [item('top'), item('bottom'), item('bag'), item('shoes')];
+    const ratio = 1.1;
+    const pieces = presetPieces(items.map(i => i.id).join(','), items, new Map(), ratio);
+    for (const p of pieces) expect(visibleRect(p, null).y + visibleRect(p, null).h).toBeLessThanOrEqual(ratio + 1e-9);
   });
   it('is empty without ids', () => {
     expect(presetPieces(undefined, [item('top')])).toEqual([]);

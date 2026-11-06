@@ -157,6 +157,19 @@ describe('layoutOutfit — fixed spots', () => {
     expect(r.onepiece.h).toBeGreaterThan(CANVAS_HEIGHT_RATIO * 0.7);
   });
 
+  it('畫布比較高時（給 ratio）格子跟著往下拉長，鞋子貼近畫布底部', () => {
+    const shoes = item('shoes');
+    const top = item('top');
+    const map = new Map<string, PieceShape | null>([[shoes.id, wide], [top.id, padded]]);
+    const tallRatio = 2;
+    const layout = layoutOutfit([top, shoes], map, tallRatio);
+    const r = visibleRect(layout[1], wide);
+    expect(r.y + r.h).toBeGreaterThan(CANVAS_HEIGHT_RATIO);
+    expect(r.y + r.h).toBeLessThanOrEqual(tallRatio);
+    // 沒給 ratio 時和原本一樣
+    expect(layoutOutfit([top, shoes], map)).toEqual(layoutOutfit([top, shoes], map, CANVAS_HEIGHT_RATIO));
+  });
+
   it('keeps the input order and distinct z, outerwear at the back', () => {
     const layout = layoutOutfit(all, new Map());
     expect(layout.map(p => p.itemId)).toEqual(all.map(i => i.id));

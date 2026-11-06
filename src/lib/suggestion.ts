@@ -608,8 +608,12 @@ export function suggestOutfit(input: SuggestionInput, options: SuggestionOptions
 }
 
 /** 自動排版（「穿在身上」的疊法，見 outfitLayout.ts）；shapes 是量到的照片範圍，沒量到就用整張照片 */
-export function suggestionLayout(items: Item[], shapes: ReadonlyMap<string, PieceShape | null> = new Map()): OutfitItemPlacement[] {
-  return layoutOutfit(items, shapes);
+export function suggestionLayout(
+  items: Item[],
+  shapes: ReadonlyMap<string, PieceShape | null> = new Map(),
+  ratio?: number,
+): OutfitItemPlacement[] {
+  return layoutOutfit(items, shapes, ratio);
 }
 
 /** 「存成穿搭」：網址帶來的單品 id（逗號分隔）→ 已排好位置的畫布單品；找不到或重複的 id 略過 */
@@ -617,9 +621,11 @@ export function presetPieces(
   idsParam: string | undefined,
   items: Item[],
   shapes: ReadonlyMap<string, PieceShape | null> = new Map(),
+  /** 畫布高 / 寬：和天氣穿搭、編輯穿搭共用的比例，排版才不會超出畫布（2026-11-06） */
+  ratio?: number,
 ): OutfitPiece[] {
   if (!idsParam) return [];
   const byId = new Map(items.map(i => [i.id, i]));
   const picked = [...new Set(idsParam.split(','))].flatMap(id => (byId.has(id) ? [byId.get(id)!] : []));
-  return suggestionLayout(picked, shapes).map((p, i) => ({ ...p, item: picked[i] }));
+  return suggestionLayout(picked, shapes, ratio).map((p, i) => ({ ...p, item: picked[i] }));
 }

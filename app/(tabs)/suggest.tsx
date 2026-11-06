@@ -11,12 +11,14 @@ import { useActiveItemsQuery } from '@/db/useItems';
 import { useWeather } from '@/db/useWeather';
 import { useT, type TranslationKey } from '@/i18n';
 import { formatPrice } from '@/lib/currency';
+import { CANVAS_HEIGHT_RATIO } from '@/lib/outfitCanvas';
 import { wxCategory } from '@/lib/cwaWeather';
 import { outfitTotal } from '@/lib/outfitTotals';
 import { candidatesFor, suggestOutfit, suggestionLayout, type Suggestion, type SuggestionInput } from '@/lib/suggestion';
 import { describeSuggestion } from '@/lib/suggestionText';
 import { usePieceShapes } from '@/lib/usePieceShapes';
 import { addDays } from '@/lib/weatherDates';
+import { useSharedCanvasRatio } from '@/store/canvasStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme } from '@/theme/useTheme';
 import type { Category, Item, Occasion, OutfitPiece } from '@/types/models';
@@ -102,12 +104,14 @@ export default function SuggestScreen() {
   // 顯示用最新的單品資料（名稱、照片可能改過）；天氣（溫度、帶傘）也用最新的
   const current = picked && picked.key === key ? picked.suggestion : null;
   const pieces: Item[] = useMemo(() => (current ? current.pieces.map(p => byId.get(p.id) ?? p) : []), [current, byId]);
+  // 畫布和天氣穿搭、編輯穿搭同一個比例：這裡看到的就是存成穿搭後的樣子（2026-11-06）
+  const canvasRatio = useSharedCanvasRatio(CANVAS_HEIGHT_RATIO);
   // 量到照片裡衣服的範圍後才排版；量測中先顯示上一次排好的畫布，避免閃一下
   const shapes = usePieceShapes(current ? pieces : undefined);
   const lastCanvas = useRef<OutfitPiece[]>([]);
   const canvasPieces = useMemo(
-    () => (shapes ? suggestionLayout(pieces, shapes).map((p, i) => ({ ...p, item: pieces[i] })) : null),
-    [shapes, pieces],
+    () => (shapes ? suggestionLayout(pieces, shapes, canvasRatio).map((p, i) => ({ ...p, item: pieces[i] })) : null),
+    [shapes, pieces, canvasRatio],
   );
   if (canvasPieces) lastCanvas.current = canvasPieces;
   const shown: Suggestion | null =
@@ -198,6 +202,7 @@ export default function SuggestScreen() {
           >
             <OutfitCanvasView
               width={canvasWidth}
+              ratio={canvasRatio}
               pieces={canvasPieces ?? lastCanvas.current}
             />
           </View>

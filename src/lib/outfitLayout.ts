@@ -144,10 +144,22 @@ function fitInSpot(spot: Rect, shape: PieceShape | null): Rect {
   return { x: spot.x + (spot.w - w) / 2, y: spot.y + (spot.h - h) / 2, w, h };
 }
 
-export function layoutOutfit(items: Item[], shapes: ReadonlyMap<string, PieceShape | null>): OutfitItemPlacement[] {
+/**
+ * ratio：畫布高 / 寬。格子是照 CANVAS_HEIGHT_RATIO 設計的，畫布比較高或矮時垂直方向等比拉長／壓扁
+ * （穿搭建議的畫布和天氣穿搭日檢視一樣高，2026-11-06）
+ */
+export function layoutOutfit(
+  items: Item[],
+  shapes: ReadonlyMap<string, PieceShape | null>,
+  ratio: number = CANVAS_HEIGHT_RATIO,
+): OutfitItemPlacement[] {
   const shapeOf = (i: Item) => shapes.get(i.id) ?? null;
   const both = items.some(i => i.category === 'outerwear') && items.some(i => i.category === 'overlay');
-  const spotOf = (c: Category) => (both ? WITH_BOTH[c] : undefined) ?? SPOTS[c];
+  const k = ratio > 0 && Number.isFinite(ratio) ? ratio / CANVAS_HEIGHT_RATIO : 1;
+  const spotOf = (c: Category) => {
+    const spot = (both ? WITH_BOTH[c] : undefined) ?? SPOTS[c];
+    return k === 1 ? spot : { ...spot, y: spot.y * k, h: spot.h * k };
+  };
   const order = items
     .map((i, idx) => ({ id: i.id, rank: Z_RANK[i.category], idx }))
     .sort((a, b) => a.rank - b.rank || a.idx - b.idx)

@@ -1,10 +1,11 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, Dimensions, StyleSheet, type AppStateStatus } from 'react-native';
 import SuggestScreen from '../../app/(tabs)/suggest';
 import { ItemRepositoryProvider, useItemsVersion } from '@/db/ItemRepositoryContext';
 import { createMemoryDatabase } from '@/db/memoryItemRepository';
 import { createMemoryWeatherRepository } from '@/db/memoryWeatherRepository';
 import { WeatherProvider } from '@/db/WeatherContext';
+import { useCanvasStore } from '@/store/canvasStore';
 import { DEFAULT_SETTINGS, useSettingsStore } from '@/store/settingsStore';
 import type { Category, Occasion, Season, WeatherDay } from '@/types/models';
 import { withFailures } from './helpers/failingRepo';
@@ -74,6 +75,17 @@ async function setup({ items = BASIC, weather = [day('2026-11-03', 29, 19, 70), 
 beforeEach(() => {
   mockPush.mockClear();
   mockCanvasMounts = 0;
+  useCanvasStore.setState({ day: null, editor: null });
+});
+
+describe('穿搭建議的畫布比例', () => {
+  it('和天氣穿搭、編輯穿搭共用同一個比例（存成穿搭後看到的一樣）', async () => {
+    useCanvasStore.setState({ day: 1.1, editor: 1.3 });
+    await setup();
+    const canvas = StyleSheet.flatten(screen.getByTestId('outfit-canvas-view').props.style);
+    expect(canvas.height / canvas.width).toBeCloseTo(1.1);
+    expect(canvas.width).toBe(Math.min(Dimensions.get('window').width - 64, 360));
+  });
 });
 
 /** 建議的單品（畫布的無障礙標籤列出單品名稱；下方說明不寫名稱） */

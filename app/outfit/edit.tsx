@@ -10,7 +10,9 @@ import { useT } from '@/i18n';
 import { taipeiDate } from '@/lib/cwaWeather';
 import { nowIso } from '@/lib/ids';
 import { deleteOutfit, saveOutfit } from '@/lib/outfitService';
+import { CANVAS_HEIGHT_RATIO } from '@/lib/outfitCanvas';
 import { presetPieces } from '@/lib/suggestion';
+import { useSharedCanvasRatio } from '@/store/canvasStore';
 import { usePieceShapes } from '@/lib/usePieceShapes';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -44,11 +46,13 @@ function CreateNew({ date, preset }: { date: string | null; preset?: string }) {
   const [initial, setInitial] = useState<OutfitDraft | null>(null);
   const presetItems = useMemo(() => (items && preset ? presetPieces(preset, items).map(p => p.item) : []), [items, preset]);
   const shapes = usePieceShapes(items && preset && !initial ? presetItems : undefined);
+  // 照天氣穿搭／編輯穿搭共用的畫布比例排版（照 4:3 排的話畫布比較矮時鞋子、下著會被切掉）
+  const ratio = useSharedCanvasRatio(CANVAS_HEIGHT_RATIO);
   useEffect(() => {
     if (initial || items === undefined) return;
     if (!preset) setInitial({ name: '', date, pieces: [] });
-    else if (shapes) setInitial({ name: '', date, pieces: presetPieces(preset, items, shapes) });
-  }, [initial, items, preset, shapes, date]);
+    else if (shapes) setInitial({ name: '', date, pieces: presetPieces(preset, items, shapes, ratio), canvasRatio: ratio });
+  }, [initial, items, preset, shapes, date, ratio]);
   if (items === undefined && itemsQuery.error) return <LoadErrorScreen title={t('outfit.new')} onRetry={itemsQuery.retry} />;
   if (!initial || items === undefined) return <Stack.Screen options={{ headerShown: false }} />;
   return (
