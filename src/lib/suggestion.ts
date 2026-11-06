@@ -5,7 +5,9 @@ import { layoutOutfit, type PieceShape } from './outfitLayout';
 
 /**
  * 穿搭建議引擎（純邏輯）。
- * - 溫度：最高／最低體感的平均分段；缺體感時改用氣溫
+ * - 溫度：最高／最低體感的平均分段；缺體感時改用氣溫（2026-11-06 起）：
+ *   25 度以上熱（只用夏季）、20–25 暖（春夏秋）、15–20 涼（春秋冬）、15 以下冷（只用冬季）
+ * - 暖、熱的天氣不推薦季節有勾冬天的外套（當作厚外套）；冬天的外套不搭涼鞋、拖鞋（2026-11-06）
  * - 單品沒有厚薄資料，用季節代表厚薄；沒填季節 = 四季、沒填場合 = 全場合
  * - 組合：上衣＋下著 或 連身 ＋ 外套（依溫度）＋ 鞋子；包包有就配一件；配件、「其他」不推薦（2026-11-05 起不放配件）
  * - 內著（內搭）可以當上衣，但一定要搭外套（炎熱時有一般上衣就不用內著）；
@@ -153,9 +155,9 @@ export function weatherBasis(w: SuggestionWeather | null): WeatherBasis | null {
 }
 
 export function tempBand(avg: number): TempBand {
-  if (avg >= 28) return 'hot';
+  if (avg >= 25) return 'hot';
   if (avg >= 20) return 'warm';
-  if (avg >= 13) return 'cool';
+  if (avg >= 15) return 'cool';
   return 'cold';
 }
 
@@ -193,9 +195,11 @@ export function candidatesFor(
   filter: { band: TempBand | null; occasion: Occasion | null },
 ): Item[] {
   const seasons = filter.band ? BAND_SEASONS[filter.band] : null;
+  const warm = filter.band === 'warm' || filter.band === 'hot';
   return items.filter(
     i =>
       i.category === category &&
+      !(warm && isWinterOuter(i)) &&
       (!seasons || i.seasons.length === 0 || i.seasons.some(s => seasons.includes(s))) &&
       (!filter.occasion || i.occasions.length === 0 || i.occasions.includes(filter.occasion)),
   );
@@ -216,6 +220,11 @@ export function needsOuterwear(item: Pick<Item, 'category' | 'name'>): boolean {
   if (item.category !== 'top' && item.category !== 'onepiece') return false;
   const name = item.name.toLowerCase();
   return STRAPPY_WORDS.some(w => name.includes(w));
+}
+
+/** 季節有勾冬天的外套：當作厚外套 */
+function isWinterOuter(i: Item): boolean {
+  return i.category === 'outerwear' && i.seasons.includes('winter');
 }
 
 const summerOnly = (i: Item) => i.seasons.length > 0 && i.seasons.every(s => s === 'summer');
@@ -264,9 +273,20 @@ export function isTallBoots(item: Item): boolean {
   return item.category === 'shoes' && nameHas(item, TALL_BOOT_WORDS) && !nameHas(item, SHORT_BOOT_WORDS);
 }
 
-/** 這套可以穿的鞋子：長裙、長洋裝、長褲不搭長靴（短靴、一般鞋子可以） */
-const shoeChoices = (p: Picks, shoes: Item[]) =>
-  [p.bottom, p.onepiece].some(i => i && isLongBottom(i)) ? shoes.filter(s => !isTallBoots(s)) : shoes;
+const SANDAL_WORDS = ['涼鞋', '拖鞋', '夾腳拖', '涼拖', '洞洞鞋', 'sandal', 'slipper', 'flip-flop', 'flip flop', 'サンダル'];
+
+/** 涼鞋、拖鞋（名稱判斷） */
+export function isSandals(item: Item): boolean {
+  return item.category === 'shoes' && nameHas(item, SANDAL_WORDS);
+}
+
+/** 這套可以穿的鞋子：長裙、長洋裝、長褲不搭長靴（短靴、一般鞋子可以）；冬天的外套不搭涼鞋 */
+const shoeChoices = (p: Picks, shoes: Item[]) => {
+  let list = shoes;
+  if ([p.bottom, p.onepiece].some(i => i && isLongBottom(i))) list = list.filter(s => !isTallBoots(s));
+  if (p.outerwear && isWinterOuter(p.outerwear)) list = list.filter(s => !isSandals(s));
+  return list;
+};
 
 /** 內著、細肩帶一定有外套；外搭一定疊在一般上衣外面；長裙、長褲不搭長靴；夏天的外套不搭春秋冬的衣服 */
 const isValid = (p: Picks) =>
@@ -347,7 +367,9 @@ function randomPicks(
     picks.onepiece = take(onepieces);
   }
   if (pool.outerwear.length > 0 && (needsOuter(picks) || rule === 'required' || (rule === 'optional' && rng() < 0.5))) {
-    const fitting = pool.outerwear.filter(o => outerFitsPicks(o, picks));
+    // 能挑的鞋子都是涼鞋時，不配冬天的外套
+    const onlySandals = pool.shoes.length > 0 && pool.shoes.every(isSandals);
+    const fitting = pool.outerwear.filter(o => outerFitsPicks(o, picks) && !(onlySandals && isWinterOuter(o)));
     const outers = fit(fitting);
     if (outers.length > 0) picks.outerwear = take(outers);
     // 一定要穿外套、卻沒有可以搭的外套：細肩帶等一定要搭的重抽；只是天氣冷就不配外套（說明裡會提醒缺外套）

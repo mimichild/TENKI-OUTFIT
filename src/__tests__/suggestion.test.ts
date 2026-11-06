@@ -1,6 +1,7 @@
 import {
   candidatesFor,
   isLongBottom,
+  isSandals,
   isTallBoots,
   lookOf,
   needsOuterwear,
@@ -78,12 +79,12 @@ describe('weatherBasis', () => {
 
 describe('tempBand / outerwearRule', () => {
   it.each([
-    [28, 'hot'],
-    [27.5, 'warm'],
+    [25, 'hot'],
+    [24.9, 'warm'],
     [20, 'warm'],
     [19.9, 'cool'],
-    [13, 'cool'],
-    [12.9, 'cold'],
+    [15, 'cool'],
+    [14.9, 'cold'],
   ] as const)('%s° → %s', (avg, band) => {
     expect(tempBand(avg)).toBe(band);
   });
@@ -857,6 +858,45 @@ describe('夏天的外套不搭在春秋冬的上衣、洋裝外面（2026-11-06
     for (let seed = 1; seed <= 20; seed++) {
       const r = suggestOutfit({ items: [summerCoat, dress, top, item('bottom'), item('shoes')], weather: weather(25, 17), occasion: null }, { rng: seeded(seed) });
       expect(r.pieces.map(p => p.id)).not.toContain(dress.id);
+    }
+  });
+});
+
+describe('暖天不推薦冬天的外套；冬天的外套不搭涼鞋（2026-11-06）', () => {
+  const seeded = (seed: number) => () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648;
+  };
+
+  it('isSandals 依名稱判斷', () => {
+    for (const name of ['黑色涼鞋', '夾腳拖', '涼拖', '室外拖鞋', 'Sandals']) expect(isSandals(item('shoes', { name }))).toBe(true);
+    for (const name of ['球鞋', '短靴', '樂福鞋']) expect(isSandals(item('shoes', { name }))).toBe(false);
+  });
+
+  it('20–25 度（暖）時，季節有勾冬天的外套不推薦', () => {
+    const wool = item('outerwear', { name: '大衣', seasons: ['autumn', 'winter'] });
+    const light = item('outerwear', { name: '薄外套', seasons: ['spring', 'autumn'] });
+    for (let seed = 1; seed <= 20; seed++) {
+      const r = suggestOutfit({ items: [wool, light, item('top'), item('bottom'), item('shoes')], weather: weather(25, 18), occasion: null }, { rng: seeded(seed) });
+      expect(r.pieces.map(p => p.id)).not.toContain(wool.id);
+    }
+  });
+
+  it('涼天時冬天的外套照常推薦', () => {
+    const wool = item('outerwear', { name: '大衣', seasons: ['autumn', 'winter'] });
+    const r = suggestOutfit({ items: [wool, item('top'), item('bottom'), item('shoes')], weather: weather(18, 14), occasion: null }, { rng: () => 0 });
+    expect(r.pieces.map(p => p.id)).toContain(wool.id);
+  });
+
+  it('冬天的外套不搭涼鞋', () => {
+    const wool = item('outerwear', { name: '大衣', seasons: ['winter'] });
+    const sandals = item('shoes', { name: '涼鞋' });
+    const boots = item('shoes', { name: '短靴' });
+    for (let seed = 1; seed <= 20; seed++) {
+      const r = suggestOutfit({ items: [wool, sandals, boots, item('top'), item('bottom')], weather: weather(12, 8), occasion: null }, { rng: seeded(seed) });
+      const ids = r.pieces.map(p => p.id);
+      expect(ids).toContain(wool.id);
+      expect(ids).toContain(boots.id);
     }
   });
 });
