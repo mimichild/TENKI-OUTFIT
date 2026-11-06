@@ -23,17 +23,17 @@ const byNewest = (a: Item, b: Item) => b.createdAt.localeCompare(a.createdAt);
 const COMPARATORS: Record<ItemSort, (a: Item, b: Item) => number> = {
   newest: byNewest,
   oldest: (a, b) => a.createdAt.localeCompare(b.createdAt),
-  recentlyUsed: (a, b) => {
-    if (a.lastUsedAt === b.lastUsedAt) return byNewest(a, b);
-    if (a.lastUsedAt === null) return 1;
-    if (b.lastUsedAt === null) return -1;
-    return b.lastUsedAt.localeCompare(a.lastUsedAt);
-  },
-  unused: (a, b) => {
-    const au = a.lastUsedAt === null ? 0 : 1;
-    const bu = b.lastUsedAt === null ? 0 : 1;
-    return au - bu || byNewest(a, b);
-  },
+  recentlyUsed: (a, b) => (b.lastUsedAt ?? '').localeCompare(a.lastUsedAt ?? '') || byNewest(a, b),
+  unused: byNewest,
+};
+
+/**
+ * 「最近使用」只列出用過的（最新使用 → 最舊使用）；「未使用」只列出加入後還沒用過的（最新加入 → 最舊加入）
+ * （使用者指定 2026-11-06）
+ */
+const SORT_FILTERS: Partial<Record<ItemSort, (i: Item) => boolean>> = {
+  recentlyUsed: i => i.lastUsedAt !== null,
+  unused: i => i.lastUsedAt === null,
 };
 
 export function applyItemQuery(items: readonly Item[], query: ItemQuery): Item[] {
@@ -41,6 +41,7 @@ export function applyItemQuery(items: readonly Item[], query: ItemQuery): Item[]
     .filter(i => query.category === 'all' || i.category === query.category)
     .filter(i => matchesAny(i.seasons, query.seasons))
     .filter(i => matchesAny(i.occasions, query.occasions))
+    .filter(SORT_FILTERS[query.sort] ?? (() => true))
     .sort(COMPARATORS[query.sort]);
 }
 

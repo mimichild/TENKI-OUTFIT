@@ -359,12 +359,12 @@ describe('WeatherScreen outfits', () => {
   it('week view lists every day of the week; tapping a day opens it in day view', async () => {
     await setup({ result: twoDays, outfits: planned });
     await press(screen.getByRole('tab', { name: '週' }));
-    for (const label of ['11/1（日）', '11/3（二）', '11/7（六）']) {
+    for (const label of ['11/2（一）', '11/3（二）', '11/8（日）']) {
       expect(screen.getByRole('button', { name: `查看 ${label}` })).toBeTruthy();
     }
     expect(cards()).toHaveLength(3);
     await press(screen.getByRole('button', { name: '下一週' }));
-    expect(screen.getByRole('button', { name: '查看 11/8（日）' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '查看 11/9（一）' })).toBeTruthy();
     expect(cards()).toHaveLength(0);
     await press(screen.getByRole('button', { name: '上一週' }));
     await press(screen.getByRole('button', { name: '查看 11/4（三）' }));
@@ -376,9 +376,9 @@ describe('WeatherScreen outfits', () => {
   it('week title shows the year on both ends across new year', async () => {
     await setup({ result: twoDays, outfits: planned });
     await press(screen.getByRole('tab', { name: '週' }));
-    expect(screen.getByText('11/1（日） – 11/7（六）')).toBeTruthy();
+    expect(screen.getByText('11/2（一） – 11/8（日）')).toBeTruthy();
     for (let i = 0; i < 8; i++) await press(screen.getByRole('button', { name: '下一週' }));
-    expect(screen.getByText('2026/12/27（日） – 2027/1/2（六）')).toBeTruthy();
+    expect(screen.getByText('2026/12/28（一） – 2027/1/3（日）')).toBeTruthy();
   });
 
   it('月檢視：有穿搭的日子顯示縮小版穿搭，點了打開那天的日檢視', async () => {

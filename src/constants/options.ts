@@ -1,7 +1,8 @@
 import type { Category, ColorTag, Occasion, Season, StyleTag } from '@/types/models';
 
+/** 外搭排在外套左邊（使用者指定 2026-11-06） */
 export const CATEGORIES: Category[] = [
-  'top', 'inner', 'overlay', 'bottom', 'onepiece', 'outerwear', 'shoes', 'bag', 'accessory', 'other',
+  'top', 'inner', 'bottom', 'onepiece', 'overlay', 'outerwear', 'shoes', 'bag', 'accessory', 'other',
 ];
 
 export const SEASONS: Season[] = ['spring', 'summer', 'autumn', 'winter'];

@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useT, type TranslationKey } from '@/i18n';
-import { monthGrid, monthOf } from '@/lib/calendar';
+import { monthGrid, monthOf, WEEKDAYS } from '@/lib/calendar';
 import { useTheme } from '@/theme/useTheme';
 
 interface Props {
@@ -36,7 +36,7 @@ export function MonthGrid({ month, today, selected, marked, onSelect, onPrev, on
         </Pressable>
       </View>
       <View style={styles.row}>
-        {[0, 1, 2, 3, 4, 5, 6].map(wd => (
+        {WEEKDAYS.map(wd => (
           <Text key={wd} style={[styles.weekday, { color: theme.textMuted }]}>{t(`weather.wd${wd}` as TranslationKey)}</Text>
         ))}
       </View>

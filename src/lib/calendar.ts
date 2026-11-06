@@ -9,13 +9,16 @@ export function addMonths(month: string, n: number): string {
   return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`;
 }
 
-/** 包含 date 的那一週（星期日 ~ 星期六） */
+/** 一週的星期順序（weekdayOf 的值，0 = 星期日）：星期一開頭、星期日最後（使用者指定 2026-11-06） */
+export const WEEKDAYS = [1, 2, 3, 4, 5, 6, 0] as const;
+
+/** 包含 date 的那一週（星期一 ~ 星期日） */
 export function weekOf(date: string): string[] {
-  const sunday = addDays(date, -weekdayOf(date));
-  return Array.from({ length: 7 }, (_, i) => addDays(sunday, i));
+  const monday = addDays(date, -((weekdayOf(date) + 6) % 7));
+  return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
 }
 
-/** 月曆格子：星期日開頭，每列 7 天，前後補上相鄰月份的日期 */
+/** 月曆格子：星期一開頭，每列 7 天，前後補上相鄰月份的日期 */
 export function monthGrid(month: string): string[][] {
   const first = `${month}-01`;
   const weeks: string[][] = [];

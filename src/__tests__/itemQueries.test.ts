@@ -27,12 +27,13 @@ describe('applyItemQuery', () => {
     expect(ids(applyItemQuery(items, { ...DEFAULT_ITEM_QUERY, sort: 'oldest' }))).toEqual(['a', 'b', 'c']);
   });
 
-  it('sorts recently used first, never-used items last', () => {
-    expect(ids(applyItemQuery(items, { ...DEFAULT_ITEM_QUERY, sort: 'recentlyUsed' }))).toEqual(['c', 'a', 'b']);
+  it('「最近使用」只列出用過的，最新使用到最舊使用', () => {
+    expect(ids(applyItemQuery(items, { ...DEFAULT_ITEM_QUERY, sort: 'recentlyUsed' }))).toEqual(['c', 'a']);
   });
 
-  it('puts never-used items first for "unused", then newest', () => {
-    expect(ids(applyItemQuery(items, { ...DEFAULT_ITEM_QUERY, sort: 'unused' }))).toEqual(['b', 'c', 'a']);
+  it('「未使用」只列出沒用過的，最新加入到最舊加入', () => {
+    const more = [...items, item({ id: 'd', createdAt: '2026-05-01T00:00:00.000Z' })];
+    expect(ids(applyItemQuery(more, { ...DEFAULT_ITEM_QUERY, sort: 'unused' }))).toEqual(['d', 'b']);
   });
 
   it('filters by category tab', () => {
@@ -78,8 +79,8 @@ describe('單品頁左右滑的隔壁單品', () => {
       item({ id: 'y', createdAt: '2026-02-01T00:00:00.000Z', lastUsedAt: '2026-04-01' }),
       item({ id: 'z', createdAt: '2026-03-01T00:00:00.000Z' }),
     ];
-    // 順序 x（最近穿）→ y → z（沒穿過）
-    expect(adjacentItems(used, { ...DEFAULT_ITEM_QUERY, sort: 'recentlyUsed' }, 'y')).toEqual({ prev: 'x', next: 'z' });
+    // 順序 x（最近穿）→ y；z 沒穿過不列出
+    expect(adjacentItems(used, { ...DEFAULT_ITEM_QUERY, sort: 'recentlyUsed' }, 'y')).toEqual({ prev: 'x', next: null });
   });
 
   it('沿用服裝頁的分類篩選', () => {
