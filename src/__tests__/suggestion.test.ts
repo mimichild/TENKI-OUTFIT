@@ -888,6 +888,22 @@ describe('暖天不推薦冬天的外套；冬天的外套不搭涼鞋（2026-11
     expect(r.pieces.map(p => p.id)).toContain(wool.id);
   });
 
+  it('涼鞋、拖鞋只在熱天（25 度以上）推薦；短袖外套也可以配涼鞋', () => {
+    const sandals = item('shoes', { name: '涼鞋', seasons: ['summer'] });
+    const sneakers = item('shoes', { name: '球鞋' });
+    const shortJacket = item('outerwear', { name: '短袖外套', seasons: ['summer'] });
+    for (let seed = 1; seed <= 20; seed++) {
+      const warm = suggestOutfit({ items: [sandals, sneakers, shortJacket, item('top'), item('bottom')], weather: weather(25, 20), occasion: null }, { rng: seeded(seed) });
+      expect(warm.pieces.map(p => p.id)).not.toContain(sandals.id);
+    }
+    // 暖天只有涼鞋時也不拿來補，改成提醒缺鞋子
+    const onlySandals = suggestOutfit({ items: [sandals, item('top'), item('bottom')], weather: weather(25, 20), occasion: null }, { rng: () => 0 });
+    expect(onlySandals.pieces.map(p => p.id)).not.toContain(sandals.id);
+    expect(onlySandals.missing).toContain('shoes');
+    const hot = suggestOutfit({ items: [sandals, shortJacket, item('top'), item('bottom')], weather: weather(30, 26), occasion: null }, { rng: () => 0 });
+    expect(hot.pieces.map(p => p.id)).toContain(sandals.id);
+  });
+
   it('冬天的外套不搭涼鞋', () => {
     const wool = item('outerwear', { name: '大衣', seasons: ['winter'] });
     const sandals = item('shoes', { name: '涼鞋' });

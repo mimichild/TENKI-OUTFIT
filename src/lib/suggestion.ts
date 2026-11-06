@@ -8,6 +8,7 @@ import { layoutOutfit, type PieceShape } from './outfitLayout';
  * - 溫度：最高／最低體感的平均分段；缺體感時改用氣溫（2026-11-06 起）：
  *   25 度以上熱（只用夏季）、20–25 暖（春夏秋）、15–20 涼（春秋冬）、15 以下冷（只用冬季）
  * - 暖、熱的天氣不推薦季節有勾冬天的外套（當作厚外套）；冬天的外套不搭涼鞋、拖鞋（2026-11-06）
+ * - 涼鞋、拖鞋只在熱天（25 度以上）推薦（2026-11-06）
  * - 單品沒有厚薄資料，用季節代表厚薄；沒填季節 = 四季、沒填場合 = 全場合
  * - 組合：上衣＋下著 或 連身 ＋ 外套（依溫度）＋ 鞋子；包包有就配一件；配件、「其他」不推薦（2026-11-05 起不放配件）
  * - 內著（內搭）可以當上衣，但一定要搭外套（炎熱時有一般上衣就不用內著）；
@@ -182,7 +183,8 @@ export interface FilledPiece {
 
 /** 沒有完全符合的單品時，次之的候選：場合符合 → 天氣符合 → 任何一件 */
 function fallbackFor(items: Item[], category: Category, filter: { band: TempBand | null; occasion: Occasion | null }): Item[] {
-  const all = items.filter(i => i.category === category);
+  // 涼鞋、拖鞋不是熱天就不拿來補（寧可提醒缺鞋子）
+  const all = items.filter(i => i.category === category && !(filter.band && filter.band !== 'hot' && isSandals(i)));
   const byOccasion = all.filter(i => fitsOccasion(i, filter.occasion));
   if (byOccasion.length > 0) return byOccasion;
   const bySeason = all.filter(i => fitsSeason(i, filter.band));
@@ -200,6 +202,7 @@ export function candidatesFor(
     i =>
       i.category === category &&
       !(warm && isWinterOuter(i)) &&
+      !(filter.band && filter.band !== 'hot' && isSandals(i)) &&
       (!seasons || i.seasons.length === 0 || i.seasons.some(s => seasons.includes(s))) &&
       (!filter.occasion || i.occasions.length === 0 || i.occasions.includes(filter.occasion)),
   );
