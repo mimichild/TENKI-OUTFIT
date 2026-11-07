@@ -107,6 +107,11 @@ export default function WeatherScreen() {
    */
   const [scrollSize, setScrollSize] = useState<{ width: number; height: number } | null>(null);
   const [weatherCardHeight, setWeatherCardHeight] = useState(0);
+  /**
+   * 有天氣資料時天氣內容的高度：讀取中、沒有天氣資料時天氣欄也用這個高度，
+   * 天氣欄才不會變大、把穿搭畫布擠小（2026-11-07）
+   */
+  const [detailsHeight, setDetailsHeight] = useState(DETAILS_FALLBACK_HEIGHT);
   const areaWidth = scrollSize?.width || window.width;
   const measuredHeight = scrollSize && weatherCardHeight ? scrollSize.height - DAY_PADDING_TOP - weatherCardHeight - DAY_GAP : 0;
   const areaHeight = measuredHeight > 200 ? measuredHeight : areaWidth * (4 / 3);
@@ -164,14 +169,16 @@ export default function WeatherScreen() {
           </Pressable>
         </View>
       ) : day ? (
-        <DayDetails day={day} theme={theme} language={language} t={t} />
+        <View testID="weather-details" onLayout={e => setDetailsHeight(e.nativeEvent.layout.height)}>
+          <DayDetails day={day} theme={theme} language={language} t={t} />
+        </View>
       ) : weather.loading || days === undefined ? (
-        <View style={styles.placeholder}>
+        <View testID="weather-placeholder" style={[styles.compactPlaceholder, { height: detailsHeight }]}>
           <ActivityIndicator color={theme.primaryText} />
           <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.loading')}</Text>
         </View>
       ) : (
-        <View style={styles.placeholder}>
+        <View testID="weather-placeholder" style={[styles.compactPlaceholder, { height: detailsHeight }]}>
           <Text style={[styles.message, { color: theme.textMuted }]}>{t('weather.noData')}</Text>
         </View>
       )}
@@ -285,6 +292,9 @@ export default function WeatherScreen() {
   );
 }
 
+/** 還沒量到天氣內容高度時的預估值（溫度列＋天氣描述列） */
+const DETAILS_FALLBACK_HEIGHT = 80;
+
 function NavButton({ icon, label, disabled, onPress, theme }: {
   icon: 'chevron-back' | 'chevron-forward'; label: string; disabled: boolean; onPress: () => void; theme: Theme;
 }) {
@@ -370,6 +380,7 @@ const styles = StyleSheet.create({
   relative: { fontSize: 13, fontWeight: '600' },
   county: { fontSize: 13 },
   placeholder: { alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 170 },
+  compactPlaceholder: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   details: { alignItems: 'center', paddingTop: 6, gap: 6 },
   mainRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   temps: { flexDirection: 'row', alignItems: 'baseline', gap: 2 },

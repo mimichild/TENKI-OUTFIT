@@ -205,6 +205,17 @@ describe('WeatherScreen', () => {
     expect(screen.getByText('24°')).toBeTruthy();
   });
 
+  it('沒有天氣資料的日子，天氣欄和有資料時一樣高（穿搭畫布不會縮小）', async () => {
+    await setup({ result: { status: 'ok', days: [forecast('2026-11-03', 25)] } });
+    // 有天氣資料時量到的內容高度
+    fireEvent(screen.getByTestId('weather-details'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 300, height: 84 } } });
+    fireEvent.press(screen.getByLabelText('後一天'));
+    expect(screen.getByText('這一天沒有天氣資料')).toBeTruthy();
+    const box = StyleSheet.flatten(screen.getByTestId('weather-placeholder').props.style);
+    expect(box.height).toBe(84);
+    expect(box.minHeight).toBeUndefined();
+  });
+
   it('says there is no data when today is missing', async () => {
     await setup({ result: { status: 'network' } });
     expect(screen.getByText('無法連線到氣象署')).toBeTruthy();
